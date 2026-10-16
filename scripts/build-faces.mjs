@@ -35,15 +35,19 @@ export async function buildFaces() {
     }
   }
   const index = { schema: 1, size, kinds: FACE_KINDS, personas: rows.map(({ id, entry, npc }) => ({ id, recolor: entry.recolor ?? false, ...(npc ? { npc: true } : {}) })), variants: manifest.variants ?? {} };
-  return { png: encodePng(width, height, atlas), json: `${JSON.stringify(index, null, 2)}\n` };
+  return { png: encodePng(width, height, atlas), pixels: { width, height, rgba: atlas }, json: `${JSON.stringify(index, null, 2)}\n` };
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  const { png: image, json } = await buildFaces();
+  const { png: image, pixels, json } = await buildFaces();
   if (process.argv.includes('--check')) {
     const read = (name) => readFile(new URL(name, DIR)).catch(() => Buffer.alloc(0));
-    const same = async (name, data) => (typeof data === 'string' ? (await read(name)).toString('utf8').replace(/\r\n/g, '\n') === data : Buffer.from(data).equals(await read(name)));
-    if (!(await same('faces.png', image)) || !(await same('faces.json', json))) { console.error('faces.png/faces.json is out of date; run node scripts/build-faces.mjs'); process.exit(1); }
+    let committed = null;
+    try { committed = decodePng(await read('faces.png')); }
+    catch (error) { console.error(`faces.png를 읽을 수 없습니다(${error.message}). node scripts/build-faces.mjs로 다시 만드세요.`); process.exit(1); }
+    const samePixels = committed.width === pixels.width && committed.height === pixels.height && Buffer.from(committed.rgba).equals(pixels.rgba);
+    const sameJson = (await read('faces.json')).toString('utf8').replace(/\r\n/g, '\n') === json;
+    if (!samePixels || !sameJson) { console.error('faces.png/faces.json is out of date; run node scripts/build-faces.mjs'); process.exit(1); }
     console.log('Face thumbnails are up to date.');
   } else {
     await writeFile(new URL('faces.png', DIR), image);

@@ -33,7 +33,12 @@ class ReleaseTests(unittest.TestCase):
             for command in (plugin / 'commands/wax').glob('*.toml'):
                 tomllib.loads(command.read_text(encoding='utf-8'))
             subprocess.run(['npm', 'run', 'check'], cwd=plugin, check=True, capture_output=True)
-            checked = subprocess.run(['node', '--test', '--test-timeout=60000'], cwd=plugin, capture_output=True, encoding='utf-8', timeout=180)
+            try:
+                checked = subprocess.run(['node', '--test', '--test-timeout=60000'], cwd=plugin, capture_output=True, encoding='utf-8', timeout=180)
+            except subprocess.TimeoutExpired as error:
+                partial = (error.stdout or b'')
+                partial = partial.decode('utf-8', 'replace') if isinstance(partial, bytes) else partial
+                self.fail('extracted tests did not finish in 180 s; last output:\n' + partial[-3000:])
             self.assertEqual(checked.returncode, 0, checked.stdout + checked.stderr)
             cli = plugin / 'bin/wax.mjs'
             target = work / 'target project'

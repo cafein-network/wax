@@ -153,7 +153,7 @@ export async function runAgentSession(root, options = {}) {
   if (signal?.aborted) abort();
   try {
     if (acp) {
-      const init = await rpc('initialize', { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: 'wax', version: '0.12.5' } });
+      const init = await rpc('initialize', { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: 'wax', version: '0.12.6' } });
       if (init.protocolVersion !== 1) throw new WaxError('지원하지 않는 ACP 버전입니다.');
       if (thread && init.agentCapabilities?.loadSession) {
         sessionId = thread;

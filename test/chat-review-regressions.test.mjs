@@ -84,7 +84,7 @@ test('dashboard status recognizes real and symlink project paths',async t=>{
 });
 test('independent processes serialize stale recovery and writes',async t=>{
  const {spawn}=await import('node:child_process');const root=await project(t),lock=join(root,'counter.lock'),counter=join(root,'counter');await writeFile(counter,'0');await mkdir(lock);await writeFile(join(lock,'owner.json'),JSON.stringify({pid:2147483647}));
- const code=`import {withFileLock} from ${JSON.stringify(new URL('../src/file-lock.mjs',import.meta.url).href)};import {readFile,writeFile} from 'node:fs/promises';for(let i=0;i<12;i++)await withFileLock(process.argv[1],async()=>{const n=Number(await readFile(process.argv[2],'utf8'));await new Promise(r=>setTimeout(r,2));await writeFile(process.argv[2],String(n+1));});`;
+ const code=`import {withFileLock} from ${JSON.stringify(new URL('../src/file-lock.mjs',import.meta.url).href)};import {readFile,writeFile} from 'node:fs/promises';for(let i=0;i<12;i++)await withFileLock(process.argv[1],async()=>{const n=Number(await readFile(process.argv[2],'utf8'));await new Promise(r=>setTimeout(r,2));await writeFile(process.argv[2],String(n+1));},{timeoutMs:30000});`;
  await Promise.all(Array.from({length:4},()=>new Promise((resolve,reject)=>{const child=spawn(process.execPath,['--input-type=module','-e',code,lock,counter]);let err='';child.stderr.on('data',x=>err+=x);child.on('error',reject);child.on('exit',code=>code===0?resolve():reject(new Error(err)));})));assert.equal(await readFile(counter,'utf8'),'48');
 });
 

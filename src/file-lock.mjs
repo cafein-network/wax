@@ -100,6 +100,7 @@ export async function withFileLock(path, action, { timeoutMs = 5000, staleMs = 3
     await sweepCandidates(path, staleMs);
     await mkdir(candidate, { mode: 0o700 });
     await writeFile(join(candidate, 'owner.json'), JSON.stringify({ pid: process.pid, token, at: new Date().toISOString() }), { flag: 'wx', mode: 0o600 });
+    let vanished = 0;
     for (;;) {
       try {
         if (await info(path)) {
@@ -108,8 +109,14 @@ export async function withFileLock(path, action, { timeoutMs = 5000, staleMs = 3
           await rename(candidate, path); identity = await info(path); break;
         }
       } catch (e) {
-        const transientWindowsRename = process.platform === 'win32' && e.code === 'EPERM';
-        if (!['EEXIST', 'ENOTEMPTY', 'EPERM', 'EACCES'].includes(e.code) || (!transientWindowsRename && !await info(path))) throw e;
+        const exists = Boolean(await info(path));
+        if (e.code === 'EEXIST' || e.code === 'ENOTEMPTY') {
+          vanished = exists ? 0 : vanished + 1;
+          if (vanished > 20) throw e;
+        } else {
+          const transientWindowsRename = process.platform === 'win32' && e.code === 'EPERM';
+          if (!['EPERM', 'EACCES'].includes(e.code) || (!transientWindowsRename && !exists)) throw e;
+        }
       }
       if (Date.now() >= deadline) throw new LockError('다른 기록이 저장 중입니다. 잠시 후 다시 시도하세요.');
       await sleep(10 + Math.floor(Math.random() * 30));
