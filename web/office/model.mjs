@@ -4,7 +4,7 @@ import { ROOMS } from './rooms.mjs';
 export const MEETING_WINDOW_MS = 5 * 60 * 1000;
 export const BOARD_VISIT_MS = 8000;
 export const STATE_LABELS = { working: '작업 중', discussing: '논의 중', reviewing: '검토 중', idle: '휴식', away: '자리 비움' };
-export const KIND_LABELS = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini', antigravity: 'Antigravity', copilot: 'GitHub Copilot', human: '사람', other: '기타' };
+export const KIND_LABELS = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini', antigravity: 'Antigravity', copilot: 'GitHub Copilot', human: '사용자', other: '기타' };
 
 export function effectiveState(entry, now, awayAfterMs) {
   return now - Date.parse(entry.lastActive) > awayAfterMs ? 'away' : entry.state;

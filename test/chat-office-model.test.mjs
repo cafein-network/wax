@@ -416,7 +416,7 @@ test('사이드뷰 연구소: 검토 중인 사람은 테스트 벤치 앞에 �
   assert.ok(iso.every((i) => i.room !== 'lab'));
 });
 
-test('사이드뷰 그리기: 배경·소품 그림이 있든 없든 건물 전체를 오류 없이 그리고, 엘리베이터 탄 사람 칸을 그린다', async () => {
+test('사이드뷰 그리기: 배경이 없으면 대체 도형을 그리지 않고, 이미지가 준비되면 건물과 캐릭터를 그린다', async () => {
   const { render } = await import('../web/office/side-render.mjs');
   const { BUILDING } = await import('../web/office/side-rooms.mjs');
   const calls = [];
@@ -427,6 +427,7 @@ test('사이드뷰 그리기: 배경·소품 그림이 있든 없든 건물 전�
   const actors = [{ x: 1350, y: 900, riding: true, persona: 'p', pose: { dy: 0 }, scale: 1 }, { x: 250, y: 1632, sit: true, activity: 'typing', persona: 'p', pose: { dy: 0 }, scale: 1 }];
   render(ctx, { assets: null, actors: [], board: null, room: BUILDING });
   render(ctx, { assets: { props: { plant: { image, width: 10, height: 8 } } }, actors: [], board: null, room: BUILDING });
+  assert.deepEqual(calls, ['clearRect', 'clearRect'], '누락된 이미지 대신 건물·가구를 그리지 않는다');
   const withArt = { characters: { p: sprite }, backgrounds: Object.fromEntries(BUILDING.floors.map((id) => [id, image])), props: { desk: { image, width: 10, height: 8 }, sofa: { image, width: 10, height: 8 }, chair: { image, width: 10, height: 8 } } };
   render(ctx, { assets: withArt, actors, board: { notes: [{ type: 'opinion' }] }, room: BUILDING });
   assert.ok(calls.includes('drawImage') && calls.includes('fillRect'));

@@ -18,6 +18,7 @@
     <div class="office-toolbar">
       <button type="button" id="view-toggle" aria-pressed="false">목록 보기</button>
       <button type="button" id="open-board">화이트보드 열기</button>
+      <button type="button" id="open-messenger" aria-haspopup="dialog" aria-controls="messenger-dialog" aria-expanded="false">팀 메시지 <span class="message-count" id="message-count" hidden></span></button>
       <button type="button" id="chatter-toggle" aria-pressed="true" title="안내 NPC(제이크·써니·에밀리·브라이언)와 캐릭터의 가벼운 잡담. 화면에만 보이고 기록되지 않습니다">NPC·잡담 켜짐</button>
       <div class="legend" aria-label="노트 색상">
         <span><i class="legend-opinion"></i>의견</span>
@@ -64,6 +65,15 @@
       <button type="button" role="tab" id="tab-reports" aria-controls="panel-board" aria-selected="false" data-tab="reports">보고서</button>
     </div>
     <div class="content" id="panel-board" role="tabpanel"></div>
+  </dialog>
+
+  <dialog id="messenger-dialog" class="office-messenger" aria-labelledby="messenger-title">
+    <header>
+      <div><h2 id="messenger-title">팀 메시지</h2><p data-messenger-target></p></div>
+      <button type="button" data-close aria-label="팀 메시지 닫기">닫기</button>
+    </header>
+    <div class="messenger-preview" data-messenger-preview hidden></div>
+    <iframe id="messenger-frame" title="팀 채널 대화와 답장"></iframe>
   </dialog>
 
   <script type="module" src="/office/office.mjs"></script>

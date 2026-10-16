@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { getTeam, listTasks } from './team.mjs';
 import { readFile } from 'node:fs/promises';
+import { lstatSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { WaxError } from '../workflow.mjs';
 import * as v from './validate.mjs';
@@ -55,6 +56,16 @@ async function update(root, author, session, change) {
     await writeJsonAtomic(file, data);
     return publicEntry(entry);
   });
+}
+
+export function storedDashboardUser(root) {
+  try {
+    const file = join(root, '.wax', 'chat', 'presence.json');
+    const info = lstatSync(file);
+    if (!info.isFile() || info.size > 1_000_000) return null;
+    const name = JSON.parse(readFileSync(file, 'utf8'))?.dashboardAuthor;
+    return typeof name === 'string' ? v.author(name) : null;
+  } catch { return null; }
 }
 
 export async function reserveDashboardUser(root, author) {

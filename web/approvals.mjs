@@ -83,4 +83,4 @@ export function mountApprovals(container) {
 }
 
 const container = typeof document !== 'undefined' && document.getElementById('approvals');
-if (container) mountApprovals(container);
+if (container && new URLSearchParams(location.search).get('embed') !== '1') mountApprovals(container);

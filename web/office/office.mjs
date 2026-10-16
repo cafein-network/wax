@@ -17,6 +17,7 @@ import { loadSideAssets } from './sprites.mjs';
 import { planStroll, strollGap } from './stroll.mjs';
 import { cardTabs, ceoCard, faceShot, profileCard } from './card.mjs';
 import { isPlaying, startMusic, stopMusic } from './music.mjs';
+import { createOfficeMessenger } from './messenger.mjs';
 
 const ROOMS = SIDE_ROOMS;
 const ROOM_ORDER = SIDE_ROOM_ORDER;
@@ -38,7 +39,7 @@ const OUTFIT_COLORS = { claude: '#d9774b', codex: '#4a515c', gemini: '#2f63b8', 
 const NPC_STAND_UP = { dx: Math.round(34 * SCALE), dy: 0 };
 
 const state = {
-  config: null, assets: null, agents: [], order: [], events: [], lastNoteAt: new Map(), boards: new Map(),
+  config: null, assets: null, assetError: null, agents: [], order: [], events: [], lastNoteAt: new Map(), boards: new Map(),
   features: [], channels: [], recent: new Map(), bubbles: new Map(), currentBoard: null, scene: [], pm: null,
   skills: new Map(), auras: new Map(),
   usage: null,
@@ -46,6 +47,15 @@ const state = {
   tools: [],
   room: ROOMS[new URLSearchParams(location.search).get('room')] ? new URLSearchParams(location.search).get('room') : storage('wax.office.room', 'dev'),
 };
+const messenger = createOfficeMessenger({
+  dialog: $('messenger-dialog'), launcher: $('open-messenger'), frame: $('messenger-frame'), count: $('message-count'),
+  api, getConfig: () => state.config, getChannels: () => state.channels, onChange: () => {
+    for (const [author, bubble] of state.bubbles) {
+      if (bubble.kind === 'message' && (bubble.message ? !messenger.isUnread(bubble.message.channel, bubble.message.id) : !messenger.count(author))) state.bubbles.delete(author);
+    }
+    requestFrame();
+  },
+});
 if (!ROOMS[state.room]) state.room = 'dev';
 const actors = new Map();
 let view = storage('wax-chat.office.view', 'office');
@@ -181,8 +191,8 @@ function updateScene({ instant = false } = {}) {
   renderRoomTabs();
   canvas.setAttribute('aria-label', `${roomOf(state.room).label} — ${summaryLabel(state.scene.filter((item) => (item.room ?? 'dev') === state.room))}`);
   const hidden = state.scene.filter((item) => !item.seated);
-  $('notice').hidden = !hidden.length;
-  $('notice').textContent = hidden.length ? `자리가 부족해 사무실에 표시하지 못한 에이전트: ${hidden.map((item) => item.author).join(', ')} (목록 보기에서 확인)` : '';
+  $('notice').hidden = !state.assetError && !hidden.length;
+  $('notice').textContent = state.assetError || (hidden.length ? `자리가 부족해 사무실에 표시하지 못한 에이전트: ${hidden.map((item) => item.author).join(', ')} (목록 보기에서 확인)` : '');
   renderList();
   requestFrame();
 }
@@ -324,7 +334,8 @@ function positionOverlay(time) {
   if (speaker) {
     seen.add('speaker');
     const button = overlayFor('speaker', () => el('button', { type: 'button', class: 'hit', onclick: toggleMusic }));
-    button.setAttribute('aria-label', isPlaying() ? '블루투스 스피커: 음악 끄기' : '블루투스 스피커: 음악 켜기');
+    button.setAttribute('aria-label', isPlaying() ? '스피커: 음표 연출 끄기 (소리 없음)' : '스피커: 음표 연출 켜기 (소리 없음)');
+    button.setAttribute('aria-pressed', String(isPlaying()));
     button.title = button.getAttribute('aria-label');
     Object.assign(button.style, { left: `${speaker.x * scale}px`, top: `${speaker.y * scale}px`, width: `${speaker.width * scale}px`, height: `${speaker.height * scale}px` });
   }
@@ -348,6 +359,24 @@ function positionOverlay(time) {
     Object.assign(tag.style, { left: `${actor.drawn.x * scale}px`, top: `${(box.bottom + 8) * scale}px` });
     const floorTop = Math.max(...Object.values(BUILDING.floorTop).filter((y) => y <= actor.drawn.y));
     tags.push({ node: tag, x: actor.drawn.x * scale, top: (box.bottom + 8) * scale, limit: (floorTop + FLOOR_HEIGHT - 16) * scale });
+    const unread = !actor.npc && actor.kind !== 'human' ? messenger.count(actor.author) : 0;
+    const said = state.bubbles.get(actor.author);
+    const messageToast = unread > 0 && said?.kind === 'message' && said.until > now && (!said.message || messenger.isUnread(said.message.channel, said.message.id));
+    if (messageToast) {
+      const key = `message:${actor.author}`;
+      seen.add(key);
+      const button = overlayFor(key, () => el('button', {
+        type: 'button', class: 'agent-message', 'aria-haspopup': 'dialog',
+        onclick: () => messenger.open({ author: actor.author, channel: actor.item?.feature }),
+      }, icon('message', 16)));
+      const label = `${actor.author}의 새 메시지 · 대화 열기`;
+      button.setAttribute('aria-label', label); button.title = label;
+      button.dataset.unread = String(unread > 0);
+      Object.assign(button.style, {
+        left: `${Math.min(stage.clientWidth - 32, Math.max(4, actor.drawn.x * scale - 14))}px`,
+        top: `${Math.max(4, box.top * scale - 34)}px`,
+      });
+    }
     const aura = !actor.npc && state.auras.get(actor.author);
     if (aura && aura.until > now) {
       const auraKey = `aura:${actor.author}`;
@@ -359,7 +388,6 @@ function positionOverlay(time) {
       const size = Math.max(28, height * 0.42 * scale);
       Object.assign(node.style, { left: `${actor.drawn.x * scale}px`, top: `${(box.top + height * 0.17) * scale}px`, width: `${size}px`, height: `${size}px` });
     }
-    const said = state.bubbles.get(actor.author);
     const quiet = actor.item?.quiet && !actor.route && actor.activity !== 'sleep';
     const bubble = said && said.until > now ? said
       : quiet ? { text: reducedQuery.matches ? '…' : '.'.repeat(1 + Math.floor(time / 500) % 3), kind: 'quiet' } : null;
@@ -369,8 +397,9 @@ function positionOverlay(time) {
       node.textContent = bubble.text;
       node.dataset.kind = bubble.kind;
       node.style.setProperty('--tone', tone);
-      Object.assign(node.style, { left: `${actor.drawn.x * scale}px`, top: `${(box.top - 12) * scale}px` });
-      placed.push({ node, x: actor.drawn.x * scale, y: (box.top - 12) * scale });
+      const bottom = messageToast ? Math.max(4, box.top * scale - 34) - 12 : (box.top - 12) * scale;
+      Object.assign(node.style, { left: `${actor.drawn.x * scale}px`, top: `${bottom}px` });
+      placed.push({ node, x: actor.drawn.x * scale, y: bottom });
     }
   }
   for (const [key, node] of overlayNodes) if (!seen.has(key)) { node.remove(); overlayNodes.delete(key); }
@@ -468,6 +497,10 @@ function stackBubbles(placed) {
   const boxes = [];
   for (const item of placed.sort((a, b) => b.y - a.y)) {
     const width = item.node.offsetWidth, height = item.node.offsetHeight;
+    const headX = item.x;
+    item.x = Math.max(width / 2 + gap, Math.min(stage.clientWidth - width / 2 - gap, headX));
+    item.node.style.left = `${item.x}px`;
+    item.node.style.setProperty('--tail-x', `${Math.max(8, Math.min(width - 8, headX - item.x + width / 2))}px`);
     let bottom = item.y;
     for (let moved = true; moved;) {
       moved = false;
@@ -504,12 +537,12 @@ function refreshSkills({ initial = false } = {}) {
   }, initial ? 0 : 600);
 }
 
-function showBubble(author, text, kind, ms = BUBBLE_MS) {
+function showBubble(author, text, kind, ms = BUBBLE_MS, message = null) {
   const flat = String(text).replace(/\s+/g, ' ').trim();
   const max = kind === 'npc' ? 120 : 60;
   const shown = flat.length > max ? `${flat.slice(0, max)}…` : flat;
   ms = kind === 'emote' ? ms : bubbleMs(shown, ms);
-  state.bubbles.set(author, { text: shown, kind, until: Date.now() + ms });
+  state.bubbles.set(author, { text: shown, kind, until: Date.now() + ms, message });
   setTimeout(requestFrame, ms + 50);
 }
 
@@ -815,6 +848,10 @@ async function openAgent(author) {
   $('agent-title').textContent = author;
   const recent = (state.recent.get(author) ?? []).slice(-5).reverse();
   const kind = agent?.kind ?? 'other';
+  const chatAction = kind === 'human' ? null : el('button', {
+    type: 'button', class: 'hr-chat-button icon-label',
+    onclick: () => { $('agent-dialog').close(); void messenger.open({ author, channel: agent?.feature }); },
+  }, icon('message', 15), '채팅');
   const nowInfo = el('dl', { class: 'dl' },
     el('dt', { text: '종류' }), el('dd', { text: KIND_LABELS[agent?.kind] ?? agent?.kind ?? '-' }),
     el('dt', { text: '상태' }), el('dd', { text: STATE_LABELS[item?.state] ?? '-' }),
@@ -833,8 +870,8 @@ async function openAgent(author) {
   api('/api/profiles').then(({ profiles }) => {
     const profile = profiles.find((p) => p.author === author) ?? null;
     if (kind === 'human') { clear(card).append(ceoCard({ author, profile, sprite: state.assets?.characters?.[persona], look: lookFor(state.assets?.characters?.[persona], kind, state.assets?.variants), team: teamSummary(), department: state.config.project, tabs })); return; }
-    clear(card).append(profileCard({ author, kindLabel: agent?.model ? `${KIND_LABELS[profile?.kind ?? kind] ?? kind} · ${agent.model}` : KIND_LABELS[profile?.kind ?? kind] ?? kind, profile, sprite: state.assets?.characters?.[persona], look: lookFor(state.assets?.characters?.[persona], kind, state.assets?.variants), department: state.config.project, lead: state.pm === author, tabs }));
-  }).catch(() => clear(card).append(el('p', { class: 'kind', text: '인사기록 카드를 불러오지 못했습니다.' }), cardTabs(tabs)));
+    clear(card).append(profileCard({ author, kindLabel: agent?.model ? `${KIND_LABELS[profile?.kind ?? kind] ?? kind} · ${agent.model}` : KIND_LABELS[profile?.kind ?? kind] ?? kind, profile, sprite: state.assets?.characters?.[persona], look: lookFor(state.assets?.characters?.[persona], kind, state.assets?.variants), department: state.config.project, lead: state.pm === author, extra: chatAction, tabs }));
+  }).catch(() => clear(card).append(el('p', { class: 'kind', text: '인사기록 카드를 불러오지 못했습니다.' }), chatAction, cardTabs(tabs)));
   const next = el('div', { class: 'hr-next' });
   if (agent) api('/api/team').then(({ tasks }) => {
     const cmd = nextCommand({ agent, features: state.features, tasks: tasks ?? [] });
@@ -938,9 +975,10 @@ function connect({ resync = false } = {}) {
   source.onerror = () => { retry.stop(); wasDown = true; $('status').dataset.state = 'down'; $('status').textContent = '연결 끊김 — 다시 연결 중'; };
   source.addEventListener('message', (event) => {
     const { channel, message } = JSON.parse(event.data);
+    const unread = messenger.receive(channel, message);
     addMessage(channel, message);
     addToOrder([message.author]);
-    showBubble(message.author, message.body, 'message');
+    if (unread) showBubble(message.author, message.body, 'message', BUBBLE_MS, { channel, id: message.id });
     refreshSkills();
     announce(`${message.author}: ${channel} 채널에 메시지`);
     updateScene();
@@ -1017,11 +1055,15 @@ try {
   state.config = await api('/api/config');
   document.title = `${state.config.project} · wax 가상 사무실`;
   [state.assets] = await Promise.all([loadSideAssets(), loadSnapshot()]);
+  if (!state.assets || !state.assets.personas?.length || !Object.keys(state.assets.characters ?? {}).length || BUILDING.floors.some((id) => !state.assets.backgrounds?.[BUILDING.rooms[id].background])) {
+    state.assetError = '건물·캐릭터 이미지를 불러오지 못했습니다. 이미지 경로를 확인한 뒤 새로고침해 주세요. 목록 보기와 채팅은 계속 사용할 수 있습니다.';
+    state.assets = null;
+  }
   refreshSkills({ initial: true });
   refreshUsage();
   refreshTools();
   refreshToolNews();
-  assetsSettled = true;
+  assetsSettled = Boolean(state.assets);
   applyView();
   updateScene({ instant: true });
   disconnectOffice = connect();

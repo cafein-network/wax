@@ -145,3 +145,30 @@ test('프로젝트 소개는 package.json description, 없으면 README 첫 소�
   await writeFile(join(root, 'package.json'), JSON.stringify({ description: '패키지 설명' }));
   assert.equal(await projectDescription(root), '패키지 설명');
 });
+
+test('기본 이름이 사용자로 바뀌어도 기존 프로젝트는 쓰던 대시보드 이름(사람)으로 PM 업무를 이어 간다', async (t) => {
+  const root = await project(t, ['chatbot']);
+  const legacy = createChatServer({ root, env: { WAX_CHAT_USER: '사람' }, intervalMs: 100 });
+  { const server = legacy;
+    server.listen(0, '127.0.0.1'); await once(server, 'listening');
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const { token, user } = await (await fetch(`${base}/api/config`)).json();
+    assert.equal(user, '사람');
+    const res = await fetch(`${base}/api/team/pm`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-chat-token': token }, body: JSON.stringify({ self: true }) });
+    assert.equal(res.status, 200);
+    server.shutdown();
+  }
+  const upgraded = createChatServer({ root, env: {}, intervalMs: 100 });
+  upgraded.listen(0, '127.0.0.1'); await once(upgraded, 'listening');
+  t.after(() => upgraded.shutdown());
+  const base = `http://127.0.0.1:${upgraded.address().port}`;
+  const { token, user } = await (await fetch(`${base}/api/config`)).json();
+  assert.equal(user, '사람');
+  const res = await fetch(`${base}/api/tasks`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-chat-token': token }, body: JSON.stringify({ feature: 'chatbot', to: 'codex-app', phase: 'plan', body: '기획' }) });
+  assert.equal(res.status, 201);
+  const fresh = await project(t, ['chatbot']);
+  const brandNew = createChatServer({ root: fresh, env: {}, intervalMs: 100 });
+  brandNew.listen(0, '127.0.0.1'); await once(brandNew, 'listening');
+  t.after(() => brandNew.shutdown());
+  assert.equal((await (await fetch(`http://127.0.0.1:${brandNew.address().port}/api/config`)).json()).user, '사용자');
+});

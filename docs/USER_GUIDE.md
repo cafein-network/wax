@@ -193,7 +193,7 @@ copilot plugin install wax@wax
 node "/path/to/wax/bin/wax.mjs" --project "/path/to/my-app" dashboard
 ```
 
-`http://127.0.0.1:4330/`을 엽니다(`--port`나 `WAX_DASHBOARD_PORT`로 변경). AI 세션에서는 `/wax:init`(Codex `$wax:init`, Antigravity `/init`)이 대시보드를 열지 묻고 켜 줍니다. 따로 대시보드 명령은 없고, 나중에 다시 열 때도 init을 실행합니다. 이미 켜져 있으면 주소만 알려 주고, 꺼져 있으면 세션이 백그라운드로 실행하거나 따로 실행할 명령을 안내합니다. `dashboard --status`로 실행 여부만 확인할 수 있습니다. 화면 사용법은 대시보드 상단의 **도움말**(`/help`)에 정리되어 있습니다. 서버는 이 컴퓨터(127.0.0.1)에서만 열립니다. 웹에서 쓰는 사람 이름은 `WAX_CHAT_USER`로 정합니다(기본 "사람").
+`http://127.0.0.1:4330/`을 엽니다(`--port`나 `WAX_DASHBOARD_PORT`로 변경). AI 세션에서는 `/wax:init`(Codex `$wax:init`, Antigravity `/init`)이 대시보드를 열지 묻고 켜 줍니다. 따로 대시보드 명령은 없고, 나중에 다시 열 때도 init을 실행합니다. 이미 켜져 있으면 주소만 알려 주고, 꺼져 있으면 세션이 백그라운드로 실행하거나 따로 실행할 명령을 안내합니다. `dashboard --status`로 실행 여부만 확인할 수 있습니다. 화면 사용법은 대시보드 상단의 **도움말**(`/help`)에 정리되어 있습니다. 서버는 이 컴퓨터(127.0.0.1)에서만 열립니다. 웹에서 쓰는 사람 이름은 `WAX_CHAT_USER`로 정합니다(기본 "사용자").
 
 | 화면 | 내용 |
 | --- | --- |

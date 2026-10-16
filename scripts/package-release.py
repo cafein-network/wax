@@ -32,7 +32,7 @@ FILES = (
     *(f'src/chat/{name}.mjs' for name in CHAT),
     *web_files(ROOT),
     'test/workflow.test.mjs', 'test/context.test.mjs', 'test/approvals.test.mjs', 'test/approvals-ui.test.mjs', 'test/approval-retention.test.mjs', 'test/backup-evidence.test.mjs', 'test/codex.test.mjs', 'test/diagnostics.test.mjs', 'test/package_test.py', 'test/chat-helpers.mjs', 'test/chat-requests.test.mjs', 'test/agent-session.test.mjs',
-    *(f'test/chat-{name}.test.mjs' for name in ('board', 'channels', 'cli', 'digest', 'presence', 'server', 'validate', 'office-model', 'ui-safety', 'team-daily', 'watch', 'skills', 'commands', 'usage', 'tools', 'dashboard-model', 'dashboard-proof', 'dialog-surface', 'workflow-demo', 'review-regressions', 'round4', 'round5', 'round6', 'tool-news', 'cross-session')),
+    *(f'test/chat-{name}.test.mjs' for name in ('board', 'channels', 'cli', 'digest', 'presence', 'server', 'validate', 'office-model', 'ui-safety', 'team-daily', 'watch', 'skills', 'commands', 'usage', 'tools', 'dashboard-model', 'dashboard-proof', 'dialog-surface', 'workflow-demo', 'review-regressions', 'round4', 'round5', 'round6', 'tool-news', 'cross-session', 'inbox')),
     *(f'commands/{name}.md' for name in COMMANDS),
     *(f'commands/wax/{name}.toml' for name in COMMANDS),
     *(f'skills/{name}/{file}' for name in COMMANDS for file in ('SKILL.md', 'run.mjs')),

@@ -31,68 +31,7 @@ export function actorBox(actor, sprite) {
   return { top: actor.y - info.anchor.y * k + drop, bottom: actor.y + (info.height - info.anchor.y) * k, left: actor.x - (info.width / 2) * k, right: actor.x + (info.width / 2) * k };
 }
 
-
-function shade(hex, amount) {
-  const n = parseInt(hex.slice(1), 16);
-  const c = [n >> 16, (n >> 8) & 255, n & 255].map((v) => Math.max(0, Math.min(255, Math.round(v + amount))));
-  return `rgb(${c.join(',')})`;
-}
-
-function drawFloor(ctx, room) {
-  ctx.fillStyle = room.wall;
-  ctx.fillRect(0, 0, WIDTH, FLOOR);
-  ctx.fillStyle = room.accent;
-  ctx.fillRect(0, 0, WIDTH, 14);
-  ctx.fillStyle = shade(room.wall, -18);
-  ctx.fillRect(0, FLOOR - 12, WIDTH, 12);
-  ctx.fillStyle = room.dark ? '#1b2232' : '#c69c6d';
-  ctx.fillRect(0, FLOOR, WIDTH, FLOOR_HEIGHT - FLOOR);
-  ctx.fillStyle = room.dark ? '#222b3d' : '#b98d5f';
-  for (let x = 0; x < WIDTH; x += 96) ctx.fillRect(x, FLOOR, 3, 90);
-  ctx.fillStyle = '#5b4a3a';
-  ctx.fillRect(0, FLOOR_HEIGHT - 16, WIDTH, 16);
-}
-
 export const floorName = (building, id) => building.rooms[id]?.floor ?? `${building.floors.indexOf(id) + 1}F`;
-
-function drawRoof(ctx) {
-  const sky = ['#9fd3ef', '#b5ddf2', '#c9e6f4', '#dcedf3'];
-  const band = Math.ceil(FLOOR / sky.length);
-  sky.forEach((color, i) => { ctx.fillStyle = color; ctx.fillRect(0, i * band, WIDTH, band); });
-  ctx.fillStyle = '#ffffff';
-  for (const [x, y, w] of [[120, 34, 90], [470, 22, 120], [860, 40, 80], [1120, 18, 110]]) {
-    ctx.fillRect(x, y + 8, w, 12); ctx.fillRect(x + w * 0.2, y, w * 0.45, 10); ctx.fillRect(x + w * 0.5, y + 3, w * 0.3, 8);
-  }
-  for (let x = 0, i = 0; x < WIDTH; i++) {
-    const w = 40 + ((i * 37) % 50), h = 40 + ((i * 53) % 70);
-    ctx.fillStyle = i % 2 ? '#8fb4c9' : '#a3c3d4';
-    ctx.fillRect(x, FLOOR - 34 - h, w, h + 34);
-    ctx.fillStyle = '#c4dae5';
-    for (let wy = FLOOR - 26 - h; wy < FLOOR - 40; wy += 14) for (let wx = x + 6; wx < x + w - 8; wx += 12) ctx.fillRect(wx, wy, 5, 6);
-    x += w + 6;
-  }
-  ctx.fillStyle = '#d7dfd9'; ctx.fillRect(0, FLOOR - 40, WIDTH, 40);
-  ctx.fillStyle = '#b9c4bd'; ctx.fillRect(0, FLOOR - 40, WIDTH, 5);
-  ctx.fillStyle = 'rgba(200,232,244,0.55)'; ctx.fillRect(0, FLOOR - 78, WIDTH, 38);
-  ctx.fillStyle = '#7d8a83'; ctx.fillRect(0, FLOOR - 82, WIDTH, 5);
-  for (let x = 40; x < WIDTH; x += 160) ctx.fillRect(x, FLOOR - 82, 4, 42);
-  ctx.fillStyle = '#b07a4f'; ctx.fillRect(0, FLOOR, WIDTH, FLOOR_HEIGHT - FLOOR);
-  ctx.fillStyle = '#9c6a42';
-  for (let y = FLOOR + 10; y < FLOOR_HEIGHT - 16; y += 12) ctx.fillRect(0, y, WIDTH, 2);
-  ctx.fillStyle = '#5b4a3a'; ctx.fillRect(0, FLOOR_HEIGHT - 16, WIDTH, 16);
-  ctx.strokeStyle = '#4b4f55'; ctx.lineWidth = 2;
-  for (const [x0, x1] of [[150, 560], [560, 1010], [1010, 1270]]) {
-    ctx.beginPath(); ctx.moveTo(x0, 36);
-    ctx.quadraticCurveTo((x0 + x1) / 2, 76, x1, 36); ctx.stroke();
-    for (let t = 0.1; t < 1; t += 0.14) {
-      const x = (1 - t) * (1 - t) * x0 + 2 * (1 - t) * t * ((x0 + x1) / 2) + t * t * x1;
-      const y = (1 - t) * (1 - t) * 36 + 2 * (1 - t) * t * 76 + t * t * 36;
-      ctx.fillStyle = '#ffd36b'; ctx.fillRect(Math.round(x) - 3, Math.round(y) + 1, 6, 7);
-    }
-  }
-  ctx.fillStyle = '#5f6b78';
-  for (const x of [150, 560, 1010, 1270]) ctx.fillRect(x - 3, 30, 6, FLOOR - 30 - 82);
-}
 
 function drawLiftShaft(ctx, building) {
   const x = LIFT_X - LIFT_WIDTH / 2;
@@ -280,6 +219,10 @@ function drawOccupiedDesk(ctx, assets, prop) {
 }
 
 export function render(ctx, { assets, actors, board, room: building, music = null, chairs = [] }) {
+  if (!assets || building.floors.some((id) => !assets.backgrounds?.[building.rooms[id].background])) {
+    ctx.clearRect(0, 0, building.SIZE.width, building.SIZE.height);
+    return;
+  }
   ctx.imageSmoothingEnabled = false;
   const occupied = occupiedSeats(building, actors);
   const seatTaken = (id, prop) => (prop.seat && occupied.has(`${id}:${prop.seat}`)) || (prop.seatOf && occupied.has(`${id}:${prop.seatOf}`));
@@ -305,16 +248,6 @@ export function render(ctx, { assets, actors, board, room: building, music = nul
         const sprite = deskSprite(assets, prop) || assets?.props?.[PROP_SPRITE[prop.type] ?? prop.type];
         if (sprite) drawPropImage(ctx, prop, sprite); else PROP_DRAW[prop.type]?.(ctx, prop);
       }
-    } else if (room.outdoor) {
-      drawRoof(ctx);
-      for (const prop of room.props ?? []) {
-        if (seatTaken(id, prop)) continue;
-        const sprite = assets?.props?.[PROP_SPRITE[prop.type] ?? prop.type];
-        if (sprite) drawPropImage(ctx, prop, sprite); else PROP_DRAW[prop.type]?.(ctx, prop);
-      }
-    } else {
-      drawFloor(ctx, room);
-      for (const prop of room.props ?? []) if (!(prop.seatOf && seatTaken(id, prop))) PROP_DRAW[prop.type]?.(ctx, prop);
     }
     for (const key of chairs) {
       const [floor, seat] = key.split(':');

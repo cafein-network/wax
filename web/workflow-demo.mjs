@@ -91,7 +91,7 @@ function render() {
   }));
   clear($('demo-team')).append(...view.team.map((person) => el('li', { class: person.state !== 'idle' ? 'demo-active-agent' : '' },
     el('button', { type: 'button', class: 'demo-person', disabled: !officeReady, 'aria-label': `${label(person)} 캐릭터 카드`, onclick: () => officeAction('agent', person.author) },
-      portrait(person, 56), el('span', {}, el('strong', { text: person.role }), el('span', { class: 'kind', text: person.model || (person.kind === 'human' ? '사람 PM' : `${DEMO_KIND_LABELS[person.kind]} · 기본 모델`) }))),
+      portrait(person, 56), el('span', {}, el('strong', { text: person.role }), el('span', { class: 'kind', text: person.model || (person.kind === 'human' ? '사용자 PM' : `${DEMO_KIND_LABELS[person.kind]} · 기본 모델`) }))),
     el('div', { class: 'agent-head' }, el('span', { class: 'badge', text: view.step.done ? '완료' : agentStates[person.state] }), el('span', { class: 'kind', text: person.note })))));
   clear($('demo-proofs')).append(...(view.tests.length ? view.tests.slice().reverse().map((event) => el('div', { class: 'demo-proof' },
     el('div', { class: 'agent-head' }, icon(event.proof === 'pass' ? 'passed' : 'failed'), el('strong', { text: event.proof === 'pass' ? '재실행 통과' : '첫 테스트 실패' }), el('span', { class: 'kind', text: '가상 근거' })),

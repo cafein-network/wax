@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import { LABELS, PHASES, WaxError, createFeature, getFeature } from '../workflow.mjs';
 import { listChannels, postMessage, readMessages, resolveTarget } from './channels.mjs';
-import { AWAY_AFTER_MS, listPresence, withDashboardUser, reserveDashboardUser } from './presence.mjs';
+import { AWAY_AFTER_MS, listPresence, withDashboardUser, reserveDashboardUser, storedDashboardUser } from './presence.mjs';
 import { listBoard, postNote, readReport } from './board.mjs';
 import { buildDigest } from './digest.mjs';
 import { ChatWatcher, featureSummary } from './watcher.mjs';
@@ -70,7 +70,7 @@ async function readJson(req, maxBytes = 1_000_000) {
 
 export function createChatServer({ root, env = process.env, intervalMs = 1000, executeRequest, requestTools = discoverRequestTools } = {}) {
   const token = randomBytes(32).toString('hex');
-  const user = validAuthor(env.WAX_CHAT_USER || '사람');
+  const user = validAuthor(env.WAX_CHAT_USER || storedDashboardUser(root) || '사용자');
   let identityReady;
   const ensureIdentity = () => identityReady ??= reserveDashboardUser(root, user).catch(error => {
     identityReady = null;

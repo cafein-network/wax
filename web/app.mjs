@@ -3,6 +3,19 @@ import { api, clear, el, richText, timeLabel } from '/dom.mjs';
 import { REACH, addressed, deliveryHint, recipientOptions } from '/recipients-model.mjs';
 
 const $ = (id) => document.getElementById(id);
+const embedded = new URLSearchParams(location.search).get('embed') === '1';
+let readingReady = false;
+if (embedded) document.body.classList.add('messenger-chat');
+function notifyRead() {
+  if (embedded && readingReady && parent !== window && !document.hidden) parent.postMessage({ type: 'wax-chat-read', channel: current, ids: [...shown.keys()] }, location.origin);
+}
+if (embedded) window.addEventListener('message', (event) => {
+  if (event.source === parent && event.origin === location.origin && event.data?.type === 'wax-chat-visible') notifyRead();
+});
+if (embedded) document.addEventListener('visibilitychange', notifyRead);
+if (embedded) document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') parent.postMessage({ type: 'wax-chat-close' }, location.origin);
+});
 const TYPE_LABELS = { message: '메시지', opinion: '의견', question: '질문', answer: '답변', decision: '결정' };
 let config, channels = [], current = new URLSearchParams(location.search).get('channel');
 const feed = new ChannelFeed(), drafts = new ChannelDrafts(), sending = new Set();
@@ -10,7 +23,9 @@ const shown = new Map();
 let presence = [], options = [], selected = new Set(), replyTo = null, typeBeforeReply = null;
 
 function renderRecipients() {
-  for (const name of selected) if (!options.some((option) => option.author === name)) selected.delete(name);
+  const unavailable = [...selected].filter((name) => !options.some((option) => option.author === name));
+  for (const name of unavailable) selected.delete(name);
+  if (unavailable.length) { $('delivery').textContent = `${unavailable.join(', ')} 세션을 받는 사람으로 고를 수 없습니다. 받는 사람을 다시 선택해 주세요.`; $('delivery').hidden = false; }
   const list = clear($('recipients'));
   if (!options.length) { list.append(el('span', { class: 'meta', text: '참여한 AI 세션이 없습니다. 각 도구에서 wax join을 실행하면 여기에 나타납니다.' })); return; }
   list.append(...options.map((option) => el('button', {
@@ -45,10 +60,10 @@ function renderChannels() {
 
 function messageNode(message) {
   const target = message.replyTo && shown.get(message.replyTo);
-  return el('article', { class: 'message', id: message.id },
+  return el('article', { class: `message${message.author === config?.user ? ' own-message' : ''}`, id: message.id },
     el('header', {},
       el('span', { class: 'who', text: message.author }),
-      el('span', { class: 'kind', text: message.kind }),
+      el('span', { class: 'kind', text: message.kind === 'human' ? '사용자' : message.kind }),
       message.type !== 'message' ? el('span', { class: `badge type-${message.type}`, text: TYPE_LABELS[message.type] }) : null,
       message.phase ? el('span', { class: 'badge', text: message.phase }) : null,
       el('time', { class: 'when', datetime: message.at, text: timeLabel(message.at) }),
@@ -69,6 +84,7 @@ function append(message) {
 }
 
 async function selectChannel(id) {
+  readingReady = false;
   if (feed.current !== null) drafts.edit(current, $('body').value);
   current = id;
   setReply(null); $('type').value = 'message'; $('delivery').hidden = true;
@@ -76,7 +92,8 @@ async function selectChannel(id) {
   const sequence = feed.begin(id);
   $('body').value = drafts.read(id).body;
   $('composer').querySelector('[type=submit]').disabled = sending.has(id);
-  history.replaceState(null, '', `/chat?channel=${encodeURIComponent(id)}`);
+  const url = new URL(location.href); url.searchParams.set('channel', id);
+  history.replaceState(null, '', url.pathname + url.search);
   renderChannels();
   shown.clear();
   clear($('timeline')).append(el('p', { class: 'empty', text: '불러오는 중…' }));
@@ -88,6 +105,8 @@ async function selectChannel(id) {
     if (!merged.length) $('timeline').append(el('p', { class: 'empty', text: '아직 메시지가 없습니다. 에이전트는 wax chat post로 글을 남깁니다.' }));
     merged.forEach(append);
     $('timeline').scrollTop = $('timeline').scrollHeight;
+    readingReady = true;
+    notifyRead();
   } catch (error) {
     if (!feed.accepts(id, sequence)) return;
     const live = feed.merge(id, sequence, []) ?? [];
@@ -136,7 +155,7 @@ function connect() {
     const { channel, message } = JSON.parse(event.data);
     const entry = channels.find((c) => c.id === channel);
     if (entry) { entry.count += 1; renderChannels(); }
-    if (feed.receive(channel, message)) append(message);
+    if (feed.receive(channel, message)) { append(message); notifyRead(); }
   });
   source.addEventListener('features', () => refreshChannels().catch(() => {}));
   source.addEventListener('presence', () => refreshRecipients().catch(() => {}));
@@ -149,6 +168,12 @@ try {
   await refreshChannels();
   await selectChannel(current);
   await refreshRecipients().catch(() => {});
+  const recipient = new URLSearchParams(location.search).get('recipient');
+  if (recipient) {
+    if (options.some((option) => option.author === recipient)) { selected.add(recipient); renderRecipients(); }
+    else { $('delivery').textContent = `${recipient} 세션을 받는 사람으로 고를 수 없습니다. 받는 사람을 선택해 주세요.`; $('delivery').hidden = false; }
+  }
+  if (embedded) $('body').placeholder = '메시지를 입력하세요…';
   setInterval(() => refreshRecipients().catch(() => {}), 30_000);
   connect();
 } catch (error) {

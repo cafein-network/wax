@@ -22,7 +22,7 @@ export const DEMO_TEAM = [
   { author: 'reviewer', kind: 'codex', role: '코드 리뷰', phases: [3] },
   { author: 'docs', kind: 'claude', role: '문서·보고', phases: [4] },
 ];
-export const DEMO_KIND_LABELS = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini', copilot: 'Copilot', antigravity: 'Antigravity', human: '사람' };
+export const DEMO_KIND_LABELS = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini', copilot: 'Copilot', antigravity: 'Antigravity', human: '사용자' };
 export function assessDemoTask(input = DEMO_TASKS.system) {
   const scope = ['ui', 'feature', 'system'].includes(input?.scope) ? input.scope : 'ui';
   let score = { ui: 1, feature: 2, system: 3 }[scope];
