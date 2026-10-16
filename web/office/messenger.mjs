@@ -38,7 +38,7 @@ export function createOfficeMessenger({ dialog, launcher, frame, count, api, get
       try {
         const { messages } = await api(`/api/channels/${encodeURIComponent(channel)}/messages?limit=50`);
         if (currentGeneration !== generation || !dialog.open) return;
-        preview.append(...messages.map((message) => el('article', { class: 'message' }, el('header', {}, faceFor(message.author, message.kind), el('strong', { text: message.author })), el('div', { class: 'body' }, richText(message.body)))));
+        preview.append(...messages.map((message) => el('article', { class: `message msg-${message.type}` }, el('header', {}, faceFor(message.author, message.kind), el('strong', { text: message.author })), el('div', { class: 'body' }, richText(message.body)))));
         if (!messages.length) preview.append(el('p', { class: 'empty', text: '아직 메시지가 없습니다.' }));
         inbox.read(channel); update();
       } catch (error) { if (currentGeneration === generation) preview.append(el('p', { class: 'error', text: error.message })); }

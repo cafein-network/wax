@@ -53,7 +53,7 @@ const messenger = createOfficeMessenger({
   api, getConfig: () => state.config, getChannels: () => state.channels,
   getFaces: () => { for (const agent of state.agents) personaOf(agent.author); return [...personaMap].map(([author, face]) => ({ author, persona: face.persona, kind: face.kind })); },
   faceFor: (author, kind) => {
-    const node = kind === 'human' ? faceShot(null, null, 'U', 28) : faceOf(author, kind, 28);
+    const node = faceOf(author, kind, 28);
     node.classList.add('message-avatar');
     return node;
   },

@@ -14,7 +14,7 @@ function notifyRead() {
 let officeFaces = [];
 if (embedded) window.addEventListener('message', (event) => {
   if (event.origin !== location.origin || !(event.source === parent || (event.source && event.source !== window && event.source.parent === parent))) return;
-  if (event.data?.type === 'wax-chat-visible') notifyRead();
+  if (event.data?.type === 'wax-chat-visible') { $('timeline').scrollTop = $('timeline').scrollHeight; notifyRead(); }
   if (event.data?.type === 'wax-chat-faces' && Array.isArray(event.data.faces)) { officeFaces = event.data.faces.slice(0, 500); repaintAvatars(); }
 });
 if (embedded) document.addEventListener('visibilitychange', notifyRead);
@@ -65,12 +65,13 @@ function renderChannels() {
 
 let faceAssets = null, faces = new Map();
 function computeFaces() {
-  const known = assignPersonas(presence, faceAssets, keepFaces(faces, reservedFrom(officeFaces, faceAssets)));
+  const both = (agents, reserved) => assignPersonas(agents, faceAssets, assignPersonas(agents, faceAssets, reserved), { humans: true });
+  const known = both(presence, keepFaces(faces, reservedFrom(officeFaces, faceAssets)));
   const extra = [...new Map([...shown.values()].filter((m) => !presence.some((a) => a.author === m.author)).map((m) => [m.author, { author: m.author, kind: m.kind }])).values()];
-  faces = extra.length ? assignPersonas(extra, faceAssets, known) : known;
+  faces = extra.length ? both(extra, known) : known;
 }
 function avatarNode(author, kind) {
-  const face = kind !== 'human' && faces.get(author);
+  const face = faces.get(author);
   const node = (face && faceThumb(faceAssets, face.persona, face.kind, author)) || faceShot(null, null, kind === 'human' ? 'U' : author, 32);
   node.classList.add('message-avatar');
   node.dataset.author = author; node.dataset.kind = kind;
@@ -84,7 +85,7 @@ function repaintAvatars() {
 
 function messageNode(message) {
   const target = message.replyTo && shown.get(message.replyTo);
-  return el('article', { class: `message${message.author === config?.user ? ' own-message' : ''}`, id: message.id },
+  return el('article', { class: `message msg-${message.type}${message.author === config?.user ? ' own-message' : ''}`, id: message.id },
     el('header', {},
       avatarNode(message.author, message.kind),
       el('span', { class: 'who', text: message.author }),
