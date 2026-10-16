@@ -81,10 +81,11 @@ jobs:
         run: |
           version="${GITHUB_REF_NAME#v}"
           files=("dist/wax-$version.zip" dist/wax-latest.zip dist/SHA256SUMS.txt dist/latest.json)
-          notes="wax $version. Changes: https://wax.me2shop.com/#changelog · Installation: INSTALL.md
-          Verify provenance: gh attestation verify wax-$version.zip --repo $GITHUB_REPOSITORY"
+          printf '<!-- wax:changes:start -->\n' > dist/github-release-notes.md
+          cat dist/RELEASE_NOTES.md >> dist/github-release-notes.md
+          printf '<!-- wax:changes:end -->\n\nChanges: https://wax.me2shop.com/#changelog · Installation: INSTALL.md\nVerify provenance: gh attestation verify wax-%s.zip --repo %s\n' "$version" "$GITHUB_REPOSITORY" >> dist/github-release-notes.md
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
           else
-            gh release create "$GITHUB_REF_NAME" "${files[@]}" --verify-tag --title "wax $version" --notes "$notes"
+            gh release create "$GITHUB_REF_NAME" "${files[@]}" --verify-tag --title "wax $version" --notes-file dist/github-release-notes.md
           fi

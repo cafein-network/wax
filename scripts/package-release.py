@@ -52,6 +52,38 @@ def release_bytes(path, comments=False):
     return (text if comments or generated else strip(path.name, text)).encode('utf-8')
 
 
+def release_notes(root, version):
+    changelog = root / 'CHANGELOG.md'
+    published = root / 'RELEASE_NOTES.md'
+    for path in (changelog, published):
+        if path.is_symlink():
+            raise ValueError(f'Release files must not be symlinks: {path.name}')
+    if changelog.exists():
+        text = changelog.read_text(encoding='utf-8')
+        section = re.search(rf'^## {re.escape(version)} —([^\n]*)(?:\n|\Z)(.*?)(?=^## |\Z)', text, re.MULTILINE | re.DOTALL)
+        if not section:
+            raise ValueError(f'CHANGELOG.md must have a "## {version} —" entry')
+        heading, body = f'# wax {version} — {section[1].strip()}', section[2]
+    else:
+        if not published.is_file():
+            raise ValueError('RELEASE_NOTES.md is missing; use a complete release archive or add notes for this version')
+        heading, _, body = published.read_text(encoding='utf-8').partition('\n')
+        if not re.fullmatch(rf'# wax {re.escape(version)}(?: — [^\n]+)?', heading):
+            raise ValueError('RELEASE_NOTES.md must match the release version')
+    cleaned = re.sub(r'<!--.*?-->', '', f'{heading}\n\n{body}', flags=re.DOTALL)
+    if '<!--' in cleaned:
+        raise ValueError('Release notes contain an unterminated HTML comment')
+    heading, _, body = cleaned.partition('\n')
+    body = body.strip()
+    if not body:
+        raise ValueError('Release notes must contain changes, not just a version heading')
+    notes = f'{heading.rstrip()}\n\n{body}\n'
+    forbidden = r'gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|/(?:Users|home)/[^\s`]+|[A-Z]:\\Users\\'
+    if re.search(forbidden, notes):
+        raise ValueError('Release notes contain a possible secret or private machine path')
+    return notes
+
+
 def build_release(root, destination):
     version = json.loads((root / 'package.json').read_text(encoding='utf-8'))['version']
     if not re.fullmatch(r'\d+\.\d+\.\d+', version):
@@ -63,9 +95,10 @@ def build_release(root, destination):
         market = json.loads((root / name).read_text(encoding='utf-8'))
         if market['metadata']['version'] != version or any(plugin['version'] != version for plugin in market['plugins']):
             raise ValueError(f'Version mismatch: {name}')
+    notes = release_notes(root, version).encode('utf-8')
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
-        for name in sorted(FILES):
+        for name in sorted((*FILES, 'RELEASE_NOTES.md')):
             path = root / name
             if any((root / Path(*Path(name).parts[:i])).is_symlink() for i in range(1, len(Path(name).parts) + 1)):
                 raise ValueError(f'Release files must not be symlinks: {name}')
@@ -73,13 +106,10 @@ def build_release(root, destination):
             entry.create_system = 3
             entry.compress_type = zipfile.ZIP_DEFLATED
             entry.external_attr = (0o100755 if name == 'bin/wax.mjs' else 0o100644) << 16
-            archive.writestr(entry, release_bytes(path))
+            archive.writestr(entry, notes if name == 'RELEASE_NOTES.md' else release_bytes(path))
     data = buffer.getvalue()
     filename = f'wax-{version}.zip'
     digest = hashlib.sha256(data).hexdigest()
-    changelog = root / 'CHANGELOG.md'
-    if changelog.exists() and f'## {version} —' not in changelog.read_text(encoding='utf-8'):
-        raise ValueError(f'CHANGELOG.md must have a "## {version} —" entry')
     metadata = {'name': 'wax', 'version': version, 'filename': filename,
                 'bytes': len(data), 'sha256': digest, 'license': 'AGPL-3.0-only', 'node': '>=22'}
     destination.mkdir(parents=True, exist_ok=True)
@@ -89,6 +119,7 @@ def build_release(root, destination):
     (destination / 'SHA256SUMS.txt').write_text(
         f'{digest}  {filename}\n{digest}  wax-latest.zip\n', encoding='utf-8')
     (destination / 'wax-manual.md').write_bytes(release_bytes(root / 'docs/USER_GUIDE.md'))
+    (destination / 'RELEASE_NOTES.md').write_bytes(notes)
     (destination / 'CHANGELOG.md').unlink(missing_ok=True)
     return metadata
 

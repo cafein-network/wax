@@ -11,7 +11,7 @@ export const FACE_KINDS = ['claude', 'codex', 'gemini', 'copilot', 'antigravity'
 
 const png = async (name) => decodePng(await readFile(new URL(name, DIR)));
 
-export async function buildFaces() {
+export async function buildFaces({ encode = true } = {}) {
   const manifest = JSON.parse(await readFile(new URL('manifest.json', DIR), 'utf8'));
   const entries = Object.entries(manifest.characters).filter(([, entry]) => !entry.npc && entry.views?.front).sort(([a], [b]) => a.localeCompare(b));
   const npcs = NPCS.filter((npc) => manifest.characters[npc.side]?.views?.front);
@@ -35,15 +35,16 @@ export async function buildFaces() {
     }
   }
   const index = { schema: 1, size, kinds: FACE_KINDS, personas: rows.map(({ id, entry, npc }) => ({ id, recolor: entry.recolor ?? false, ...(npc ? { npc: true } : {}) })), variants: manifest.variants ?? {} };
-  return { png: encodePng(width, height, atlas), pixels: { width, height, rgba: atlas }, json: `${JSON.stringify(index, null, 2)}\n` };
+  return { png: encode ? encodePng(width, height, atlas) : null, pixels: { width, height, rgba: atlas }, json: `${JSON.stringify(index, null, 2)}\n` };
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  const { png: image, pixels, json } = await buildFaces();
-  if (process.argv.includes('--check')) {
+  const check = process.argv.includes('--check');
+  const { png: image, pixels, json } = await buildFaces({ encode: !check });
+  if (check) {
     const read = (name) => readFile(new URL(name, DIR)).catch(() => Buffer.alloc(0));
     let committed = null;
-    try { committed = decodePng(await read('faces.png')); }
+    try { committed = decodePng(await readFile(new URL('faces.png', DIR))); }
     catch (error) { console.error(`faces.png를 읽을 수 없습니다(${error.message}). node scripts/build-faces.mjs로 다시 만드세요.`); process.exit(1); }
     const samePixels = committed.width === pixels.width && committed.height === pixels.height && Buffer.from(committed.rgba).equals(pixels.rgba);
     const sameJson = (await read('faces.json')).toString('utf8').replace(/\r\n/g, '\n') === json;

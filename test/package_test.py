@@ -17,6 +17,29 @@ spec.loader.exec_module(release)
 
 
 class ReleaseTests(unittest.TestCase):
+    def test_only_current_release_notes_are_published_and_match_the_version(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp)
+            changelog = source / 'CHANGELOG.md'
+            changelog.write_text('# History\n\n## 1.2.3 — 2026-10-17 <!-- Internal date memo. -->\n\n- Current fix.\n<!-- Internal memo. -->\n\n## 1.2.2 — 2026-10-16\n\nPrivate historical detail.', encoding='utf-8')
+            notes = release.release_notes(source, '1.2.3')
+            self.assertEqual(notes, '# wax 1.2.3 — 2026-10-17\n\n- Current fix.\n')
+            self.assertEqual(release.release_notes(source, '1.2.2'), '# wax 1.2.2 — 2026-10-16\n\nPrivate historical detail.\n')
+            with self.assertRaisesRegex(ValueError, 'CHANGELOG.md'):
+                release.release_notes(source, '1.2.4')
+            changelog.unlink()
+            (source / 'RELEASE_NOTES.md').write_bytes(notes.replace('\n', '\r\n').encode('utf-8'))
+            self.assertEqual(release.release_notes(source, '1.2.3'), notes)
+            with self.assertRaisesRegex(ValueError, 'match the release version'):
+                release.release_notes(source, '1.2.4')
+            for content, message in [('# wax 1.2.3', 'contain changes'), ('# wax 1.2.3\n<!-- internal -->', 'contain changes'), ('# wax 1.2.3\n<!-- internal', 'unterminated'), ('# wax 1.2.3\nsk-' + 'a' * 30, 'possible secret')]:
+                (source / 'RELEASE_NOTES.md').write_text(content, encoding='utf-8')
+                with self.subTest(content=message), self.assertRaisesRegex(ValueError, message):
+                    release.release_notes(source, '1.2.3')
+            (source / 'RELEASE_NOTES.md').unlink()
+            with self.assertRaisesRegex(ValueError, 'complete release archive'):
+                release.release_notes(source, '1.2.3')
+
     def test_reproducible_archive_extracts_and_runs_without_install(self):
         with tempfile.TemporaryDirectory(prefix='wax release ') as temp:
             work = Path(temp)
@@ -27,9 +50,15 @@ class ReleaseTests(unittest.TestCase):
             self.assertEqual(hashlib.sha256(archive.read_bytes()).hexdigest(), first['sha256'])
             with zipfile.ZipFile(archive) as zipped:
                 self.assertIsNone(zipped.testzip())
-                self.assertEqual(set(zipped.namelist()), {f'wax/{name}' for name in release.FILES})
+                self.assertEqual(set(zipped.namelist()), {f'wax/{name}' for name in (*release.FILES, 'RELEASE_NOTES.md')})
                 zipped.extractall(work / 'extracted')
             plugin = work / 'extracted/wax'
+            notes = (plugin / 'RELEASE_NOTES.md').read_text(encoding='utf-8')
+            self.assertTrue(notes.startswith(f'# wax {first["version"]}'))
+            self.assertNotIn('\n## ', notes)
+            self.assertEqual(notes, (work / 'a/RELEASE_NOTES.md').read_text(encoding='utf-8'))
+            repacked = release.build_release(plugin, work / 'repacked')
+            self.assertEqual(repacked, first)
             for command in (plugin / 'commands/wax').glob('*.toml'):
                 tomllib.loads(command.read_text(encoding='utf-8'))
             subprocess.run(['npm', 'run', 'check'], cwd=plugin, check=True, capture_output=True)
@@ -57,6 +86,8 @@ class ReleaseTests(unittest.TestCase):
                 target = source / name
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(ROOT / name, target)
+            version = json.loads((source / 'package.json').read_text(encoding='utf-8'))['version']
+            (source / 'RELEASE_NOTES.md').write_text(release.release_notes(ROOT, version), encoding='utf-8')
             for name in ['.env', '.git/config', '.wax/features/private.json', 'docs/private.md', 'node_modules/private.txt']:
                 target = source / name
                 target.parent.mkdir(parents=True, exist_ok=True)

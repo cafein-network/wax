@@ -14,6 +14,16 @@ const read = async (path) => { try { return JSON.parse(await readFile(path, 'utf
 const birth = (s) => Number.isFinite(s.birthtimeMs) && s.birthtimeMs > 0 && s.birthtimeMs !== s.ctimeMs ? s.birthtimeMs : null;
 const same = (a, b) => a && b && a.dev === b.dev && a.ino === b.ino && (birth(a) === null || birth(b) === null || birth(a) === birth(b));
 const alive = (owner) => owner && (owner.pid === process.pid ? registry.active.has(owner.token) : processAlive(owner.pid));
+const WINDOWS_BUSY = ['EPERM', 'EBUSY', 'EACCES'];
+async function renameWithRetry(from, to) {
+  for (let attempt = 0; ; attempt++) {
+    try { return await rename(from, to); }
+    catch (error) {
+      if (process.platform !== 'win32' || !WINDOWS_BUSY.includes(error.code) || attempt >= 30) throw error;
+      await sleep(5 + attempt * 5);
+    }
+  }
+}
 
 async function sweepCandidates(path, staleMs) {
   const dir = dirname(path), now = Date.now();
@@ -40,20 +50,24 @@ async function reclaim(path, staleMs) {
   const original = await info(path);
   if (!original) return true;
   if (!original.isDirectory() || original.isSymbolicLink()) throw new LockError('잠금 경로는 일반 디렉터리이어야 합니다.');
+  const claim = join(path, '.reclaim');
+  const pending = await info(claim);
+  if (pending && Date.now() - pending.mtimeMs <= staleMs) return false;
   const owner = await read(join(path, 'owner.json'));
   if (alive(owner) || (!owner && Date.now() - original.mtimeMs < staleMs)) return false;
   const observed = await info(path);
   if (!same(original, observed)) return false;
-  const claim = join(path, '.reclaim');
   const token = randomUUID();
   try { await mkdir(claim); }
   catch (e) {
     if (e.code === 'ENOENT') return true;
     if (e.code !== 'EEXIST') throw e;
-    const claimInfo = await info(claim), reaper = await read(join(claim, 'owner.json'));
-    if (claimInfo && !alive(reaper) && Date.now() - claimInfo.mtimeMs > staleMs && same(original, await info(path))) {
+    const claimInfo = await info(claim);
+    if (!claimInfo || Date.now() - claimInfo.mtimeMs <= staleMs) return false;
+    const reaper = await read(join(claim, 'owner.json'));
+    if (!alive(reaper) && same(original, await info(path))) {
       const moved = `${path}.reclaim-${randomUUID()}`;
-      try { await rename(claim, moved); await rm(moved, { recursive: true, force: true }); } catch (err) { if (err.code !== 'ENOENT') throw err; }
+      try { await renameWithRetry(claim, moved); await rm(moved, { recursive: true, force: true, maxRetries: 10, retryDelay: 20 }); } catch (err) { if (err.code !== 'ENOENT') throw err; }
     }
     return false;
   }
@@ -67,15 +81,28 @@ async function reclaim(path, staleMs) {
     const latest = await read(join(path, 'owner.json'));
     const ownerlessSince = observed.mtimeMs;
     if (alive(latest) || JSON.stringify(owner) !== JSON.stringify(latest) || (!latest && Date.now() - ownerlessSince < staleMs)) return false;
-    moved = `${path}.stale-${randomUUID()}`;
-    await rename(path, moved);
-    await rm(moved, { recursive: true, force: true });
+    const target = `${path}.stale-${randomUUID()}`;
+    await renameWithRetry(path, target);
+    moved = target;
+    await rm(moved, { recursive: true, force: true, maxRetries: 10, retryDelay: 20 });
     return true;
   } catch (e) { if (e.code === 'ENOENT' || e.code === 'EEXIST') return false; throw e; }
   finally {
     registry.active.delete(token);
-    if (!moved && same(claimIdentity, await info(claim))) await rm(claim, { recursive: true, force: true });
+    if (!moved && same(claimIdentity, await info(claim))) await rm(claim, { recursive: true, force: true, maxRetries: 10, retryDelay: 20 });
   }
+}
+
+async function releaseLock(path) {
+  const released = `${path}.released-${randomUUID()}`;
+  try { await renameWithRetry(path, released); }
+  catch (error) {
+    if (error.code === 'ENOENT') return;
+    if (process.platform !== 'win32' || !WINDOWS_BUSY.includes(error.code)) throw error;
+    await rm(path, { recursive: true, force: true, maxRetries: 10, retryDelay: 20 });
+    return;
+  }
+  await rm(released, { recursive: true, force: true, maxRetries: 10, retryDelay: 20 });
 }
 
 export async function withFileLock(path, action, { timeoutMs = 5000, staleMs = 30_000 } = {}) {
@@ -127,7 +154,7 @@ export async function withFileLock(path, action, { timeoutMs = 5000, staleMs = 3
     try {
       if (identity && same(identity, await info(path))) {
         const owner = await read(join(path, 'owner.json'));
-        if (!owner || owner.token === token) await rm(path, { recursive: true, force: true });
+        if (!owner || owner.token === token) await releaseLock(path);
       }
     } finally {
       try { await rm(candidate, { recursive: true, force: true }); }
