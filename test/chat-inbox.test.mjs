@@ -24,6 +24,7 @@ test('reading one channel clears only that channel and a replay does not restore
   inbox.receive('feature', message, '사용자');
   inbox.read('general');
   assert.equal(inbox.count(), 1);
+  assert.equal(inbox.channelFor(), 'feature', '토스트를 놓쳐도 상단 메시지 버튼에서 안 읽은 채널을 찾는다');
   assert.equal(inbox.receive('general', message, '사용자'), false);
   inbox.read('feature');
   assert.equal(inbox.count(), 0);

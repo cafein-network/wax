@@ -106,6 +106,8 @@ select, textarea, input { background: var(--panel); border: 1px solid var(--line
 .own-message { justify-self: end; background: var(--chat-outgoing); border-radius: 18px 18px 5px 18px; }
 .message header { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin-bottom: 4px; }
 .message .who { font-weight: 700; }
+.message .message-avatar { width: 32px; height: 32px; flex: none; align-self: center; border-radius: 50%; background: var(--panel-2); border: 1px solid var(--line); object-fit: cover; image-rendering: pixelated; }
+.message .message-avatar.card-face-empty { display: inline-grid; place-items: center; font: 700 13px var(--mono); color: var(--muted); }
 .message .when { font: 12px var(--mono); color: var(--muted); }
 .message .body { white-space: pre-wrap; overflow-wrap: anywhere; }
 .message .reply { font-size: 13px; color: var(--muted); border-left: 3px solid var(--line); padding-left: 8px; margin-bottom: 6px; }

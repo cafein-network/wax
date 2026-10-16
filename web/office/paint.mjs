@@ -41,6 +41,30 @@ const hsl2rgb = (h, s, l) => {
   return [f(0), f(8), f(4)];
 };
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
+export function paintPixels(px, mask, look) {
+  const sum = PART_KEYS.map(() => [0, 0, 0]);
+  for (let i = 0; i < px.length; i += 4) {
+    const part = mask[i + 3] ? mask[i] : 0;
+    if (part < 2 || !px[i + 3]) continue;
+    const [, s, l] = rgb2hsl(px[i], px[i + 1], px[i + 2]);
+    sum[part][0] += s; sum[part][1] += l; sum[part][2] += 1;
+  }
+  const own = sum.map(([s, l, n]) => (n ? { s: s / n, l: l / n } : null));
+  for (let i = 0; i < px.length; i += 4) {
+    const part = mask[i + 3] ? PART_KEYS[mask[i]] : null;
+    const to = part && look[part];
+    if (!to || !px[i + 3]) continue;
+    const [, s, l] = rgb2hsl(px[i], px[i + 1], px[i + 2]);
+    let rgb;
+    if (part === 'jacket') rgb = hsl2rgb(to.hue, clamp01(s * (to.saturation ?? 1)), clamp01(l + (to.lightness ?? 0)));
+    else {
+      const base = own[mask[i]];
+      rgb = hsl2rgb(to.h, clamp01(to.s + (s - base.s) * 0.5), clamp01(to.l + (l - base.l) * 0.55));
+    }
+    px[i] = rgb[0]; px[i + 1] = rgb[1]; px[i + 2] = rgb[2];
+  }
+}
+
 export function dressed(info, look) {
   if (!info?.image) return null;
   if (!look || !info.mask || typeof document === 'undefined' || !PART_KEYS.some((key) => key && look[key])) return info.image;
@@ -58,28 +82,7 @@ export function dressed(info, look) {
     c.clearRect(0, 0, width, height);
     c.drawImage(info.image, 0, 0);
     const data = c.getImageData(0, 0, width, height);
-    const px = data.data;
-    const sum = PART_KEYS.map(() => [0, 0, 0]);
-    for (let i = 0; i < px.length; i += 4) {
-      const part = mask[i + 3] ? mask[i] : 0;
-      if (part < 2 || !px[i + 3]) continue;
-      const [, s, l] = rgb2hsl(px[i], px[i + 1], px[i + 2]);
-      sum[part][0] += s; sum[part][1] += l; sum[part][2] += 1;
-    }
-    const own = sum.map(([s, l, n]) => (n ? { s: s / n, l: l / n } : null));
-    for (let i = 0; i < px.length; i += 4) {
-      const part = mask[i + 3] ? PART_KEYS[mask[i]] : null;
-      const to = part && look[part];
-      if (!to || !px[i + 3]) continue;
-      const [, s, l] = rgb2hsl(px[i], px[i + 1], px[i + 2]);
-      let rgb;
-      if (part === 'jacket') rgb = hsl2rgb(to.hue, clamp01(s * (to.saturation ?? 1)), clamp01(l + (to.lightness ?? 0)));
-      else {
-        const base = own[mask[i]];
-        rgb = hsl2rgb(to.h, clamp01(to.s + (s - base.s) * 0.5), clamp01(to.l + (l - base.l) * 0.55));
-      }
-      px[i] = rgb[0]; px[i + 1] = rgb[1]; px[i + 2] = rgb[2];
-    }
+    paintPixels(data.data, mask, look);
     c.putImageData(data, 0, 0);
   } catch { return info.image; }
   byLook.set(key, canvas);

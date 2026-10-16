@@ -32,7 +32,7 @@ class ReleaseTests(unittest.TestCase):
             plugin = work / 'extracted/wax'
             for command in (plugin / 'commands/wax').glob('*.toml'):
                 tomllib.loads(command.read_text(encoding='utf-8'))
-            subprocess.run(['node', 'scripts/build-commands.mjs', '--check'], cwd=plugin, check=True, capture_output=True)
+            subprocess.run(['npm', 'run', 'check'], cwd=plugin, check=True, capture_output=True)
             checked = subprocess.run(['node', '--test', '--test-timeout=60000'], cwd=plugin, capture_output=True, encoding='utf-8', timeout=180)
             self.assertEqual(checked.returncode, 0, checked.stdout + checked.stderr)
             cli = plugin / 'bin/wax.mjs'

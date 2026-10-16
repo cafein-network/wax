@@ -1,4 +1,4 @@
-.home { --bg: #f7f8fa; --panel: #fff; --ink: #202730; --muted: #717985; --line: #e5e8ed; --accent: #315b4b; --accent-hover: #244638; --radius: 14px; background: var(--bg); color: var(--ink); }
+.home { --bg: #f7f8fa; --panel: #fff; --ink: #202730; --muted: #717985; --line: #e5e8ed; --accent: #315b4b; --accent-hover: #244638; --accent-ink: #fdfcf6; --radius: 14px; background: var(--bg); color: var(--ink); }
 .home-header { height: 78px; display: flex; align-items: center; gap: 24px; padding: 0 38px; border-bottom: 1px solid var(--line); background: #ffffffb8; }
 .wordmark { color: var(--ink); font-size: 34px; font-weight: 850; letter-spacing: -2px; text-decoration: none; }
 .wordmark span { color: #6ea68a; }

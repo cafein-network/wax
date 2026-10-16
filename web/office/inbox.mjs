@@ -30,7 +30,7 @@ export class OfficeInbox {
 
   channelFor(author) {
     let channel;
-    for (const item of this.unread.values()) if (item.author === author) channel = item.channel;
+    for (const item of this.unread.values()) if (author === undefined || item.author === author) channel = item.channel;
     return channel;
   }
 }

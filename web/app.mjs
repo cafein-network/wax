@@ -1,6 +1,8 @@
 import { ChannelFeed, ChannelDrafts } from './channel-state.mjs';
 import { api, clear, el, richText, timeLabel } from '/dom.mjs';
 import { REACH, addressed, deliveryHint, recipientOptions } from '/recipients-model.mjs';
+import { assignPersonas, faceThumb, keepFaces, loadFaceAssets, reservedFrom } from '/office/faces.mjs';
+import { faceShot } from '/office/card.mjs';
 
 const $ = (id) => document.getElementById(id);
 const embedded = new URLSearchParams(location.search).get('embed') === '1';
@@ -9,8 +11,11 @@ if (embedded) document.body.classList.add('messenger-chat');
 function notifyRead() {
   if (embedded && readingReady && parent !== window && !document.hidden) parent.postMessage({ type: 'wax-chat-read', channel: current, ids: [...shown.keys()] }, location.origin);
 }
+let officeFaces = [];
 if (embedded) window.addEventListener('message', (event) => {
-  if (event.source === parent && event.origin === location.origin && event.data?.type === 'wax-chat-visible') notifyRead();
+  if (event.origin !== location.origin || !(event.source === parent || (event.source && event.source !== window && event.source.parent === parent))) return;
+  if (event.data?.type === 'wax-chat-visible') notifyRead();
+  if (event.data?.type === 'wax-chat-faces' && Array.isArray(event.data.faces)) { officeFaces = event.data.faces.slice(0, 500); repaintAvatars(); }
 });
 if (embedded) document.addEventListener('visibilitychange', notifyRead);
 if (embedded) document.addEventListener('keydown', (event) => {
@@ -37,7 +42,7 @@ function renderRecipients() {
 }
 
 function computeRecipients() { options = recipientOptions(presence, config?.user, current); renderRecipients(); }
-async function refreshRecipients() { presence = await api('/api/presence'); computeRecipients(); }
+async function refreshRecipients() { presence = await api('/api/presence'); computeRecipients(); repaintAvatars(); }
 
 function setReply(message) {
   if (!message && typeBeforeReply !== null) { $('type').value = typeBeforeReply; typeBeforeReply = null; }
@@ -58,10 +63,30 @@ function renderChannels() {
   el('span', { class: 'meta', text: `${channel.title ?? ''} · ${channel.count}개` })))));
 }
 
+let faceAssets = null, faces = new Map();
+function computeFaces() {
+  const known = assignPersonas(presence, faceAssets, keepFaces(faces, reservedFrom(officeFaces, faceAssets)));
+  const extra = [...new Map([...shown.values()].filter((m) => !presence.some((a) => a.author === m.author)).map((m) => [m.author, { author: m.author, kind: m.kind }])).values()];
+  faces = extra.length ? assignPersonas(extra, faceAssets, known) : known;
+}
+function avatarNode(author, kind) {
+  const face = kind !== 'human' && faces.get(author);
+  const node = (face && faceThumb(faceAssets, face.persona, face.kind, author)) || faceShot(null, null, kind === 'human' ? 'U' : author, 32);
+  node.classList.add('message-avatar');
+  node.dataset.author = author; node.dataset.kind = kind;
+  if (face) node.dataset.persona = face.persona;
+  return node;
+}
+function repaintAvatars() {
+  computeFaces();
+  for (const old of $('timeline').querySelectorAll('.message-avatar')) old.replaceWith(avatarNode(old.dataset.author, old.dataset.kind));
+}
+
 function messageNode(message) {
   const target = message.replyTo && shown.get(message.replyTo);
   return el('article', { class: `message${message.author === config?.user ? ' own-message' : ''}`, id: message.id },
     el('header', {},
+      avatarNode(message.author, message.kind),
       el('span', { class: 'who', text: message.author }),
       el('span', { class: 'kind', text: message.kind === 'human' ? '사용자' : message.kind }),
       message.type !== 'message' ? el('span', { class: `badge type-${message.type}`, text: TYPE_LABELS[message.type] }) : null,
@@ -104,6 +129,7 @@ async function selectChannel(id) {
     shown.clear(); clear($('timeline'));
     if (!merged.length) $('timeline').append(el('p', { class: 'empty', text: '아직 메시지가 없습니다. 에이전트는 wax chat post로 글을 남깁니다.' }));
     merged.forEach(append);
+    repaintAvatars();
     $('timeline').scrollTop = $('timeline').scrollHeight;
     readingReady = true;
     notifyRead();
@@ -155,7 +181,7 @@ function connect() {
     const { channel, message } = JSON.parse(event.data);
     const entry = channels.find((c) => c.id === channel);
     if (entry) { entry.count += 1; renderChannels(); }
-    if (feed.receive(channel, message)) { append(message); notifyRead(); }
+    if (feed.receive(channel, message)) { append(message); if (message.kind !== 'human' && !faces.has(message.author)) repaintAvatars(); notifyRead(); }
   });
   source.addEventListener('features', () => refreshChannels().catch(() => {}));
   source.addEventListener('presence', () => refreshRecipients().catch(() => {}));
@@ -168,6 +194,7 @@ try {
   await refreshChannels();
   await selectChannel(current);
   await refreshRecipients().catch(() => {});
+  loadFaceAssets().then((assets) => { faceAssets = assets; repaintAvatars(); });
   const recipient = new URLSearchParams(location.search).get('recipient');
   if (recipient) {
     if (options.some((option) => option.author === recipient)) { selected.add(recipient); renderRecipients(); }

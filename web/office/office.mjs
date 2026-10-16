@@ -10,7 +10,7 @@ const storage = (key, fallback) => demo ? fallback : liveStorage(key, fallback);
 const store = (key, value) => { if (!demo) liveStore(key, value); };
 import { BUILDING, EXTRA_SEATS, FLOOR_HEIGHT, SCALE, SIDE_ROOMS, SIDE_ROOM_ORDER } from './side-rooms.mjs';
 import { actorBox, render } from './side-render.mjs';
-import { KIND_LABELS, STATE_LABELS, BOARD_VISIT_MS, lookFor, pickPersona, stackDown, officeScene, roomCounts, summaryLabel } from './model.mjs';
+import { KIND_LABELS, STATE_LABELS, BOARD_VISIT_MS, lookFor, stackDown, officeScene, roomCounts, summaryLabel } from './model.mjs';
 import { SIT_MS, WALK_SPEED, point, poseAt, positionAt, routeLength, routeTo } from './animate.mjs';
 import { CHATTER_MS, CHATTER_PER_ROOM, EMOTE_MS, EMOTE_PER_FLOOR, emoteGap, pickEmote, bubbleMs, npcGuide, NPCS, NPC_MS, REPLY_DELAY_MS, canChatter, chatterAllowed, chatterGap, npcGap, npcLine, pickChatter, pickReaction } from './chatter.mjs';
 import { loadSideAssets } from './sprites.mjs';
@@ -18,6 +18,7 @@ import { planStroll, strollGap } from './stroll.mjs';
 import { cardTabs, ceoCard, faceShot, profileCard } from './card.mjs';
 import { isPlaying, startMusic, stopMusic } from './music.mjs';
 import { createOfficeMessenger } from './messenger.mjs';
+import { assignPersonas, faceThumb, loadFaceAssets } from './faces.mjs';
 
 const ROOMS = SIDE_ROOMS;
 const ROOM_ORDER = SIDE_ROOM_ORDER;
@@ -39,7 +40,7 @@ const OUTFIT_COLORS = { claude: '#d9774b', codex: '#4a515c', gemini: '#2f63b8', 
 const NPC_STAND_UP = { dx: Math.round(34 * SCALE), dy: 0 };
 
 const state = {
-  config: null, assets: null, assetError: null, agents: [], order: [], events: [], lastNoteAt: new Map(), boards: new Map(),
+  config: null, assets: null, faces: null, assetError: null, agents: [], order: [], events: [], lastNoteAt: new Map(), boards: new Map(),
   features: [], channels: [], recent: new Map(), bubbles: new Map(), currentBoard: null, scene: [], pm: null,
   skills: new Map(), auras: new Map(),
   usage: null,
@@ -49,9 +50,16 @@ const state = {
 };
 const messenger = createOfficeMessenger({
   dialog: $('messenger-dialog'), launcher: $('open-messenger'), frame: $('messenger-frame'), count: $('message-count'),
-  api, getConfig: () => state.config, getChannels: () => state.channels, onChange: () => {
+  api, getConfig: () => state.config, getChannels: () => state.channels,
+  getFaces: () => { for (const agent of state.agents) personaOf(agent.author); return [...personaMap].map(([author, face]) => ({ author, persona: face.persona, kind: face.kind })); },
+  faceFor: (author, kind) => {
+    const node = kind === 'human' ? faceShot(null, null, 'U', 28) : faceOf(author, kind, 28);
+    node.classList.add('message-avatar');
+    return node;
+  },
+  onChange: () => {
     for (const [author, bubble] of state.bubbles) {
-      if (bubble.kind === 'message' && (bubble.message ? !messenger.isUnread(bubble.message.channel, bubble.message.id) : !messenger.count(author))) state.bubbles.delete(author);
+      if (bubble.kind === 'message' && bubble.message && !messenger.isUnread(bubble.message.channel, bubble.message.id)) state.bubbles.delete(author);
     }
     requestFrame();
   },
@@ -119,17 +127,24 @@ async function loadSnapshot() {
 }
 
 
-const personaByAuthor = new Map();
+function faceOf(author, kind, size) {
+  const persona = personaOf(author);
+  const thumb = faceThumb(state.faces, persona, kind, author);
+  if (thumb) { thumb.classList.add('card-face'); return thumb; }
+  const sprite = state.assets?.characters?.[persona];
+  return faceShot(sprite, lookFor(sprite, kind, state.assets?.variants), author, size);
+}
+
+let personaMap = new Map();
 function personaOf(author) {
-  if (!personaByAuthor.has(author)) {
-    const kindOf = (name) => state.agents.find((agent) => agent.author === name)?.kind ?? 'other';
-    const used = new Map();
-    for (const [name, id] of personaByAuthor) used.set(id, [...(used.get(id) ?? []), kindOf(name)]);
-    const pick = pickPersona(author, kindOf(author), state.assets?.personas, state.assets?.characters, used);
-    if (!pick) return null;
-    personaByAuthor.set(author, pick);
+  const agent = state.agents.find((item) => item.author === author);
+  if (state.assets && (!personaMap.has(author) || (agent && personaMap.get(author).kind !== agent.kind))) {
+    const agents = agent ? state.agents : [...state.agents, { author, kind: 'other' }];
+    personaMap = assignPersonas(agents, state.assets, personaMap);
+    personaMap = assignPersonas(agents, state.assets, personaMap, { humans: true });
+    messenger.syncFaces();
   }
-  return personaByAuthor.get(author);
+  return personaMap.get(author)?.persona ?? null;
 }
 
 function updateScene({ instant = false } = {}) {
@@ -361,7 +376,7 @@ function positionOverlay(time) {
     tags.push({ node: tag, x: actor.drawn.x * scale, top: (box.bottom + 8) * scale, limit: (floorTop + FLOOR_HEIGHT - 16) * scale });
     const unread = !actor.npc && actor.kind !== 'human' ? messenger.count(actor.author) : 0;
     const said = state.bubbles.get(actor.author);
-    const messageToast = unread > 0 && said?.kind === 'message' && said.until > now && (!said.message || messenger.isUnread(said.message.channel, said.message.id));
+    const messageToast = unread > 0 && said?.kind === 'message' && said.until > now && said.message && messenger.isUnread(said.message.channel, said.message.id);
     if (messageToast) {
       const key = `message:${actor.author}`;
       seen.add(key);
@@ -785,6 +800,12 @@ function applyView() {
 }
 
 
+function npcFace(actor, sprite) {
+  const thumb = faceThumb(state.faces, actor.persona, 'npc', actor.author);
+  if (thumb) { thumb.classList.add('card-face'); return thumb; }
+  return faceShot(sprite, { jacket: actor.jacket ?? null }, actor.author, 80);
+}
+
 function openNpc(actor) {
   const guide = npcGuide(actor.npc, npcContext());
   $('agent-title').textContent = guide.title;
@@ -797,7 +818,7 @@ function openNpc(actor) {
       el('div', { class: 'table-wrap' }, el('table', { class: 'agent-table' }, el('thead', {}, head), el('tbody', {}, rows)))) });
   }
   const content = [
-    el('header', { class: 'npc-head' }, faceShot(sprite, { jacket: actor.jacket ?? null }, actor.author, 80),
+    el('header', { class: 'npc-head' }, npcFace(actor, sprite),
       el('div', {}, el('strong', { class: 'npc-name', text: `${actor.author} · 안내 NPC` }), el('p', { class: 'kind', text: guide.role }))),
     el('div', { class: 'npc-section' }, cardTabs(tabs)),
     el('p', { class: 'kind' }, '더 자세한 내용은 ', el('a', { href: '/help', text: '도움말' }), '에 있어요. NPC 대화는 프로젝트 기록으로 저장하지 않아요.'),
@@ -866,12 +887,11 @@ async function openAgent(author) {
     ))) : el('p', { class: 'empty', text: '최근 메시지가 없습니다.' });
   const tabs = [{ label: '지금', content: nowInfo }, { label: `최근 메시지 ${recent.length}`, content: recentList }];
   const card = el('div', { class: 'hr-slot' }, el('p', { class: 'kind', text: '인사기록 카드를 불러오는 중…' }));
-  const persona = personaOf(author);
   api('/api/profiles').then(({ profiles }) => {
     const profile = profiles.find((p) => p.author === author) ?? null;
-    if (kind === 'human') { clear(card).append(ceoCard({ author, profile, sprite: state.assets?.characters?.[persona], look: lookFor(state.assets?.characters?.[persona], kind, state.assets?.variants), team: teamSummary(), department: state.config.project, tabs })); return; }
-    clear(card).append(profileCard({ author, kindLabel: agent?.model ? `${KIND_LABELS[profile?.kind ?? kind] ?? kind} · ${agent.model}` : KIND_LABELS[profile?.kind ?? kind] ?? kind, profile, sprite: state.assets?.characters?.[persona], look: lookFor(state.assets?.characters?.[persona], kind, state.assets?.variants), department: state.config.project, lead: state.pm === author, extra: chatAction, tabs }));
-  }).catch(() => clear(card).append(el('p', { class: 'kind', text: '인사기록 카드를 불러오지 못했습니다.' }), chatAction, cardTabs(tabs)));
+    if (kind === 'human') { clear(card).append(ceoCard({ author, profile, face: faceOf(author, kind, 112), team: teamSummary(), department: state.config.project, tabs })); return; }
+    clear(card).append(profileCard({ author, kindLabel: agent?.model ? `${KIND_LABELS[profile?.kind ?? kind] ?? kind} · ${agent.model}` : KIND_LABELS[profile?.kind ?? kind] ?? kind, profile, face: faceOf(author, kind, 112), department: state.config.project, lead: state.pm === author, extra: chatAction, tabs }));
+  }).catch(() => clear(card).append(el('p', { class: 'kind', text: '인사기록 카드를 불러오지 못했습니다.' }), ...(chatAction ? [chatAction] : []), cardTabs(tabs)));
   const next = el('div', { class: 'hr-next' });
   if (agent) api('/api/team').then(({ tasks }) => {
     const cmd = nextCommand({ agent, features: state.features, tasks: tasks ?? [] });
@@ -978,7 +998,7 @@ function connect({ resync = false } = {}) {
     const unread = messenger.receive(channel, message);
     addMessage(channel, message);
     addToOrder([message.author]);
-    if (unread) showBubble(message.author, message.body, 'message', BUBBLE_MS, { channel, id: message.id });
+    if (unread || message.author === state.config.user) showBubble(message.author, message.body, 'message', BUBBLE_MS, unread ? { channel, id: message.id } : null);
     refreshSkills();
     announce(`${message.author}: ${channel} 채널에 메시지`);
     updateScene();
@@ -1054,7 +1074,7 @@ setInterval(() => updateScene(), 5000);
 try {
   state.config = await api('/api/config');
   document.title = `${state.config.project} · wax 가상 사무실`;
-  [state.assets] = await Promise.all([loadSideAssets(), loadSnapshot()]);
+  [state.assets, state.faces] = await Promise.all([loadSideAssets(), loadFaceAssets(), loadSnapshot()]);
   if (!state.assets || !state.assets.personas?.length || !Object.keys(state.assets.characters ?? {}).length || BUILDING.floors.some((id) => !state.assets.backgrounds?.[BUILDING.rooms[id].background])) {
     state.assetError = '건물·캐릭터 이미지를 불러오지 못했습니다. 이미지 경로를 확인한 뒤 새로고침해 주세요. 목록 보기와 채팅은 계속 사용할 수 있습니다.';
     state.assets = null;
@@ -1069,8 +1089,7 @@ try {
   disconnectOffice = connect();
   if (demo) {
     const publishCast = () => demo.cast(state.agents.map((agent) => {
-      const persona = personaOf(agent.author), sprite = state.assets?.characters?.[persona];
-      const portrait = faceShot(sprite, lookFor(sprite, agent.kind, state.assets?.variants), agent.author, 64);
+      const portrait = faceOf(agent.author, agent.kind, 64);
       return { author: agent.author, portrait: portrait instanceof HTMLCanvasElement ? portrait.toDataURL('image/png') : null };
     }));
     const applyDemo = async () => {

@@ -175,3 +175,10 @@ test('3차 리뷰: 듣는 중 표시는 쓰기가 한 번 실패해도 다음 �
   await mkdir(dir, { mode: 0o700 });
   await until(async () => (await listListeners(root)).has('claude-app'));
 });
+
+test('실제 세션 테스트 반영: Claude 명령은 참여 전에 ListAgents로 자기 이름을 확인해 --peer로 남긴다', async () => {
+  const claude = await readFile(new URL('../commands/join.md', import.meta.url), 'utf8');
+  const codex = await readFile(new URL('../skills/join/SKILL.md', import.meta.url), 'utf8');
+  assert.match(claude, /Before you run CLI chat join, call ListAgents once: .*add --peer <that name> to the join/);
+  assert.doesNotMatch(codex, /ListAgents/);
+});

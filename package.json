@@ -1,6 +1,6 @@
 {
   "name": "@cafein-network/wax",
-  "version": "0.12.2",
+  "version": "0.12.3",
   "description": "A portable, evidence-based AI coding workflow and team dashboard for Claude Code, Codex, GitHub Copilot CLI, Gemini CLI and Antigravity CLI",
   "type": "module",
   "license": "AGPL-3.0-only",
@@ -39,8 +39,8 @@
   "scripts": {
     "test": "node --test",
     "dashboard": "node bin/wax.mjs dashboard",
-    "build": "node scripts/build-commands.mjs",
-    "check": "node scripts/build-commands.mjs --check",
+    "build": "node scripts/build-commands.mjs && node scripts/build-faces.mjs",
+    "check": "node scripts/build-commands.mjs --check && node scripts/build-faces.mjs --check",
     "package": "python3 scripts/package-release.py",
     "test:package": "python3 test/package_test.py",
     "test:windows": "node scripts/verify-windows.mjs"

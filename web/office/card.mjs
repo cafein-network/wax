@@ -73,12 +73,12 @@ export function cardTabs(panels) {
 const hours = (ms) => (ms >= 3_600_000 ? `${(ms / 3_600_000).toFixed(1)}시간` : `${Math.round(ms / 60_000)}분`);
 const date = (iso) => (iso ? new Date(iso).toLocaleDateString('ko-KR') : '-');
 
-export function profileCard({ author, kindLabel, profile, sprite, look, extra, department, lead = false, tabs = [] }) {
+export function profileCard({ author, kindLabel, profile, sprite, look, face, extra, department, lead = false, tabs = [] }) {
   const m = profile?.metrics ?? { bugRate: null, bugsFound: 0, commits: 0, workMs: 0, tasksDone: 0, tests: 0 };
   const earned = profile?.badges.filter((b) => b.earned).length ?? 0;
   return el('article', { class: 'hr-card' },
     el('header', { class: 'hr-head' },
-      el('div', { class: 'hr-portrait' }, faceShot(sprite, look, author, 112), el('span', { class: 'hr-level', 'aria-label': `레벨 ${profile?.level ?? 1}` }, el('small', { text: 'Lv' }), String(profile?.level ?? 1))),
+      el('div', { class: 'hr-portrait' }, face ?? faceShot(sprite, look, author, 112), el('span', { class: 'hr-level', 'aria-label': `레벨 ${profile?.level ?? 1}` }, el('small', { text: 'Lv' }), String(profile?.level ?? 1))),
       el('div', { class: 'hr-id' },
         el('div', { class: 'hr-kicker', text: '인사기록 카드' }),
         el('strong', { class: 'hr-name', text: author }),
@@ -108,11 +108,11 @@ export function profileCard({ author, kindLabel, profile, sprite, look, extra, d
 
 const metric = (label, value, note, small = false) => el('div', {}, el('dt', { text: label }), el('dd', { class: small ? 'small' : null, text: value }), el('span', { class: 'kind', text: note }));
 
-export function ceoCard({ author, profile, sprite, look, team, department, tabs = [] }) {
+export function ceoCard({ author, profile, sprite, look, face, team, department, tabs = [] }) {
   const c = profile?.counts ?? {};
   return el('article', { class: 'hr-card hr-ceo' },
     el('header', { class: 'hr-head' },
-      el('div', { class: 'hr-portrait' }, faceShot(sprite, look, author, 112), el('span', { class: 'hr-level hr-crown', 'aria-hidden': 'true', text: '👑' })),
+      el('div', { class: 'hr-portrait' }, face ?? faceShot(sprite, look, author, 112), el('span', { class: 'hr-level hr-crown', 'aria-hidden': 'true', text: '👑' })),
       el('div', { class: 'hr-id' },
         el('div', { class: 'hr-kicker', text: '대표 카드' }),
         el('strong', { class: 'hr-name', text: author }),

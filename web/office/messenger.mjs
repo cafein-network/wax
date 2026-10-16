@@ -1,7 +1,7 @@
 import { OfficeInbox } from './inbox.mjs';
 import { clear, el, richText } from '../dom.mjs';
 
-export function createOfficeMessenger({ dialog, launcher, frame, count, api, getConfig, getChannels, onChange }) {
+export function createOfficeMessenger({ dialog, launcher, frame, count, api, getConfig, getChannels, onChange, getFaces = () => [], faceFor = () => null }) {
   const inbox = new OfficeInbox();
   const host = dialog.ownerDocument.defaultView;
   const target = dialog.querySelector('[data-messenger-target]');
@@ -18,6 +18,7 @@ export function createOfficeMessenger({ dialog, launcher, frame, count, api, get
     const config = getConfig();
     if (!config) return;
     if (author) channel = inbox.channelFor(author) ?? channel;
+    else channel ??= inbox.channelFor();
     const channels = getChannels();
     channel = channels.some((item) => item.id === channel) ? channel : channels.find((item) => item.id === 'general')?.id ?? channels[0]?.id ?? 'general';
     const url = new URL('/chat', location.href);
@@ -37,14 +38,16 @@ export function createOfficeMessenger({ dialog, launcher, frame, count, api, get
       try {
         const { messages } = await api(`/api/channels/${encodeURIComponent(channel)}/messages?limit=50`);
         if (currentGeneration !== generation || !dialog.open) return;
-        preview.append(...messages.map((message) => el('article', { class: 'message' }, el('strong', { text: message.author }), el('div', { class: 'body' }, richText(message.body)))));
+        preview.append(...messages.map((message) => el('article', { class: 'message' }, el('header', {}, faceFor(message.author, message.kind), el('strong', { text: message.author })), el('div', { class: 'body' }, richText(message.body)))));
         if (!messages.length) preview.append(el('p', { class: 'empty', text: '아직 메시지가 없습니다.' }));
         inbox.read(channel); update();
       } catch (error) { if (currentGeneration === generation) preview.append(el('p', { class: 'error', text: error.message })); }
-    } else if (!navigate) frame.contentWindow?.postMessage({ type: 'wax-chat-visible' }, location.origin);
+    } else if (!navigate) { sendFaces(); frame.contentWindow?.postMessage({ type: 'wax-chat-visible' }, location.origin); }
   };
   launcher.addEventListener('click', () => open());
   dialog.addEventListener('close', () => { generation++; launcher.setAttribute('aria-expanded', 'false'); });
+  const sendFaces = () => frame.contentWindow?.postMessage({ type: 'wax-chat-faces', faces: getFaces() }, location.origin);
+  frame.addEventListener('load', sendFaces);
   const receive = (event) => {
     if (event.origin !== location.origin || event.source !== frame.contentWindow || !dialog.open) return;
     if (event.data?.type === 'wax-chat-close') { dialog.close(); return; }
@@ -62,6 +65,7 @@ export function createOfficeMessenger({ dialog, launcher, frame, count, api, get
   window.addEventListener('pageshow', (event) => { if (event.persisted) host.addEventListener('message', receive); });
   return {
     open,
+    syncFaces: () => { if (frame.getAttribute('src')) sendFaces(); },
     count: (author) => inbox.count(author),
     isUnread: (channel, id) => inbox.isUnread(channel, id),
     receive(channel, message) {
