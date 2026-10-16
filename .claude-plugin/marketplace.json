@@ -1,0 +1,18 @@
+{
+  "name": "wax",
+  "owner": {
+    "name": "cafein-network"
+  },
+  "metadata": {
+    "description": "wax: one plugin folder that brings the plan → design → implement → review → report workflow to every coding CLI.",
+    "version": "0.12.0"
+  },
+  "plugins": [
+    {
+      "name": "wax",
+      "description": "Plan, design, implement, review and report with saved documents and real test evidence, shared across coding tools in the same project.",
+      "version": "0.12.0",
+      "source": "./"
+    }
+  ]
+}

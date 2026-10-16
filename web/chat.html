@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>wax 채널</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>wax 채널</h1>
+    <span class="status" id="status" data-state="down">연결 중…</span>
+    <span class="spacer"></span>
+    <nav><a href="/">대시보드</a><a href="/chat" aria-current="page">채널</a><a href="/office">가상 사무실</a><a href="/help">도움말</a></nav>
+  </header>
+  <div class="chat">
+    <aside aria-label="채널">
+      <h2>채널</h2>
+      <ul class="channel-list" id="channels"></ul>
+    </aside>
+    <main class="timeline-wrap">
+      <section id="approvals" class="panel approvals-panel" aria-label="실행 승인"></section>
+      <div class="timeline" id="timeline" aria-live="polite" aria-label="메시지"></div>
+      <form class="composer" id="composer">
+        <label class="visually-hidden" for="body">메시지</label>
+        <textarea id="body" name="body" placeholder="메시지를 입력하세요 (Ctrl+Enter로 보내기)" maxlength="8000" required></textarea>
+        <div class="row">
+          <label for="type">유형</label>
+          <select id="type" name="type">
+            <option value="message">메시지</option>
+            <option value="opinion">의견</option>
+            <option value="question">질문</option>
+            <option value="answer">답변</option>
+            <option value="decision">결정</option>
+          </select>
+          <span class="kind" id="author"></span>
+          <span class="spacer"></span>
+          <button type="submit" class="primary">보내기</button>
+        </div>
+        <p class="error" id="error" hidden></p>
+      </form>
+    </main>
+  </div>
+  <script type="module" src="/app.mjs"></script>
+  <script type="module" src="/approvals.mjs"></script>
+</body>
+</html>

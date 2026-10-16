@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>wax 대시보드 · 요청과 보고</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/home.css">
+</head>
+<body class="home">
+  <header class="home-header">
+    <a class="wordmark" href="/" aria-label="wax 홈">wax<span aria-hidden="true">.</span></a>
+    <span id="project" class="project-name"></span>
+    <span class="spacer"></span>
+    <span id="connection" class="connection" role="status">연결 중</span>
+    <nav aria-label="메뉴"><a href="/manage">상세 기록</a><a href="/office">사무실 ↗</a></nav>
+  </header>
+  <main class="home-layout">
+    <aside class="request-sidebar" aria-label="요청 기록">
+      <button id="new-request" type="button" class="new-request">＋ 새 요청</button>
+      <div class="sidebar-label">내가 맡긴 일 <span id="request-count"></span></div>
+      <ul id="requests" class="request-list"></ul>
+      <a class="team-link" href="/chat">팀 채널 ↗</a>
+    </aside>
+    <section class="workspace" aria-label="요청과 보고">
+      <div id="welcome" class="welcome">
+        <p class="eyebrow">LESS MANAGING. MORE MAKING.</p>
+        <h1>무엇을 할까요?</h1>
+        <p class="intro">할 일을 말해주세요.<br>기획부터 진행, 결과 보고까지 이어갈게요.</p>
+        <div class="suggestions" aria-label="요청 예시">
+          <button type="button" data-example="최근 변경에서 오류를 찾아 고쳐줘">오류 찾아 고치기 <span>↗</span></button>
+          <button type="button" data-example="첫 화면을 더 간결하고 사용하기 쉽게 개선해줘">사용 경험 개선하기 <span>↗</span></button>
+          <button type="button" data-example="이 프로젝트에 필요한 기능을 조사하고 가장 유용한 하나를 구현해줘">새 기능 만들기 <span>↗</span></button>
+        </div>
+      </div>
+      <section id="progress" class="request-progress" aria-label="현재 진행 상황" hidden>
+        <div class="progress-heading"><span id="request-status" class="request-status"></span><h1 id="request-title"></h1><span class="spacer"></span><button id="stop" type="button" class="quiet" hidden>중지</button><button id="resume" type="button" class="quiet" hidden>이어서 진행</button></div>
+        <p id="progress-detail" role="status"></p>
+        <ol id="steps" class="request-steps" aria-label="작업 단계"></ol>
+        <a id="detail-link" class="detail-link" href="/manage">자세한 기록 ↗</a>
+      </section>
+      <section id="approvals" class="panel approvals-panel" aria-label="실행 승인" hidden></section>
+      <div id="conversation" class="conversation" aria-live="polite" aria-relevant="additions" aria-label="대화와 보고"></div>
+      <p id="error" class="error" role="alert" hidden></p>
+      <form id="request-form" class="request-composer">
+        <div class="tool-picker"><label for="request-tool">실행 도구</label><select id="request-tool" aria-describedby="tool-note"></select></div>
+        <p id="tool-note" class="tool-note" role="status"></p>
+        <label class="visually-hidden" for="request-body">할 일 또는 추가 요청</label>
+        <textarea id="request-body" maxlength="8000" required placeholder="예: 회원가입이 안 되는 문제를 찾아서 고쳐줘" rows="3"></textarea>
+        <div class="composer-bottom"><span id="composer-hint">선택한 도구가 이 프로젝트에서 작업합니다</span><button id="send" class="primary" type="submit">시작하기 <span aria-hidden="true">↑</span></button></div>
+      </form>
+      <p class="composer-footnote" id="footnote">방향은 언제든 대화로 바꾸세요. Ctrl+Enter로 전송</p>
+      <details class="connection-help"><summary>실행 연결 안내</summary><p>설치한 Codex·Claude Code·Gemini CLI·GitHub Copilot CLI·Antigravity CLI 중 선택하세요. 해당 CLI의 로그인 또는 API 설정이 필요하며, 선택한 도구의 계정 한도·API 비용·데이터 정책이 적용됩니다. 요청은 같은 도구로 이어집니다. 실행 권한은 기존 설정을 따릅니다. Antigravity는 기존에 허용한 범위로 실행하며 새 권한 요청은 터미널 설정을 확인해야 합니다.</p><a href="/help">도움말 보기 ↗</a></details>
+    </section>
+  </main>
+  <script type="module" src="/home.mjs"></script>
+  <script type="module" src="/approvals.mjs"></script>
+</body>
+</html>

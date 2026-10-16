@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>wax 대시보드</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>wax 대시보드</h1>
+    <span class="kind" id="project"></span>
+    <span class="status" id="status" data-state="down">연결 중…</span>
+    <span class="spacer"></span>
+    <label class="date-pick"><span class="visually-hidden">날짜</span><input type="date" id="date"></label>
+    <button type="button" id="today">오늘</button>
+    <nav><a href="/">요청과 보고</a><a href="/manage" aria-current="page">상세 기록</a><a href="/chat">팀 채널</a><a href="/office">가상 사무실</a></nav>
+  </header>
+
+  <main class="dash">
+    <div class="dashboard-refresh">
+      <span class="kind" id="updated-at">기록을 확인하는 중…</span>
+      <button type="button" class="link" id="refresh-dashboard">새로고침</button>
+    </div>
+    <p class="visually-hidden" id="timeline-updates" role="status" aria-atomic="true"></p>
+    <p class="error" id="error" role="status" hidden></p>
+    <section class="stats" id="stats" aria-label="오늘의 숫자"></section>
+    <section id="approvals" class="panel approvals-panel" aria-label="실행 승인"></section>
+
+    <div class="dash-grid">
+      <div class="dash-main">
+        <section class="panel office-panel" aria-labelledby="office-heading">
+          <header><h2 id="office-heading">가상 사무실</h2><a href="/office" class="kind">크게 보기 ↗</a></header>
+          <iframe id="office-frame" src="/office?embed=1" title="가상 사무실"></iframe>
+        </section>
+
+        <section class="panel" aria-labelledby="timeline-heading">
+          <header><h2 id="timeline-heading">타임라인</h2><a class="kind" href="/demo">진행 과정 데모 ↗</a><span class="kind" id="timeline-count"></span></header>
+          <div class="filters" role="group" aria-label="타임라인 보기 방식">
+            <button type="button" id="timeline-record-view" aria-pressed="true">기록</button>
+            <button type="button" id="timeline-flow-view" aria-pressed="false">흐름</button>
+          </div>
+          <div class="filters" id="filters" role="group" aria-label="타임라인 필터"></div>
+          <div id="timeline-flow" hidden></div>
+          <ol class="events" id="events"></ol>
+          <nav class="timeline-pagination" id="timeline-pagination" aria-label="타임라인 페이지" hidden>
+            <button type="button" id="timeline-prev" aria-controls="events">이전</button>
+            <span class="kind" id="timeline-page-status" role="status"></span>
+            <button type="button" id="timeline-next" aria-controls="events">다음</button>
+          </nav>
+        </section>
+      </div>
+
+      <aside class="dash-side">
+        <section class="panel attention-panel" aria-labelledby="attention-heading">
+          <header><h2 id="attention-heading">먼저 확인할 일</h2><span class="kind" id="attention-count"></span></header>
+          <p class="kind attention-scope" id="attention-scope">현재 막힌 업무와 미해결 질문 · 선택한 날짜의 테스트 근거</p>
+          <ul class="attention-list" id="attention"></ul>
+        </section>
+        <section class="panel" aria-labelledby="team-heading">
+          <header><h2 id="team-heading">팀</h2><span class="kind" id="pm-label"></span></header>
+          <div id="pm-actions" class="row" hidden></div>
+          <ul class="agents" id="agents"></ul>
+        </section>
+
+        <section class="panel" aria-labelledby="tasks-heading">
+          <header><h2 id="tasks-heading">업무 배정</h2><span class="kind" id="tasks-count"></span></header>
+          <div id="tasks"></div>
+          <form id="assign" class="assign" hidden>
+            <h3>업무 배정하기</h3>
+            <p class="kind wide" id="assign-empty" hidden>배정할 진행 중인 작업이 없습니다. 완료된 작업에는 배정할 수 없으니 AI 세션에서 <code>/wax:plan &lt;작업ID&gt;</code>로 새 작업을 만드세요.</p>
+            <label>작업 <select id="assign-feature" required></select></label>
+            <label>담당 <select id="assign-to" required><option value="">참여한 AI 선택</option></select></label>
+            <label>단계 <select id="assign-phase"><option value="any">현재 단계 자동</option></select></label>
+            <div class="wide assign-hint" id="assign-hint" aria-live="polite"></div>
+            <label class="wide">지시 내용 <textarea id="assign-note" maxlength="8000" required placeholder="목표, 범위, 완료 기준, 인계 대상"></textarea></label>
+            <button type="submit" class="primary">배정</button>
+          </form>
+        </section>
+
+        <section class="panel" aria-labelledby="features-heading">
+          <header><h2 id="features-heading">작업 진행</h2></header>
+          <ul class="features" id="features"></ul>
+          <form id="new-feature" class="assign">
+            <h3>새 작업 만들기</h3>
+            <label>작업 ID <input id="feature-id" required maxlength="64" pattern="[a-z0-9][a-z0-9\-]{0,63}" placeholder="login-page" title="영문 소문자·숫자·- (첫 글자는 영문 소문자나 숫자)"></label>
+            <label>제목 <input id="feature-title" required maxlength="200" placeholder="로그인 화면"></label>
+            <label class="wide">요청 내용 <textarea id="feature-description" maxlength="10000" placeholder="무엇을 왜 만드는지, 범위와 완료 기준"></textarea></label>
+            <button type="submit" class="primary">작업 만들기</button>
+            <p class="kind wide">수동으로 작업을 관리하는 화면입니다. <a href="/">요청과 보고</a>에서는 한 줄 요청으로 기획부터 자동 진행합니다.</p>
+          </form>
+        </section>
+
+        <section class="panel" aria-labelledby="decisions-heading">
+          <header><h2 id="decisions-heading">최근 결정</h2><span class="kind" id="decisions-date"></span></header>
+          <ul class="note-list" id="decisions"></ul>
+        </section>
+
+        <section class="panel" aria-labelledby="questions-heading">
+          <header><h2 id="questions-heading">미해결 질문</h2></header>
+          <ul class="note-list" id="questions"></ul>
+        </section>
+
+        <section class="panel" aria-labelledby="daily-heading">
+          <header><h2 id="daily-heading">일일 업무보고</h2></header>
+          <ul class="reports" id="reports"></ul>
+          <div class="row"><button type="button" id="open-draft">집계 초안 보기</button></div>
+          <p class="kind">AI 세션에서 <code>/wax:daily</code>(Codex <code>$wax:daily</code>, Antigravity <code>/daily</code>)를 실행하면 이 기록으로 보고서를 작성해 등록합니다.</p>
+        </section>
+      </aside>
+    </div>
+  </main>
+
+  <dialog id="doc-dialog" aria-labelledby="doc-title">
+    <header><h2 id="doc-title"></h2><button type="button" id="doc-copy">복사</button><button type="button" id="doc-download">내려받기</button><button type="button" data-close>닫기</button></header>
+    <div class="content"><pre class="markdown" id="doc-body"></pre></div>
+  </dialog>
+
+  <script type="module" src="/dashboard.mjs"></script>
+  <script type="module" src="/approvals.mjs"></script>
+</body>
+</html>

@@ -1,0 +1,192 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { updateFeature } from '../src/workflow.mjs';
+import { postNote } from '../src/chat/board.mjs';
+import { postMessage, readMessages } from '../src/chat/channels.mjs';
+import { listPresence } from '../src/chat/presence.mjs';
+import { assignTask, getTeam, listTasks, setPm, updateTask } from '../src/chat/team.mjs';
+import { buildDailyDraft, collectDay, dayOf, listDailyReports, readDailyReport, saveDailyReport } from '../src/chat/daily.mjs';
+import { createChatServer } from '../src/chat/server.mjs';
+import { at, cli, project } from './chat-helpers.mjs';
+
+const today = () => dayOf();
+
+test('메시지는 지금 하는 일과 받는 사람을 함께 기록하고 상태 메모를 갱신한다', async (t) => {
+  const root = await project(t, ['login']);
+  const message = await postMessage(root, 'login', { author: 'codex', kind: 'codex', doing: 'login 기획 작성 중', to: 'claude, gemini', body: '수용 기준 확인 부탁' });
+  assert.equal(message.doing, 'login 기획 작성 중');
+  assert.deepEqual(message.to, ['claude', 'gemini']);
+  assert.equal((await listPresence(root)).find((a) => a.author === 'codex').note, 'login 기획 작성 중');
+  const plain = await postMessage(root, 'login', { author: 'gemini', kind: 'gemini', body: '확인' });
+  assert.equal(plain.doing, undefined);
+  assert.equal(plain.to, undefined);
+  await assert.rejects(postMessage(root, 'login', { author: 'a', body: 'x', to: 'b;rm -rf' }), /작성자/);
+  assert.equal((await readMessages(root, 'login')).messages.length, 2);
+});
+
+test('PM만 업무를 배정하고 담당자만 받기·완료하며 취소는 PM만 한다', async (t) => {
+  const root = await project(t, ['login']);
+  await assert.rejects(assignTask(root, { author: 'claude', feature: 'login', to: 'codex', body: '기획' }), /PM이 지정되지 않았습니다/);
+  await setPm(root, { author: 'claude', kind: 'claude' });
+  assert.equal((await getTeam(root)).pm.author, 'claude');
+  await assert.rejects(setPm(root, { author: 'codex', kind: 'codex' }), /이미 claude.*--replace/);
+  assert.equal((await setPm(root, { author: 'claude', kind: 'claude' })).pm.author, 'claude', '같은 PM을 다시 정하는 것은 괜찮다');
+  assert.equal((await setPm(root, { author: 'codex', kind: 'codex', replace: true })).pm.author, 'codex');
+  await setPm(root, { author: 'claude', kind: 'claude', replace: true });
+  await assert.rejects(assignTask(root, { author: 'codex', feature: 'login', to: 'codex', body: '스스로 배정' }), /PM\(claude\)만/);
+  await assert.rejects(assignTask(root, { author: 'claude', feature: 'nope', to: 'codex', body: 'x' }), /없습니다/);
+  await assert.rejects(assignTask(root, { author: 'claude', feature: 'login', to: 'codex', phase: 'deploy', body: 'x' }), /단계는/);
+  const task = await assignTask(root, { author: 'claude', feature: 'login', to: 'codex', body: '수용 기준 작성' });
+  assert.equal(task.phase, 'plan');
+  assert.equal(task.status, 'open');
+  await assert.rejects(updateTask(root, task.id, 'accept', { author: 'gemini' }), /담당자\(codex\) 또는 PM만/);
+  await assert.rejects(updateTask(root, task.id, 'cancel', { author: 'codex' }), /PM만/);
+  await assert.rejects(updateTask(root, task.id, 'block', { author: 'codex' }), /막힌 이유/);
+  assert.equal((await updateTask(root, task.id, 'accept', { author: 'codex' })).status, 'accepted');
+  const done = await updateTask(root, task.id, 'done', { author: 'codex', body: 'plan.md 저장' });
+  assert.equal(done.status, 'done');
+  assert.equal(done.updates.at(-1).note, 'plan.md 저장');
+  await assert.rejects(updateTask(root, task.id, 'cancel', { author: 'claude' }), /이미 완료/);
+  assert.equal((await listTasks(root, { to: 'codex' })).length, 0);
+  assert.equal((await listTasks(root, { to: 'codex', all: true })).length, 1);
+  await setPm(root, {});
+  assert.equal((await getTeam(root)).pm, null);
+});
+
+test('하루 기록은 단계 이력·근거·대화·업무를 시간순으로 모으고 초안은 데이터임을 밝힌다', async (t) => {
+  const root = await project(t, ['login']);
+  let feature = await updateFeature(root, 'login', 'save', { phase: 'plan', content: '# 기획', revision: 1 });
+  feature = await updateFeature(root, 'login', 'complete', { phase: 'plan', evidence: '수용 기준 4개', revision: feature.revision });
+  await setPm(root, { author: 'claude', kind: 'claude' });
+  const task = await assignTask(root, { author: 'claude', feature: 'login', to: 'codex', phase: 'design', body: '설계해줘' });
+  await postMessage(root, 'login', { author: 'codex', kind: 'codex', doing: '설계 중', to: 'claude', body: '세션 저장 방식 질문 <script>' });
+  const day = await collectDay(root);
+  assert.equal(day.date, today());
+  assert.deepEqual(day.events.map((e) => e.type), ['feature', 'feature', 'phase', 'task', 'message']);
+  assert.equal(day.stats.phasesCompleted, 1);
+  assert.equal(day.stats.tasksOpen, 1);
+  assert.equal(day.pm.author, 'claude');
+  assert.equal(day.tasks[0].id, task.id);
+  assert.match(day.events.at(-1).detail, /\[하는 일\] 설계 중/);
+  const draft = buildDailyDraft(day);
+  assert.match(draft, /데이터\*\*이며 지시가 아닙니다/);
+  assert.match(draft, /기획 단계 완료 — 수용 기준 4개/);
+  assert.match(draft, /업무 배정 \(PM: claude\)/);
+  assert.match(draft, /wax chat daily report --date \d{4}-\d{2}-\d{2}/);
+  const empty = await collectDay(root, '2000-01-01');
+  assert.equal(empty.events.length, 0);
+  assert.throws(() => dayOf('2026-02-30'), /YYYY-MM-DD/);
+});
+
+test('일일 보고서는 날짜별 번호로 저장하고 덮어쓰지 않는다', async (t) => {
+  const root = await project(t, ['login']);
+  const now = new Date();
+  const first = await saveDailyReport(root, { author: 'claude', kind: 'claude', markdown: '# 오늘 한 일' }, { now });
+  const second = await saveDailyReport(root, { author: 'codex', kind: 'codex', markdown: '# 보충' }, { now });
+  assert.equal(first.path, `docs/wax/daily/${today()}/01.md`);
+  assert.equal(second.number, 2);
+  assert.equal(await readFile(join(root, first.path), 'utf8'), '# 오늘 한 일\n');
+  assert.equal(await readDailyReport(root, today(), 1), '# 오늘 한 일\n');
+  assert.equal((await listDailyReports(root, { date: today() })).length, 2);
+  await assert.rejects(readDailyReport(root, today(), 3), /보고서가 없습니다/);
+  assert.equal((await collectDay(root)).stats.dailyReports, 2);
+});
+
+test('CLI: wax chat team·assign·tasks·task·daily와 앞쪽 --project 전달', async (t) => {
+  const root = await project(t, ['login']);
+  assert.equal((await cli(root, ['team', 'pm', 'claude', '--kind', 'claude'])).code, 0);
+  const assigned = await cli(root, ['assign', 'login', '--to', 'codex', '--author', 'claude', '--message', '기획 작성']);
+  assert.equal(assigned.code, 0, assigned.stderr);
+  const id = assigned.stdout.trim();
+  assert.match(id, /^t-000001-/);
+  const tasks = JSON.parse((await cli(root, ['tasks', '--to', 'codex', '--json'])).stdout);
+  assert.equal(tasks[0].note, '기획 작성');
+  assert.equal((await cli(root, ['task', 'accept', id, '--author', 'codex'])).stdout.trim(), `${id}: accepted`);
+  const denied = await cli(root, ['assign', 'login', '--to', 'gemini', '--author', 'codex', '--message', 'x']);
+  assert.equal(denied.code, 1);
+  assert.match(denied.stderr, /PM\(claude\)만/);
+  const post = await cli(root, ['post', 'login', '--author', 'codex', '--kind', 'codex', '--doing', '기획 작성 중', '--to', 'claude', '--message', '초안 올림']);
+  assert.equal(post.code, 0, post.stderr);
+  const read = await cli(root, ['read', 'login']);
+  assert.match(read.stdout, /→ claude/);
+  assert.match(read.stdout, /\[하는 일\] 기획 작성 중/);
+  const timeline = await cli(root, ['daily']);
+  assert.match(timeline.stdout, /업무 시작/);
+  assert.match((await cli(root, ['daily', 'draft'])).stdout, /# 일일 업무 집계 초안/);
+  const report = join(root, 'report.md');
+  await (await import('node:fs/promises')).writeFile(report, '# 보고');
+  const saved = await cli(root, ['daily', 'report', '--author', 'claude', '--file', report]);
+  assert.match(saved.stdout, /docs\/wax\/daily\/\d{4}-\d{2}-\d{2}\/01\.md/);
+  assert.match((await cli(root, ['daily', 'list'])).stdout, /01\tclaude\(claude\)/);
+});
+
+test('대시보드 API: 하루 기록·초안·보고서·팀과 사람 PM의 배정, 같은 출처 패널 허용', async (t) => {
+  const root = await project(t, ['login']);
+  const server = createChatServer({ root, env: { WAX_CHAT_USER: '민수' }, intervalMs: 50 });
+  await new Promise((done) => server.listen(0, '127.0.0.1', done));
+  t.after(() => server.shutdown());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const page = await fetch(`${base}/`);
+  assert.match(page.headers.get('content-security-policy'), /frame-ancestors 'self'/);
+  assert.match(await page.text(), /wax 대시보드/);
+  const config = await (await fetch(`${base}/api/config`)).json();
+  const post = (path, body) => fetch(`${base}${path}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-chat-token': config.token }, body: JSON.stringify(body) });
+  assert.equal((await post('/api/tasks', { feature: 'login', to: 'codex', body: 'x' })).status, 409);
+  assert.equal((await post('/api/team/pm', { self: true })).status, 200);
+  const created = await post('/api/tasks', { feature: 'login', to: 'codex', phase: 'plan', body: '기획 부탁' });
+  assert.equal(created.status, 201);
+  const task = await created.json();
+  assert.equal(task.by, '민수');
+  assert.equal((await fetch(`${base}/api/tasks/${task.id}/cancel`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).status, 403);
+  const team = await (await fetch(`${base}/api/team`)).json();
+  assert.equal(team.pm.author, '민수');
+  assert.equal(team.tasks.length, 1);
+  assert.equal((await fetch(`${base}/api/features`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: 'signup', title: '가입' }) })).status, 403);
+  const feature = await post('/api/features', { id: 'signup', title: '가입', description: '이메일 가입' });
+  assert.equal(feature.status, 201);
+  assert.equal((await feature.json()).phase, 'plan');
+  assert.equal((await post('/api/features', { id: 'signup', title: '중복' })).status, 409);
+  assert.equal((await post('/api/features', { id: 'Bad ID', title: 'x' })).status, 400);
+  assert.equal((await post('/api/tasks', { feature: 'signup', to: 'codex', phase: 'plan', body: '기획 부탁' })).status, 201);
+  await saveDailyReport(root, { author: 'claude', kind: 'claude', markdown: '# 보고', date: today() }, at(new Date().toISOString()));
+  const day = await (await fetch(`${base}/api/daily`)).json();
+  assert.equal(day.reports.length, 1);
+  assert.equal(day.events.filter((e) => e.type === 'task').length, 2);
+  assert.equal(await (await fetch(`${base}/api/daily/reports/${today()}/1`)).text(), '# 보고\n');
+  assert.match((await (await fetch(`${base}/api/daily/draft`)).json()).markdown, /일일 업무 집계 초안/);
+  assert.equal((await fetch(`${base}/api/daily?date=2026-13-01`)).status, 400);
+});
+
+test('dashboard --status: 같은 프로젝트면 실행 중, 없으면 종료 코드 1', async (t) => {
+  const root = await project(t, ['login']);
+  const server = createChatServer({ root, env: {}, intervalMs: 50 });
+  await new Promise((done) => server.listen(0, '127.0.0.1', done));
+  t.after(() => server.shutdown());
+  const port = String(server.address().port);
+  const running = await cli(root, ['serve', '--status', '--port', port, '--json']);
+  assert.equal(running.code, 0, running.stderr);
+  assert.equal(JSON.parse(running.stdout).running, true);
+  const again = await cli(root, ['serve', '--port', port]);
+  assert.equal(again.code, 0);
+  assert.match(again.stdout, /이미 실행 중입니다/);
+  const other = await project(t, ['other']);
+  const busy = await cli(other, ['serve', '--port', port]);
+  assert.equal(busy.code, 1);
+  assert.match(busy.stderr, /다른 프로젝트/);
+  await server.shutdown();
+  assert.equal((await cli(root, ['serve', '--status', '--port', port])).code, 1);
+});
+
+
+test('timeline retains original note and task phases for flow drill-down', async (t) => {
+  const root = await project(t, ['login']);
+  const note = await postNote(root, 'login', { author: 'codex', kind: 'codex', type: 'opinion', phase: 'design', body: '설계 근거' });
+  await setPm(root, { author: 'claude', kind: 'claude' });
+  const task = await assignTask(root, { author: 'claude', feature: 'login', to: 'codex', phase: 'review', body: '검토' });
+  await updateTask(root, task.id, 'accept', { author: 'codex' });
+  const day = await collectDay(root);
+  assert.equal(day.events.find((event) => event.type === 'note' && event.id === note.id).phase, 'design');
+  assert.ok(day.events.filter((event) => event.type === 'task' && event.id === task.id).every((event) => event.phase === 'review'));
+});

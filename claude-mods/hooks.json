@@ -1,0 +1,4 @@
+{
+  "description": "wax 사용량 모니터",
+  "modules": ["./usage.mjs"]
+}

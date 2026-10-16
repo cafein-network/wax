@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>팀 협업 UX 데모 · wax</title><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar"><h1>팀 협업 UX 데모</h1><span class="badge">가상 샘플</span><span class="spacer"></span><nav><a href="/">대시보드</a><a href="/chat">채널</a><a href="/office">가상 사무실</a><a href="/demo" aria-current="page">데모</a></nav></header>
+  <main class="workflow-demo demo-focus-mode" id="demo-root">
+    <section class="panel demo-intro" aria-labelledby="demo-heading">
+      <header><h2 id="demo-heading">담당자가 움직이고, 근거가 쌓이는 협업</h2><button type="button" class="link" id="demo-focus" aria-pressed="false">전체 보기</button></header>
+      <p>난이도에 맞춰 팀을 구성하고, 담당 캐릭터·화이트보드·테스트 근거를 직접 열어 보세요.</p>
+      <details class="demo-setup demo-environment" id="demo-environment" open><summary id="demo-environment-summary">처음 시작 · 개발환경 확인과 사용 가이드</summary>
+        <p class="kind">데모는 바로 재생할 수 있습니다. 아래는 실제 프로젝트에서 업무를 시작할 때 확인할 항목입니다.</p>
+        <ol class="demo-environment-steps"><li><strong>개발도구 확인</strong><p id="demo-runtime" class="kind">실행 환경 확인 중…</p><div id="demo-environment-tools"></div></li>
+          <li><strong>작업 폴더 확인</strong><p class="kind" id="demo-project-root"></p><p class="kind">이 폴더를 사용하는 AI 도구 세션에서 시작하세요.</p></li>
+          <li><strong>wax 연결·초기화</strong><p class="kind">도구에 wax 플러그인·스킬을 연결한 뒤 아래 명령으로 프로젝트에 참여합니다. 로그인·플러그인 연결 상태는 해당 도구에서 확인하세요.</p><label for="demo-start-tool">사용할 도구</label><select id="demo-start-tool"></select><div id="demo-start-commands"></div><a href="/help">도구별 사용법 전체 보기</a></li>
+        </ol>
+      </details>
+      <div class="demo-controls" role="group" aria-label="데모 재생">
+        <button type="button" id="demo-play">재생</button><button type="button" id="demo-reset">다시 시작</button>
+        <label for="demo-speed">속도</label><select id="demo-speed"><option value="1">1배</option><option value="2">2배</option><option value="4">4배</option></select><span class="kind" id="demo-position"></span><span class="kind" id="demo-duration"></span>
+      </div>
+      <label class="demo-scrubber" for="demo-seek"><span class="kind">진행 위치</span><input type="range" id="demo-seek" min="0" max="18" value="0" step="1"></label>
+      <details class="demo-setup"><summary>작업 난이도·역할별 모델 설정</summary>
+        <div class="demo-task-settings"><label for="demo-task">작업 예시</label><select id="demo-task"><option value="ui">모바일 통계 카드 정렬</option><option value="feature">작업 검색·필터 추가</option><option value="system" selected>결제 중복 요청 방지</option></select>
+          <fieldset><legend>작업 조건</legend><label><input type="checkbox" id="demo-risk-api" checked> API 연동</label><label><input type="checkbox" id="demo-risk-data" checked> 데이터 변경</label><label><input type="checkbox" id="demo-risk-sensitive" checked> 결제·인증 등 높은 영향도</label><label><input type="checkbox" id="demo-risk-parallel" checked> 병렬 구현·통합 검증</label></fieldset>
+        </div>
+        <p id="demo-assessment"></p><p class="kind">조건에 따른 규칙 기반 추정입니다. 도구 배정은 예시이며 모델 성능의 실측 순위가 아닙니다. 모델 ID를 비우면 해당 도구의 기본 모델로 표시합니다. 설정을 바꾸면 진행이 초기화됩니다.</p>
+        <div id="demo-models" class="demo-models"></div>
+      </details>
+    </section>
+    <section class="stats demo-secondary" id="demo-stats" aria-label="데모 현황"></section>
+    <section class="panel demo-current" id="demo-slider-card" role="region" aria-roledescription="슬라이더 카드" aria-label="현재 흐름" tabindex="0">
+      <div class="demo-slide-navigation"><button type="button" id="demo-prev">이전 단계</button><span class="kind" id="demo-slide-number"></span><button type="button" id="demo-next">다음 단계</button></div>
+      <p class="demo-checkpoint kind" id="demo-next-checkpoint"></p>
+      <div class="demo-moment" aria-live="polite" aria-atomic="true"><strong id="demo-title"></strong><p id="demo-detail"></p><p class="kind" id="demo-action"></p></div>
+      <div class="demo-current-bottom"><div id="demo-current-assignees" class="demo-current-assignees" aria-label="현재 담당자"></div><button type="button" id="demo-current-action">재생</button></div>
+    </section>
+    <section class="panel demo-office-panel" aria-labelledby="demo-office-heading">
+      <header><h2 id="demo-office-heading">배정된 팀의 사무실</h2><span class="kind" id="demo-office-status">캐릭터를 불러오는 중…</span><button type="button" id="demo-office-retry" class="link" hidden>다시 불러오기</button></header>
+      <p class="kind">담당자는 진행 단계에 맞춰 회의실·개발실·연구소·사장실을 오갑니다. 층 탭과 캐릭터를 눌러 보세요.</p>
+      <iframe id="office-frame" src="/office?embed=1&amp;demo=1" title="가상 팀 협업 사무실"></iframe>
+      <details class="demo-more-actions"><summary>다른 항목 확인</summary><div class="demo-experience" role="group" aria-label="핵심 UX 체험"><button type="button" id="demo-open-assignee" disabled>현재 담당자 카드</button><button type="button" id="demo-open-board" disabled>화이트보드</button><button type="button" id="demo-open-proof" disabled>실행 근거</button><button type="button" id="demo-open-report" disabled>결과 보고서</button></div></details>
+    </section>
+    <section class="panel" aria-labelledby="demo-flow-heading">
+      <header><h2 id="demo-flow-heading"></h2><span class="badge" id="demo-state"></span></header><ol class="timeline-flow-stages demo-flow" id="demo-flow" aria-label="작업 진행 흐름"></ol>
+
+    </section>
+    <details class="panel demo-expandable" id="demo-team-section"><summary id="demo-team-heading">전체 팀·담당자</summary><p class="kind">얼굴을 누르면 능력치·검증 지표를 확인합니다.</p><ul class="agents demo-team-cards" id="demo-team"></ul></details>
+    <details class="panel demo-expandable"><summary id="demo-preview-heading">산출물 미리보기·변경 이력</summary><p class="kind" id="demo-preview-version"></p>
+      <div class="demo-grid"><div id="demo-preview"></div><div><h3>변경 이력</h3><ul class="note-list" id="demo-revisions"></ul><button type="button" class="link" id="demo-preview-doc">현재 시점 문서·근거 보기</button></div></div>
+    </details>
+    <details class="panel demo-expandable" id="demo-release-section"><summary>출시계획·마일스톤별 버전</summary>
+      <label class="demo-release-version" for="demo-release-version">목표 버전 <input type="text" id="demo-release-version" value="0.2.0" maxlength="40" placeholder="0.2.0"></label>
+      <p class="kind">각 체크포인트의 산출물·담당자·목표일을 연결합니다. 모든 출시 조건을 충족하면 정식 버전 준비 완료로 표시합니다.</p>
+      <p id="demo-release-error" class="error" role="status" hidden></p><p id="demo-release-status" role="status"></p><ol id="demo-release-plan" class="demo-release-plan"></ol>
+    </details>
+    <details class="panel demo-tool-discovery demo-expandable"><summary>도구 탐색·사용 안내</summary><label class="visually-hidden" for="demo-tool-search">도구 검색</label><input type="search" id="demo-tool-search" placeholder="도구 이름이나 역할로 찾기"><div id="demo-tools" class="demo-tools"></div></details>
+    <details class="panel demo-expandable"><summary>실행 근거·진행 기록</summary><div class="demo-grid"><section aria-labelledby="demo-proof-heading"><header><h2 id="demo-proof-heading">테스트·실행 근거</h2></header><div id="demo-proofs"></div></section><section class="panel" aria-labelledby="demo-history-heading"><header><h2 id="demo-history-heading">진행 기록</h2><span class="kind">선택해서 다시 보기</span></header><ol class="events" id="demo-events"></ol></section></div></details>
+    <p class="kind">브라우저에서 재생하는 가상 예시입니다. 설정과 출시계획은 새로고침하면 초기화됩니다. 모델을 실제로 호출하거나 프로젝트의 업무·기록을 변경하지 않습니다.</p>
+  </main>
+  <dialog id="demo-dialog" aria-labelledby="demo-dialog-title"><header><h2 id="demo-dialog-title"></h2><button type="button" id="demo-close">닫기</button></header><div class="content"><div id="demo-dialog-body"></div></div></dialog>
+  <script type="module" src="/workflow-demo.mjs"></script>
+</body>
+</html>

@@ -1,0 +1,73 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { createFeature, getFeature, updateFeature } from '../src/workflow.mjs';
+import { createBackup, previewRestore, restoreBackup } from '../src/backup.mjs';
+import { collectGitProof, runTestProof } from '../src/evidence.mjs';
+async function workspace(t) { const root = await mkdtemp(join(tmpdir(), 'wax-backup-proof-')); t.after(() => rm(root, { recursive: true, force: true })); return root; }
+test('backup validates integrity, preserves existing work, and restores documents and history with a prefix', async (t) => {
+  const root = await workspace(t), target = await workspace(t);
+  await createFeature(root, { id: 'one', title: '원본' });
+  await updateFeature(root, 'one', 'save', { phase: 'plan', content: '복구할 한글 문서' });
+  const backup = await createBackup(root);
+  const corrupt = structuredClone(backup); corrupt.features[0].title = '손상';
+  await assert.rejects(previewRestore(target, corrupt), /체크섬/);
+  const preview = await previewRestore(target, backup);
+  assert.equal(preview.newCount, 1);
+  await assert.rejects(restoreBackup(target, backup, { fingerprint: 'wrong' }), { status: 409 });
+  const restored = await restoreBackup(target, backup, preview);
+  assert.deepEqual(restored.restored, ['one']);
+  assert.equal((await getFeature(target, 'one')).artifacts.plan, '복구할 한글 문서');
+  const duplicate = await previewRestore(target, backup);
+  assert.equal(duplicate.skippedCount, 1);
+  const current = await readFile(join(target, '.wax/features/one.json'), 'utf8');
+  await restoreBackup(target, backup, duplicate);
+  assert.equal(await readFile(join(target, '.wax/features/one.json'), 'utf8'), current);
+  const copy = await previewRestore(target, backup, 'copy-');
+  await restoreBackup(target, backup, { ...copy, prefix: 'copy-' });
+  assert.equal((await getFeature(target, 'copy-one')).history.at(-1).sourceId, 'one');
+  await assert.rejects(previewRestore(target, backup, '../'), /접두사/);
+});
+test('restore rejects stale previews when another client creates the target', async (t) => {
+  const root = await workspace(t), target = await workspace(t);
+  await createFeature(root, { id: 'one', title: 'backup' }); const backup = await createBackup(root);
+  const preview = await previewRestore(target, backup);
+  await createFeature(target, { id: 'one', title: '새 작업 보존' });
+  await assert.rejects(restoreBackup(target, backup, preview), { status: 409 });
+  assert.equal((await getFeature(target, 'one')).title, '새 작업 보존');
+});
+test('Git proof records the actual commit and paths; successful CLI tests can be linked to completion', async (t) => {
+  const root = await workspace(t);
+  const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  git('init'); await writeFile(join(root, 'hello.txt'), '한글'); git('add', 'hello.txt'); git('-c', 'user.name=Wax Test', '-c', 'user.email=test@example.invalid', 'commit', '-m', 'fixture');
+  const feature = await createFeature(root, { id: 'proof', title: '검증' });
+  const commit = await collectGitProof(root, feature);
+  assert.equal(commit.commit, git('rev-parse', 'HEAD').trim()); assert.deepEqual(commit.files, ['hello.txt']);
+  await updateFeature(root, 'proof', 'attach-evidence', { proof: commit, revision: 1 });
+  const result = await runTestProof(root, 'proof', [process.execPath, '-e', 'console.log("한글 테스트 통과")'], { revision: 2 });
+  assert.equal(result.recorded, true); assert.equal(result.proof.exitCode, 0); assert.match(result.proof.output, /한글 테스트 통과/);
+  await updateFeature(root, 'proof', 'save', { phase: 'plan', content: '기획 검증' });
+  const complete = await updateFeature(root, 'proof', 'complete', { phase: 'plan', evidence: '실행 결과 확인', proofIds: [commit.id, result.proof.id] });
+  assert.equal(complete.completed.plan.proofIds.length, 2);
+  await assert.rejects(collectGitProof(root, feature, '--help'), /유효한/);
+});
+test('failed and timed out tests are recorded but cannot be selected as passing completion evidence', async (t) => {
+  const root = await workspace(t); await createFeature(root, { id: 'proof', title: '검증' });
+  const failed = await runTestProof(root, 'proof', [process.execPath, '-e', 'console.error("실패"); process.exit(7)']);
+  assert.equal(failed.proof.exitCode, 7);
+  const timed = await runTestProof(root, 'proof', [process.execPath, '-e', 'setTimeout(()=>{},10000)'], { timeout: 100 });
+  assert.equal(timed.proof.timedOut, true);
+  await updateFeature(root, 'proof', 'save', { phase: 'plan', content: '기획' });
+  await assert.rejects(updateFeature(root, 'proof', 'complete', { phase: 'plan', evidence: '실패를 통과로 기록 시도', proofIds: [failed.proof.id] }), /통과한/);
+});
+test('test output is returned without overwriting a concurrent feature edit', async (t) => {
+  const root = await workspace(t); await createFeature(root, { id: 'proof', title: '검증' });
+  const running = runTestProof(root, 'proof', [process.execPath, '-e', 'setTimeout(()=>console.log("결과 유지"),200)']);
+  await new Promise(resolve => setTimeout(resolve, 80));
+  await updateFeature(root, 'proof', 'edit', { title: '변경 보존', description: '', revision: 1 });
+  const result = await running;
+  assert.equal(result.recorded, false); assert.match(result.proof.output, /결과 유지/); assert.equal((await getFeature(root, 'proof')).title, '변경 보존');
+});

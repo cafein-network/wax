@@ -1,0 +1,11 @@
+{
+  "description": "wax 실행 승인 연결 (WAX_APPROVALS=on일 때 사용)",
+  "hooks": {
+    "PermissionRequest": [{
+      "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/wax-approval-hook.mjs\"", "timeout": 35 }]
+    }],
+    "SessionEnd": [{
+      "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/wax-approval-hook.mjs\"", "timeout": 5 }]
+    }]
+  }
+}
