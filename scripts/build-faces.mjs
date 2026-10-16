@@ -41,7 +41,8 @@ export async function buildFaces() {
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const { png: image, json } = await buildFaces();
   if (process.argv.includes('--check')) {
-    const same = async (name, data) => Buffer.from(data).equals(await readFile(new URL(name, DIR)).catch(() => Buffer.alloc(0)));
+    const read = (name) => readFile(new URL(name, DIR)).catch(() => Buffer.alloc(0));
+    const same = async (name, data) => (typeof data === 'string' ? (await read(name)).toString('utf8').replace(/\r\n/g, '\n') === data : Buffer.from(data).equals(await read(name)));
     if (!(await same('faces.png', image)) || !(await same('faces.json', json))) { console.error('faces.png/faces.json is out of date; run node scripts/build-faces.mjs'); process.exit(1); }
     console.log('Face thumbnails are up to date.');
   } else {

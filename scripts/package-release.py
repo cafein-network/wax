@@ -24,7 +24,7 @@ def web_files(root):
 
 FILES = (
     'package.json', 'LICENSE', 'README.md', 'INSTALL.md',
-    'GEMINI.md', 'gemini-extension.json', '.claude-plugin/plugin.json', '.codex-plugin/plugin.json', 'plugin.json', '.github/plugin/marketplace.json', '.claude-plugin/marketplace.json',
+    'GEMINI.md', 'gemini-extension.json', '.claude-plugin/plugin.json', '.codex-plugin/plugin.json', 'plugin.json', '.github/plugin/marketplace.json', '.github/workflows/public.yml', '.claude-plugin/marketplace.json',
     'claude-mods/hooks.json', 'claude-mods/usage.mjs', 'hooks/hooks.json',
     'bin/wax-approval-hook.mjs', 'src/approvals.mjs', 'src/approval-hosts.mjs', 'src/approval-cli.mjs', 'src/codex-session.mjs', 'src/agent-tools.mjs', 'src/agent-session.mjs', 'docs/APPROVALS.md', 'scripts/verify-approvals-browser.mjs',
     'bin/wax.mjs', 'src/workflow.mjs', 'src/context.mjs', 'src/file-lock.mjs', 'src/backup.mjs', 'src/evidence.mjs', 'src/proof-schema.mjs', 'src/diagnostics.mjs', 'docs/USER_GUIDE.md', 'SECURITY.md', '.gitignore',

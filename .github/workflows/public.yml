@@ -1,0 +1,76 @@
+# 공개 저장소(cafein-network/wax)에서만 실행한다. 배포 ZIP에 함께 실려 공개 저장소로 올라간다.
+# 비공개 원본 저장소에서는 모든 작업을 건너뛴다(실행 시간을 쓰지 않는다). 원본의 빠른 검사는 ci.yml.
+name: Public checks and release
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: public-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+jobs:
+  test:
+    if: github.repository == 'cafein-network/wax'
+    name: Test (${{ matrix.os }}, Node ${{ matrix.node }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: ['22', '24']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Keep LF line endings (generated files are compared byte for byte)
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm run check
+      - run: npm test
+      - if: matrix.os == 'ubuntu-latest' && matrix.node == '24'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Release archive extracts and runs without install
+        if: matrix.os == 'ubuntu-latest' && matrix.node == '24'
+        run: python3 test/package_test.py
+
+  release:
+    # 태그(v0.12.5 등)가 올라오고 모든 검사를 통과하면 GitHub Release를 만든다. 공식 ZIP 배포처는 이 Release다.
+    # wax-latest.zip은 버전 ZIP과 같은 파일이라 …/releases/latest/download/wax-latest.zip이 늘 최신을 가리킨다(사이트 내려받기 링크).
+    if: github.repository == 'cafein-network/wax' && startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Tag matches the plugin version
+        run: test "v$(python3 -c "import json; print(json.load(open('package.json'))['version'])")" = "$GITHUB_REF_NAME"
+      - name: Build release archive
+        run: python3 scripts/package-release.py --out-dir dist
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/wax-*.zip
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          files=("dist/wax-$version.zip" dist/wax-latest.zip dist/SHA256SUMS.txt dist/latest.json)
+          notes="wax $version. 변경 내용: https://wax.me2shop.com/#changelog · 설치 안내: INSTALL.md
+          ZIP의 출처 증명: gh attestation verify wax-$version.zip --repo $GITHUB_REPOSITORY"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "${files[@]}" --verify-tag --title "wax $version" --notes "$notes"
+          fi
