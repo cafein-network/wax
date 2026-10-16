@@ -9,7 +9,7 @@ export const BIN = fileURLToPath(new URL('../bin/wax.mjs', import.meta.url));
 
 export async function project(t, features = []) {
   const root = await mkdtemp(join(tmpdir(), 'wax-chat-테스트-'));
-  t.after(() => rm(root, { recursive: true, force: true }));
+  t.after(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 20 }));
   for (const id of features) await createFeature(root, { id, title: `${id} 작업` });
   return root;
 }

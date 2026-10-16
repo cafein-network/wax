@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { joinPresence, listPresence, setPresence } from '../src/chat/presence.mjs';
 import { postMessage, readMessages } from '../src/chat/channels.mjs';
@@ -168,12 +168,14 @@ test('3차 리뷰: 듣는 중 표시는 쓰기가 한 번 실패해도 다음 �
   const root = await project(t, ['login']);
   const errors = [];
   const stop = await watchChat(root, { author: 'claude-app', write: () => {}, intervalMs: 20, wake: true, beatMs: 10, onError: (e) => errors.push(e) });
-  t.after(stop);
+  let stopped = false;
+  t.after(() => stopped || stop());
   const dir = join(root, '.wax', 'chat', 'listeners');
-  await rm(dir, { recursive: true, force: true });
+  await rename(dir, `${dir}.gone`);
   await until(async () => errors.length > 0);
   await mkdir(dir, { mode: 0o700 });
   await until(async () => (await listListeners(root)).has('claude-app'));
+  await stop(); stopped = true;
 });
 
 test('실제 세션 테스트 반영: Claude 명령은 참여 전에 ListAgents로 자기 이름을 확인해 --peer로 남긴다', async () => {

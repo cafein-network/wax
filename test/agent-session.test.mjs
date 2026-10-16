@@ -113,6 +113,17 @@ test('unknown provider and missing executable never fall back to another account
   assert.throws(() => agentTool('other'), /지원하지/);
   await assert.rejects(resolveAgentCommand('claude', { env: { PATH: '' } }), /Claude Code/);
 });
+test('Windows npm Copilot resolves native executable so stopping does not leave its child alive', async (t) => {
+  const { mkdir, realpath } = await import('node:fs/promises');
+  const root = await project(t), dir = join(root, 'node_modules', '@github', 'copilot');
+  const nativeDir = join(dir, 'node_modules', '@github', `copilot-win32-${process.arch}`);
+  await mkdir(nativeDir, { recursive: true });
+  await writeFile(join(dir, 'npm-loader.js'), '');
+  await writeFile(join(nativeDir, 'package.json'), JSON.stringify({ main: 'copilot.exe' }));
+  await writeFile(join(nativeDir, 'copilot.exe'), '');
+  const [command, args] = await resolveAgentCommand('copilot', { env: { PATH: root }, platform: 'win32' });
+  assert.equal(await realpath(command), await realpath(join(nativeDir, 'copilot.exe'))); assert.deepEqual(args, []);
+});
 test('request retains chosen provider across reply and restart and rejects conflicting retry', async (t) => {
   const root = await project(t), calls = [];
   const execute = async (_, input) => { calls.push(input); return { threadId: 'session-1', message: JSON.stringify({ outcome: 'question', report: '확인 필요' }) }; };

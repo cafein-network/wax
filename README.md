@@ -1,10 +1,13 @@
 # wax
 
+[![Public checks](https://github.com/cafein-network/wax/actions/workflows/public.yml/badge.svg)](https://github.com/cafein-network/wax/actions/workflows/public.yml)
+
 **AI 코딩 도구를 바꿔도 작업은 이어집니다.** wax는 Claude Code, Codex, GitHub Copilot CLI, Gemini CLI, Antigravity CLI에 **기획 → 설계 → 구현 → 검토 → 보고** 흐름을 더하는 플러그인입니다. 단계 문서, 완료 근거(실제 실행한 테스트·연결한 Git 커밋), 개선 이력을 프로젝트 안의 `.wax/`에 남겨, 어느 도구의 세션이든 같은 기록을 이어받습니다.
 
 > wax adds a plan → design → implement → review → report workflow to Claude Code, Codex, GitHub Copilot CLI, Gemini CLI and Antigravity CLI. Phase documents and real evidence (tests actually run, linked commits) are stored in the project's `.wax/`, so any tool can pick up where another left off. Documentation is in Korean.
 
 - 홈페이지: https://wax.me2shop.com
+- 배포 ZIP과 출처 증명: [GitHub Releases](https://github.com/cafein-network/wax/releases/latest). Ubuntu·macOS·Windows와 Node 22·24에서 검사를 통과한 버전만 올라갑니다.
 - 이 저장소는 **AGPLv3 배포본만** 담습니다. **0.12.0을 초기 릴리스**로 시작하며, 이후 릴리스마다 갱신됩니다.
 
 ## 요청과 보고
