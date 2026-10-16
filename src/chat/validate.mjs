@@ -47,6 +47,13 @@ export function model(value) {
   return text;
 }
 
+export function peer(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const text = String(value).trim();
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(text)) throw new WaxError('세션 간 통신 이름은 영문·숫자로 시작하는 64자 이하여야 합니다(영문·숫자·. _ - 허용, 예: wax-0f).');
+  return text;
+}
+
 export function optionalText(value, max, label) {
   if (value === undefined || value === null || value === '') return null;
   return body(value, max, label);

@@ -1,6 +1,6 @@
 {
   "name": "wax",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "description": "wax workflow for GitHub Copilot CLI: plan, design, implement, review and report with saved documents and real test evidence, shared with other coding tools in the same project.",
   "author": {
     "name": "cafein-network"

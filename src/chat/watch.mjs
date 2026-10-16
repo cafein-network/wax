@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ChatWatcher } from './watcher.mjs';
@@ -5,28 +6,33 @@ import { chatDir } from './paths.mjs';
 import { readRecords, writeJsonAtomic } from './store.mjs';
 import { chatFiles } from './daily.mjs';
 import { listTasks } from './team.mjs';
+import { LISTEN_BEAT_MS, startBeat } from './listeners.mjs';
 import * as v from './validate.mjs';
+import { mentions } from '../../web/recipients-model.mjs';
 
 const oneLine = (text, max = 300) => { const flat = String(text ?? '').replace(/\s+/g, ' ').trim(); return flat.length > max ? `${flat.slice(0, max)}…` : flat; };
 
-const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
 export function isForMe(message, author) {
   if (message.author === author) return false;
-  const mention = new RegExp(`(^|[^\\p{L}\\p{N}_.-])@${escape(author)}(?![\\p{L}\\p{N}_.-])`, 'u');
-  return Boolean(message.to?.includes(author)) || mention.test(String(message.body ?? ''));
+  return Boolean(message.to?.includes(author)) || mentions(message.body, author);
 }
 
 export const byTime = (a, b) => a.message.at.localeCompare(b.message.at) || (a.message.seq ?? 0) - (b.message.seq ?? 0) || a.channel.localeCompare(b.channel);
 
-const cursorFile = async (root, author, feature) => join(await chatDir(root, 'watch', { create: true }), `${Buffer.from(author).toString('hex')}${feature ? `.${feature}` : ''}.json`);
+const cursorName = (key, feature) => `${key}${feature ? `.${feature}` : ''}.json`;
+const cursorFiles = async (root, author, feature) => {
+  const dir = await chatDir(root, 'watch', { create: true });
+  const legacy = cursorName(Buffer.from(author).toString('hex'), feature);
+  return { file: join(dir, cursorName(createHash('sha256').update(author).digest('hex').slice(0, 32), feature)), legacy: legacy.length <= 255 ? join(dir, legacy) : null };
+};
 async function readCursor(file) {
   try { const data = JSON.parse(await readFile(file, 'utf8')); return typeof data?.at === 'string' ? { at: data.at, ids: Array.isArray(data.ids) ? data.ids : [] } : null; }
-  catch (error) { if (error.code === 'ENOENT' || error instanceof SyntaxError) return null; throw error; }
+  catch (error) { if (['ENOENT', 'ENAMETOOLONG'].includes(error.code) || error instanceof SyntaxError) return null; throw error; }
 }
 
-export async function watchChat(root, { author, feature, write, intervalMs = 1000, onError = () => {} }) {
+export async function watchChat(root, { author, feature, write, intervalMs = 1000, wake = false, beatMs = LISTEN_BEAT_MS, onError = () => {} }) {
   author = v.author(author);
+  feature = feature ? v.channelId(feature) : undefined;
   const seen = new Set();
   const announceTasks = async () => {
     for (const task of await listTasks(root, { to: author, feature })) {
@@ -35,9 +41,9 @@ export async function watchChat(root, { author, feature, write, intervalMs = 100
       write({ event: 'task', task });
     }
   };
-  const file = await cursorFile(root, author, feature);
+  const { file, legacy } = await cursorFiles(root, author, feature);
   const delivered = new Set();
-  let cursor = await readCursor(file);
+  let cursor = await readCursor(file) ?? (legacy && await readCursor(legacy));
   const fresh = !cursor;
   if (fresh) {
     cursor = { at: new Date().toISOString(), ids: [] };
@@ -83,7 +89,9 @@ export async function watchChat(root, { author, feature, write, intervalMs = 100
     }
     await announceTasks();
   } catch (error) { watcher.stop(); throw error; }
-  return () => watcher.stop();
+  let stopBeat = async () => {};
+  if (wake) { try { stopBeat = await startBeat(root, author, feature, beatMs, onError); } catch (error) { onError(error); } }
+  return () => { watcher.stop(); return stopBeat(); };
 }
 
 export function formatWatchEvent({ event, channel, message: m, task: t }) {

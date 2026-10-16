@@ -62,7 +62,7 @@ export async function postMessage(root, name, input = {}, { now = new Date() } =
   }, { now });
 }
 
-export async function readMessages(root, name, { since, limit } = {}) {
+export async function readMessages(root, name, { since, id, limit } = {}) {
   const channel = await canonicalChannel(root, name);
   await resolveTarget(root, channel);
   const sinceSeq = since ? v.seqOf(since, ['m'], 'since ID') : 0;
@@ -70,6 +70,7 @@ export async function readMessages(root, name, { since, limit } = {}) {
   const file = await channelFile(root, channel, false);
   if (!file) return { messages: [], skipped: 0 };
   const { records, skipped } = await readRecords(file);
+  if (id) { v.seqOf(id, ['m'], '메시지 ID'); return { messages: records.filter((record) => record.id === id), skipped }; }
   const messages = records.filter((record) => record.seq > sinceSeq).sort((a, b) => a.seq - b.seq);
   return { messages: since ? messages.slice(0, max) : messages.slice(-max), skipped };
 }

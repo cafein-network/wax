@@ -229,7 +229,8 @@ function renderTeam() {
       el('strong', { text: agent.author }),
       day.pm?.author === agent.author ? el('span', { class: 'badge', text: 'PM' }) : null,
       el('span', { class: 'kind', text: agent.model ? `${KIND_LABELS[agent.kind] ?? agent.kind} · ${agent.model}` : KIND_LABELS[agent.kind] ?? agent.kind, title: agent.model ? '모델은 세션이 스스로 밝힌 값입니다' : null }),
-      el('span', { class: 'badge', text: STATE_LABELS[agent.effectiveState] ?? agent.effectiveState })),
+      el('span', { class: 'badge', text: STATE_LABELS[agent.effectiveState] ?? agent.effectiveState }),
+      agent.listening ? el('span', { class: 'badge', text: '듣는 중', title: '채널을 듣고 있어 @이름으로 부르면 곧 답합니다' }) : null),
     agent.note ? el('div', { class: 'doing', text: agent.note }) : null,
     ((next) => (next ? commandLine('다음 명령', next.text, next.reason) : null))(nextCommand({ agent, features: day.features, tasks: day.tasks })),
     el('div', { class: 'kind', text: `${agent.feature ?? '전체'} · ${timeLabel(agent.lastActive)}${tasksFor(agent.author).length ? ` · 맡은 업무 ${tasksFor(agent.author).length}` : ''}` })))

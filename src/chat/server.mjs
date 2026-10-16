@@ -72,7 +72,10 @@ export function createChatServer({ root, env = process.env, intervalMs = 1000, e
   const token = randomBytes(32).toString('hex');
   const user = validAuthor(env.WAX_CHAT_USER || '사람');
   let identityReady;
-  const ensureIdentity = () => identityReady ??= reserveDashboardUser(root, user);
+  const ensureIdentity = () => identityReady ??= reserveDashboardUser(root, user).catch(error => {
+    identityReady = null;
+    throw error;
+  });
   const watcher = new ChatWatcher(root, { intervalMs });
   const clients = new Set();
   const broadcast = (event, data) => { const frame = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`; for (const res of clients) res.write(frame); };
@@ -94,7 +97,6 @@ export function createChatServer({ root, env = process.env, intervalMs = 1000, e
       if (![`127.0.0.1:${port}`, `localhost:${port}`].includes(req.headers.host)) throw new WaxError('허용되지 않은 호스트입니다.', 403);
       const origin = req.headers.origin;
       if (origin && origin !== `http://${req.headers.host}`) throw new WaxError('동일 출처의 요청만 허용합니다.', 403);
-      await ensureIdentity();
       const url = new URL(req.url, `http://${req.headers.host}`);
       const { pathname } = url;
       if (req.method === 'GET' && pathname === '/' && (url.searchParams.has('feature') || url.searchParams.has('date'))) {
@@ -175,7 +177,9 @@ export function createChatServer({ root, env = process.env, intervalMs = 1000, e
         return;
       }
 
-      if (req.method !== 'GET' && req.headers['x-chat-token'] !== token) throw new WaxError('세션이 만료되었습니다. 페이지를 새로고침하세요.', 403);
+      if (req.method === 'GET') throw new WaxError('찾을 수 없는 경로입니다.', 404);
+      if (req.headers['x-chat-token'] !== token) throw new WaxError('세션이 만료되었습니다. 페이지를 새로고침하세요.', 403);
+      await ensureIdentity();
       return await withDashboardUser(root, user, async () => {
       if (req.method === 'POST' && pathname === '/api/requests') {
         const data = await readJson(req, 40000);
@@ -237,7 +241,10 @@ export function createChatServer({ root, env = process.env, intervalMs = 1000, e
     }
   });
 
-  server.startWatching = async () => { await ensureIdentity(); return watcher.start(); };
+  server.startWatching = async () => {
+    try { await ensureIdentity(); } catch (error) { watcher.emit('error', error); }
+    return watcher.start();
+  };
   server.watcher = watcher;
   server.requests = requests;
   server.shutdown = async () => {

@@ -8,6 +8,7 @@ import * as v from './validate.mjs';
 import { chatDir, checkFile } from './paths.mjs';
 import { withLock } from './lock.mjs';
 import { writeJsonAtomic } from './store.mjs';
+import { listListeners } from './listeners.mjs';
 
 const dashboardUser = new AsyncLocalStorage();
 export const withDashboardUser = (root, author, action) => dashboardUser.run({ root, author }, action);
@@ -71,10 +72,10 @@ export async function setPresence(root, input = {}, { now = new Date() } = {}) {
   const kind = input.kind ? v.kind(input.kind) : null;
   const feature = input.feature ? v.channelId(input.feature) : null;
   const note = v.optionalText(input.note, v.LIMITS.note, '메모');
-  const model = v.model(input.model);
+  const model = v.model(input.model), peer = v.peer(input.peer);
   const at = now.toISOString();
   return update(root, author, input.session, (previous) => ({
-    ...(previous?.sessionHash ? { sessionHash: previous.sessionHash } : {}), author, kind: kind ?? previous?.kind ?? 'other', model: model ?? previous?.model ?? null, state, feature, note, stateAt: at, lastActive: at,
+    ...(previous?.sessionHash ? { sessionHash: previous.sessionHash } : {}), author, kind: kind ?? previous?.kind ?? 'other', model: model ?? previous?.model ?? null, peer: peer ?? previous?.peer ?? null, state, feature, note, stateAt: at, lastActive: at,
   }));
 }
 
@@ -87,7 +88,7 @@ export async function joinPresence(root, input = {}, { now = new Date() } = {}) 
   const kind = input.kind ? v.kind(input.kind) : null;
   const feature = input.feature ? v.channelId(input.feature) : null;
   const note = v.optionalText(input.note, v.LIMITS.note, '메모');
-  const model = v.model(input.model), at = now.toISOString();
+  const model = v.model(input.model), peer = v.peer(input.peer), at = now.toISOString();
   const file = await presenceFile(root, true);
   return withLock(`${file}.lock`, async () => {
     const data = await load(file);
@@ -118,7 +119,7 @@ export async function joinPresence(root, input = {}, { now = new Date() } = {}) 
       Object.assign(data.agents[owned.author], { state: 'away', stateAt: at, lastActive: at });
     }
     const previous = owned;
-    const entry = { schema: 2, author, sessionHash, kind: kind ?? previous?.kind ?? 'other', model: model ?? previous?.model ?? null,
+    const entry = { schema: 2, author, sessionHash, kind: kind ?? previous?.kind ?? 'other', model: model ?? previous?.model ?? null, peer: peer ?? previous?.peer ?? null,
       state: input.state ?? (owned?.state === 'away' ? 'idle' : owned?.state) ?? 'idle', feature: input.feature === undefined ? owned?.feature ?? null : feature,
       note: input.note === undefined ? owned?.note ?? null : note, stateAt: at, lastActive: at };
     data.schema = 2;
@@ -144,7 +145,7 @@ export async function withPresenceActivity(root, input, action, { now = new Date
     data.schema = 2;
     data.agents[author] = {
       schema: 2, ...(previous?.sessionHash ? { sessionHash: previous.sessionHash } : {}), author,
-      kind: input.kind ?? previous?.kind ?? 'other', model: previous?.model ?? null,
+      kind: input.kind ?? previous?.kind ?? 'other', model: previous?.model ?? null, peer: previous?.peer ?? null,
       state: promote ? 'discussing' : previous.state,
       feature: previous?.feature ?? input.feature ?? null, note: input.note ?? previous?.note ?? null,
       stateAt: promote ? at : previous.stateAt, lastActive: at,
@@ -174,7 +175,8 @@ export async function listPresence(root, { now = new Date(), awayAfterMs = AWAY_
   const file = await presenceFile(root, false);
   if (!file) return [];
   const { agents } = await load(file);
+  const listeners = await listListeners(root, { now });
   return Object.values(agents)
-    .map((entry) => ({ ...publicEntry(entry), effectiveState: effectiveState(entry, now, awayAfterMs) }))
+    .map((entry) => ({ ...publicEntry(entry), effectiveState: effectiveState(entry, now, awayAfterMs), listening: listeners.has(entry.author), listeningFeatures: listeners.get(entry.author)?.features ?? null }))
     .sort((a, b) => a.author.localeCompare(b.author));
 }

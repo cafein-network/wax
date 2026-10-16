@@ -1,4 +1,4 @@
-import { mkdir, lstat, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, lstat, readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, basename, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -14,6 +14,27 @@ const read = async (path) => { try { return JSON.parse(await readFile(path, 'utf
 const birth = (s) => Number.isFinite(s.birthtimeMs) && s.birthtimeMs > 0 && s.birthtimeMs !== s.ctimeMs ? s.birthtimeMs : null;
 const same = (a, b) => a && b && a.dev === b.dev && a.ino === b.ino && (birth(a) === null || birth(b) === null || birth(a) === birth(b));
 const alive = (owner) => owner && (owner.pid === process.pid ? registry.active.has(owner.token) : processAlive(owner.pid));
+
+async function sweepCandidates(path, staleMs) {
+  const dir = dirname(path), now = Date.now();
+  const sweeps = registry.sweeps ??= new Map();
+  if (now - (sweeps.get(path) ?? -Infinity) < 60_000) return;
+  sweeps.set(path, now);
+  let entries;
+  try { entries = await readdir(dir, { withFileTypes: true }); }
+  catch (error) { if (error.code === 'EACCES' || error.code === 'EPERM') return; throw error; }
+  const prefix = `${basename(path)}.pending-`;
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !entry.name.startsWith(prefix) || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(entry.name.slice(prefix.length))) continue;
+    const candidate = join(dir, entry.name), original = await info(candidate);
+    if (!original?.isDirectory() || original.isSymbolicLink() || now - original.mtimeMs < Math.max(staleMs, 30_000)) continue;
+    if (alive(await read(join(candidate, 'owner.json'))) || !same(original, await info(candidate))) continue;
+    const moved = `${path}.stale-${randomUUID()}`;
+    try { await rename(candidate, moved); }
+    catch (error) { if (error.code === 'ENOENT') continue; throw error; }
+    await rm(moved, { recursive: true, force: true });
+  }
+}
 
 async function reclaim(path, staleMs) {
   const original = await info(path);
@@ -76,6 +97,7 @@ export async function withFileLock(path, action, { timeoutMs = 5000, staleMs = 3
     ]);
     clearTimeout(timer);
     registry.active.add(token);
+    await sweepCandidates(path, staleMs);
     await mkdir(candidate, { mode: 0o700 });
     await writeFile(join(candidate, 'owner.json'), JSON.stringify({ pid: process.pid, token, at: new Date().toISOString() }), { flag: 'wx', mode: 0o600 });
     for (;;) {
@@ -85,7 +107,10 @@ export async function withFileLock(path, action, { timeoutMs = 5000, staleMs = 3
         } else {
           await rename(candidate, path); identity = await info(path); break;
         }
-      } catch (e) { if (!['EEXIST', 'ENOTEMPTY', 'EPERM', 'EACCES'].includes(e.code) || !await info(path)) throw e; }
+      } catch (e) {
+        const transientWindowsRename = process.platform === 'win32' && e.code === 'EPERM';
+        if (!['EEXIST', 'ENOTEMPTY', 'EPERM', 'EACCES'].includes(e.code) || (!transientWindowsRename && !await info(path))) throw e;
+      }
       if (Date.now() >= deadline) throw new LockError('다른 기록이 저장 중입니다. 잠시 후 다시 시도하세요.');
       await sleep(10 + Math.floor(Math.random() * 30));
     }

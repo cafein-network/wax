@@ -1,6 +1,7 @@
 import { CLI_NEWS, newerThan } from '../../web/office/cli-news.mjs';
 export const NEWS_INTERVAL_MS = 60 * 60_000;
 const RETRY_MS = 5 * 60_000;
+const FRESH_INTERVAL_MS = 60_000;
 const SOURCES = {
   claude: 'https://api.github.com/repos/anthropics/claude-code/releases/latest',
   codex: 'https://api.github.com/repos/openai/codex/releases/latest',
@@ -33,28 +34,53 @@ async function readLimited(response) {
   }
   return Buffer.concat(parts).toString('utf8');
 }
+
+function rateLimitDelay(response, now) {
+  const retry = response.headers.get('retry-after');
+  const seconds = retry?.trim() ? Number(retry) : NaN;
+  const retryAt = Number.isFinite(seconds) && seconds >= 0 ? now + seconds * 1000 : Date.parse(retry);
+  const resetAt = Number(response.headers.get('x-ratelimit-reset')) * 1000;
+  const times = [retryAt, resetAt].filter(at => Number.isFinite(at) && at > now && at <= 8.64e15);
+  return times.length ? Math.max(RETRY_MS, ...times.map(at => at - now)) : NEWS_INTERVAL_MS;
+}
+
 export function createToolNews({ fetch: fetcher = globalThis.fetch, clock = Date.now } = {}) {
-  let cached = structuredClone(CLI_NEWS), nextAt = 0, pending;
+  let cached = structuredClone(CLI_NEWS), nextFreshAt = 0, pending;
+  const schedules = Object.fromEntries(Object.keys(SOURCES).map(kind => [kind, { nextAt: 0, blockedUntil: 0, failures: 0 }]));
   return async function news({ fresh = false, enabled = true } = {}) {
     if (!enabled) return { ...structuredClone(CLI_NEWS), mode: 'bundled', intervalMs: NEWS_INTERVAL_MS };
-    if (pending) return pending;
-    if (!fresh && clock() < nextAt) return structuredClone(cached);
+    if (pending) return structuredClone(await pending);
+    const now = clock(), force = fresh && now >= nextFreshAt;
+    const due = Object.entries(SOURCES).filter(([kind]) => now >= schedules[kind].nextAt || (force && now >= schedules[kind].blockedUntil));
+    if (!due.length) return structuredClone(cached);
+    if (force) nextFreshAt = now + FRESH_INTERVAL_MS;
     const task = (async () => {
-      const checkedAt = new Date(clock()).toISOString(); let failed = false;
-      const entries = await Promise.all(Object.entries(SOURCES).map(async ([kind, url]) => {
-        const previous = cached.tools[kind];
+      const checkedAt = new Date(now).toISOString();
+      const entries = await Promise.all(due.map(async ([kind, url]) => {
+        const previous = cached.tools[kind], schedule = schedules[kind];
         try {
           const response = await fetcher(url, { headers: { 'user-agent': 'wax-tool-news', accept: kind === 'antigravity' ? 'text/html' : 'application/vnd.github+json' }, redirect: 'error', signal: AbortSignal.timeout(7000) });
+          if (response.status === 403 || response.status === 429) {
+            schedule.blockedUntil = clock() + rateLimitDelay(response, clock());
+            await response.body?.cancel();
+            throw Error('Official source rate limited');
+          }
           const release = parseToolRelease(kind, await readLimited(response));
-          if (newerThan(previous.latest, release.latest)) throw Error('Official release regressed');
+          schedule.failures = 0;
+          schedule.blockedUntil = 0;
+          schedule.nextAt = clock() + NEWS_INTERVAL_MS;
+          if (newerThan(previous.latest, release.latest)) return [kind, { ...previous, checkedAt, verifiedAt: checkedAt, checkStatus: 'ok' }];
           const items = release.latest === previous.latest ? previous.items : release.items;
           return [kind, { ...previous, ...release, items, checkedAt, verifiedAt: checkedAt, checkStatus: 'ok' }];
         } catch {
-          failed = true; return [kind, { ...previous, checkedAt, checkStatus: 'unavailable' }];
+          schedule.failures++;
+          const backoff = Math.min(NEWS_INTERVAL_MS, RETRY_MS * 2 ** Math.min(schedule.failures - 1, 4));
+          schedule.nextAt = Math.max(clock() + backoff, schedule.blockedUntil);
+          return [kind, { ...previous, checkedAt, checkStatus: 'unavailable' }];
         }
       }));
-      nextAt = clock() + (failed ? RETRY_MS : NEWS_INTERVAL_MS);
-      cached = { ...cached, mode: 'official', checkedAt, nextCheckAt: new Date(nextAt).toISOString(), intervalMs: NEWS_INTERVAL_MS, tools: Object.fromEntries(entries) };
+      const nextAt = Math.min(...Object.values(schedules).map(schedule => schedule.nextAt));
+      cached = { ...cached, mode: 'official', checkedAt, nextCheckAt: new Date(nextAt).toISOString(), intervalMs: NEWS_INTERVAL_MS, tools: { ...cached.tools, ...Object.fromEntries(entries) } };
       return structuredClone(cached);
     })();
     pending = task;

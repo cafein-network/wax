@@ -36,5 +36,66 @@ test('new release replaces bundled headlines, labels original notes and never se
 
 test('older or malformed upstream releases never replace newer reviewed data',async()=>{
  const feed=createToolNews({fetch:async()=>new Response(JSON.stringify({tag_name:'v0.0.1',body:'- Old entry',published_at:'2025-01-01'}))});
- const news=await feed();for(const kind of Object.keys(fixtures)){assert.equal(news.tools[kind].latest,CLI_NEWS.tools[kind].latest);assert.equal(news.tools[kind].checkStatus,'unavailable');}
+ const news=await feed();for(const kind of Object.keys(fixtures)){assert.equal(news.tools[kind].latest,CLI_NEWS.tools[kind].latest);assert.equal(news.tools[kind].checkStatus,kind==='antigravity'?'unavailable':'ok');}
+});
+
+test('one broken source retries alone with increasing backoff, leaving successful source timestamps intact', async () => {
+ let time = Date.parse('2026-10-16T00:00:00Z');
+ const calls = Object.fromEntries(Object.keys(fixtures).map(kind => [kind, 0]));
+ const feed = createToolNews({ clock: () => time, fetch: async url => {
+  const kind = kindOf(url); calls[kind]++;
+  return new Response(kind === 'antigravity' ? '<html>temporarily broken</html>' : fixtures[kind]);
+ }});
+ const first = await feed();
+ time += 5 * 60_000; const second = await feed();
+ assert.deepEqual(calls, { claude: 1, codex: 1, copilot: 1, gemini: 1, antigravity: 2 });
+ assert.deepEqual(second.tools.claude, first.tools.claude);
+ assert.equal(second.nextCheckAt, new Date(time + 10 * 60_000).toISOString());
+ time += 5 * 60_000; await feed(); assert.equal(calls.antigravity, 2);
+ time += 5 * 60_000; await feed(); assert.equal(calls.antigravity, 3);
+ assert.equal(calls.claude, 1);
+});
+
+test('manual refresh is limited to once a minute and concurrent readers receive independent copies', async () => {
+ let time = Date.parse('2026-10-16T00:00:00Z'), calls = 0;
+ const feed = createToolNews({ clock: () => time, fetch: async url => {
+  calls++; await new Promise(resolve => setImmediate(resolve)); return new Response(fixtures[kindOf(url)]);
+ }});
+ const [a, b] = await Promise.all([feed(), feed()]);
+ a.tools.claude.latest = 'changed'; assert.notEqual(b.tools.claude.latest, 'changed');
+ await feed({ fresh: true }); assert.equal(calls, 10);
+ for (let i = 0; i < 20; i++) await feed({ fresh: true });
+ time += 59_999; await feed({ fresh: true }); assert.equal(calls, 10);
+ time++; await feed({ fresh: true }); assert.equal(calls, 15);
+});
+
+test('rate limits honor Retry-After dates, seconds and GitHub reset even during manual refresh', async t => {
+ for (const [status, header] of [[403, 'seconds'], [429, 'date'], [403, 'reset']]) await t.test(`${status} ${header}`, async () => {
+  let time = Date.parse('2026-10-16T00:00:00Z'), limited = 0;
+  const retryAt = time + 20 * 60_000;
+  const headers = header === 'seconds' ? { 'retry-after': '1200' } : header === 'date' ? { 'retry-after': new Date(retryAt).toUTCString() } : { 'x-ratelimit-reset': String(retryAt / 1000) };
+  const feed = createToolNews({ clock: () => time, fetch: async url => {
+   const kind = kindOf(url);
+   if (kind === 'claude' && ++limited === 1) return new Response('rate limited', { status, headers });
+   return new Response(fixtures[kind]);
+  }});
+  assert.equal((await feed()).tools.claude.checkStatus, 'unavailable');
+  time += 5 * 60_000; await feed({ fresh: true }); assert.equal(limited, 1);
+  time = retryAt - 1; await feed({ fresh: true }); assert.equal(limited, 1);
+  time++; assert.equal((await feed()).tools.claude.checkStatus, 'ok'); assert.equal(limited, 2);
+ });
+});
+
+test('a withdrawn release retains the newer news and waits a full hour after a successful check', async () => {
+ let time = Date.parse('2026-10-16T00:00:00Z'), calls = 0, withdrawn = false;
+ const feed = createToolNews({ clock: () => time, fetch: async url => {
+  calls++; const kind = kindOf(url);
+  return new Response(kind === 'claude' ? JSON.stringify({ tag_name: withdrawn ? 'v2.1.301' : 'v2.1.302', body: '- Latest good notes', published_at: '2026-10-16T00:00:00Z' }) : fixtures[kind]);
+ }});
+ const first = await feed(); withdrawn = true; time += NEWS_INTERVAL_MS;
+ const second = await feed();
+ assert.equal(second.tools.claude.latest, '2.1.302');
+ assert.deepEqual(second.tools.claude.items, first.tools.claude.items);
+ assert.equal(second.tools.claude.checkStatus, 'ok');
+ time += 5 * 60_000; await feed(); assert.equal(calls, 10);
 });

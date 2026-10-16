@@ -19,11 +19,11 @@ export const USAGE = `사용법: wax chat [--project <dir>] <명령> [옵션]
        [--doing <지금 하는 일>] [--to <받는 사람,받는 사람>]
        [--kind claude|codex|gemini|antigravity|copilot|human|other] [--type message|opinion|question|answer|decision]
        [--phase <단계>] [--reply-to <메시지ID>] [--json]
-  read <channel> [--since <메시지ID>] [--limit <n>] [--json]
+  read <channel> [--since <메시지ID>] [--id <메시지ID>] [--limit <n>] [--json]
   channels [--json]
   presence --author <이름> [--session <ID>] --state working|discussing|reviewing|idle|away
-       [--kind <종류>] [--model <모델>] [--feature <작업ID>] [--note <메모>] [--json]
-  join --author <기본 이름> [--kind <종류>] [--model <모델>] [--feature <작업ID>] [--state <상태>] [--note <메모>] [--json]
+       [--kind <종류>] [--model <모델>] [--peer <세션 간 통신 이름>] [--feature <작업ID>] [--note <메모>] [--json]
+  join --author <기본 이름> [--kind <종류>] [--model <모델>] [--peer <세션 간 통신 이름>] [--feature <작업ID>] [--state <상태>] [--note <메모>] [--json]
        세션의 첫 참여. 같은 이름이 활동 중이면 <이름>-2, -3 …으로 들어오고 그 이름을 알려 줌
   who [--json]
   board post <작업ID> --author <이름> [--session <ID>] --type opinion|question|answer|decision
@@ -41,7 +41,8 @@ export const USAGE = `사용법: wax chat [--project <dir>] <명령> [옵션]
   daily draft [--date YYYY-MM-DD] [--out <새 파일 경로>]   일일 업무보고 집계 초안
   daily report --author <이름> [--session <ID>] --file <보고서.md> [--date YYYY-MM-DD] [--kind <종류>] [--json]
   daily list [--date YYYY-MM-DD] [--json]
-  watch --author <이름> [--feature <작업ID>] [--json]       나를 부른(@이름·--to) 메시지와 내 배정을 한 줄씩 출력(멈출 때까지)
+  watch --author <이름> [--feature <작업ID>] [--wake] [--json]  나를 부른(@이름·--to) 메시지와 내 배정을 한 줄씩 출력(멈출 때까지)
+       --wake: 출력이 AI 세션을 깨울 때(Claude Code Monitor) 붙여 대시보드에 '바로 답함'으로 표시
   serve [--port <n>]                                        대시보드 (wax dashboard와 같음). 이미 켜져 있으면 주소만 알림
   참여한 이름의 post·presence·board·daily·assign·task 쓰기에는 --session <ID>를 함께 넘깁니다.
   join --author <이름> [--session <ID>] [--rename]           재참여·이름 변경에 같은 세션 ID 사용
@@ -55,8 +56,8 @@ const OPTIONS = {
   project: { type: 'string' }, author: { type: 'string' }, kind: { type: 'string' }, message: { type: 'string' },
   file: { type: 'string' }, type: { type: 'string' }, phase: { type: 'string' }, 'reply-to': { type: 'string' },
   since: { type: 'string' }, limit: { type: 'string' }, state: { type: 'string' }, feature: { type: 'string' },
-  note: { type: 'string' }, model: { type: 'string' }, stance: { type: 'string' }, doing: { type: 'string' }, to: { type: 'string' }, all: { type: 'boolean' }, out: { type: 'string' },
-  session: { type: 'string' }, rename: { type: 'boolean' }, 'covers-through': { type: 'string' }, clear: { type: 'boolean' }, replace: { type: 'boolean' }, status: { type: 'boolean' }, port: { type: 'string' }, date: { type: 'string' }, json: { type: 'boolean' }, help: { type: 'boolean', short: 'h' },
+  note: { type: 'string' }, model: { type: 'string' }, peer: { type: 'string' }, stance: { type: 'string' }, doing: { type: 'string' }, to: { type: 'string' }, all: { type: 'boolean' }, out: { type: 'string' },
+  id: { type: 'string' }, wake: { type: 'boolean' }, session: { type: 'string' }, rename: { type: 'boolean' }, 'covers-through': { type: 'string' }, clear: { type: 'boolean' }, replace: { type: 'boolean' }, status: { type: 'boolean' }, port: { type: 'string' }, date: { type: 'string' }, json: { type: 'boolean' }, help: { type: 'boolean', short: 'h' },
 };
 
 const time = (iso) => new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -102,7 +103,7 @@ export async function run(argv, { cwd = process.cwd(), env = process.env, stdout
       return 0;
     }
     case 'read': {
-      const result = await readMessages(root, need(positionals, 1, '채널'), { since: values.since, limit: values.limit });
+      const result = await readMessages(root, need(positionals, 1, '채널'), { since: values.since, id: values.id, limit: values.limit });
       print(result, (r) => r.messages.length ? r.messages.map(formatMessage).join('\n') : '(메시지 없음)');
       return 0;
     }
@@ -111,19 +112,19 @@ export async function run(argv, { cwd = process.cwd(), env = process.env, stdout
       return 0;
     }
     case 'presence': {
-      const entry = await setPresence(root, { author: values.author, session: values.session, kind: values.kind, model: values.model, state: values.state, feature: values.feature, note: values.note }, clock);
+      const entry = await setPresence(root, { author: values.author, session: values.session, kind: values.kind, model: values.model, peer: values.peer, state: values.state, feature: values.feature, note: values.note }, clock);
       print(entry, (e) => `${e.author}: ${e.state}${e.feature ? ` (${e.feature})` : ''}`);
       return 0;
     }
     case 'join': {
-      const entry = await joinPresence(root, { session: values.session, rename: values.rename, author: values.author, kind: values.kind, model: values.model, state: values.state, feature: values.feature, note: values.note }, clock);
+      const entry = await joinPresence(root, { session: values.session, rename: values.rename, author: values.author, kind: values.kind, model: values.model, peer: values.peer, state: values.state, feature: values.feature, note: values.note }, clock);
       print(entry, (e) => `${e.author}: ${e.state}${e.feature ? ` (${e.feature})` : ''}${e.renamed ? `
 ${e.requested} 이름은 다른 세션이 쓰고 있어 ${e.author}(으)로 참여했습니다.` : ''}\n세션 ID: ${e.session} (재참여와 모든 쓰기 명령에 --session으로 사용)`);
       return 0;
     }
     case 'who': {
       print(await listPresence(root, clock), (list) => list.length
-        ? list.map((e) => `${e.author}(${e.kind}${e.model ? ` · ${e.model}` : ''})\t${e.effectiveState}\t${e.feature ?? '-'}\t${time(e.lastActive)}${e.note ? `\t${e.note}` : ''}`).join('\n')
+        ? list.map((e) => `${e.author}(${e.kind}${e.model ? ` · ${e.model}` : ''}${e.peer ? ` · 세션 ${e.peer}` : ''})\t${e.effectiveState}${e.listening ? ' · 듣는 중' : ''}\t${e.feature ?? '-'}\t${time(e.lastActive)}${e.note ? `\t${e.note}` : ''}`).join('\n')
         : '(참여자 없음)');
       return 0;
     }
@@ -233,11 +234,11 @@ ${e.requested} 이름은 다른 세션이 쓰고 있어 ${e.author}(으)로 참�
     case 'watch': {
       if (!values.author) throw new UsageError('--author <이름>이 필요합니다.');
       const stop = await watchChat(root, {
-        author: values.author, feature: values.feature,
+        author: values.author, feature: values.feature, wake: values.wake,
         write: (event) => stdout.write(`${values.json ? JSON.stringify(event) : formatWatchEvent(event)}\n`),
         onError: (error) => process.stderr.write(`wax chat watch: ${error.message}\n`),
       });
-      for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { stop(); process.exit(0); });
+      for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { Promise.resolve(stop()).finally(() => process.exit(0)); });
       return null;
     }
     case 'serve': {

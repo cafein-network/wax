@@ -25,7 +25,8 @@ export class ChatWatcher extends EventEmitter {
   }
 
   async start() {
-    await this.tick({ initial: true });
+    try { await this.tick({ initial: true }); }
+    catch (error) { this.emit('error', error); }
     this.running = true;
     const loop = async () => {
       if (!this.running) return;

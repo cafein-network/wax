@@ -23,10 +23,16 @@ test('웹 UI는 HTML 문자열 삽입 API를 쓰지 않는다', async () => {
   }
 });
 
-test('대시보드는 자체 AI API 클라이언트나 주기적 보고 생성을 포함하지 않는다', async () => {
+const networkCall = /\b(?:fetch|fetcher)\s*\(|\bglobalThis\s*\.\s*fetch\b|https?\.request\s*\(|node:https|from ['"]node:net['"]/;
+
+test('네트워크 검사는 fetch 별칭과 전역 fetch도 감지한다', () => {
+  for (const code of ['fetch(url)', 'fetcher (url)', 'globalThis.fetch(url)', 'const f = globalThis.fetch;', "import https from 'node:https'"]) assert.match(code, networkCall);
+});
+
+test('대시보드의 외부 조회는 공식 도구 소식 모듈에 한정하며 보고서는 자동 생성하지 않는다', async () => {
   for (const file of [...await files(join('src', 'chat'), ['.mjs']), ...await files('bin', ['.mjs'])]) {
     const text = await readFile(join(root, file), 'utf8');
-    assert.doesNotMatch(text, /\bfetch\(|https?\.request\(|node:https|from 'node:net'/, file);
+    if (file !== join('src', 'chat', 'tool-news.mjs')) assert.doesNotMatch(text, networkCall, file);
     assert.doesNotMatch(text, /setInterval\([^)]*(digest|Report|daily)/i, file);
   }
   const server = await readFile(join(root, 'src', 'chat', 'server.mjs'), 'utf8');

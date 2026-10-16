@@ -23,6 +23,14 @@
       <section id="approvals" class="panel approvals-panel" aria-label="실행 승인"></section>
       <div class="timeline" id="timeline" aria-live="polite" aria-label="메시지"></div>
       <form class="composer" id="composer">
+        <div class="recipients" id="recipients-wrap">
+          <span class="recipients-label" id="recipients-label">받는 사람</span>
+          <div class="recipient-list" id="recipients" role="group" aria-labelledby="recipients-label"></div>
+        </div>
+        <div class="replying" id="replying" hidden>
+          <span id="replying-text"></span>
+          <button type="button" class="link" id="replying-cancel" aria-label="답장 취소">취소</button>
+        </div>
         <label class="visually-hidden" for="body">메시지</label>
         <textarea id="body" name="body" placeholder="메시지를 입력하세요 (Ctrl+Enter로 보내기)" maxlength="8000" required></textarea>
         <div class="row">
@@ -38,6 +46,7 @@
           <span class="spacer"></span>
           <button type="submit" class="primary">보내기</button>
         </div>
+        <p class="delivery" id="delivery" aria-live="polite" hidden></p>
         <p class="error" id="error" hidden></p>
       </form>
     </main>
