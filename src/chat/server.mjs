@@ -1,6 +1,6 @@
 import { createServer, get } from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { basename, join, resolve } from 'node:path';
+import { basename, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import { LABELS, PHASES, WaxError, createFeature, getFeature } from '../workflow.mjs';
@@ -19,6 +19,7 @@ import { toolNews } from './tool-news.mjs';
 import { listApprovals, decideApproval } from '../approvals.mjs';
 import { requestTools as discoverRequestTools } from '../agent-tools.mjs';
 import { createRequestRunner } from './requests.mjs';
+import { artifactFile } from '../quality.mjs';
 
 const publicDir = fileURLToPath(new URL('../../web/', import.meta.url));
 const { version } = JSON.parse(await readFile(new URL('../../package.json', import.meta.url), 'utf8'));
@@ -70,7 +71,8 @@ async function readJson(req, maxBytes = 1_000_000) {
 
 export function createChatServer({ root, env = process.env, intervalMs = 1000, executeRequest, requestTools = discoverRequestTools } = {}) {
   const token = randomBytes(32).toString('hex');
-  const user = validAuthor(env.WAX_CHAT_USER || storedDashboardUser(root) || '사용자');
+  const user = validAuthor(env.WAX_CHAT_USER || storedDashboardUser(root) || '대표');
+  const onePerson = (agents) => agents.filter((agent) => agent.kind !== 'human' || agent.author === user);
   let identityReady;
   const ensureIdentity = () => identityReady ??= reserveDashboardUser(root, user).catch(error => {
     identityReady = null;
@@ -80,7 +82,7 @@ export function createChatServer({ root, env = process.env, intervalMs = 1000, e
   const clients = new Set();
   const broadcast = (event, data) => { const frame = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`; for (const res of clients) res.write(frame); };
   const requests = createRequestRunner({ root, execute: executeRequest, notify: broadcast });
-  for (const event of ['message', 'note', 'report', 'presence', 'features', 'daily', 'tasks', 'approvals']) watcher.on(event, (data) => broadcast(event, data));
+  for (const event of ['message', 'note', 'report', 'presence', 'features', 'daily', 'tasks', 'approvals']) watcher.on(event, (data) => broadcast(event, event === 'presence' ? { ...data, agents: onePerson(data.agents) } : data));
   watcher.on('error', (error) => console.error('wax 대시보드 감시:', error.message));
   const heartbeat = setInterval(() => { for (const res of clients) res.write(': ping\n\n'); }, 15_000);
   heartbeat.unref();
@@ -128,8 +130,20 @@ export function createChatServer({ root, env = process.env, intervalMs = 1000, e
       if (req.method === 'GET' && pathname === '/api/request-tools') { json(res, 200, { tools: await requestTools() }); return; }
       if (req.method === 'GET' && pathname === '/api/requests') { json(res, 200, { requests: await requests.list() }); return; }
       if (req.method === 'GET' && pathname === '/api/approvals') { json(res, 200, await listApprovals(root)); return; }
-      if (req.method === 'GET' && pathname === '/api/presence') { json(res, 200, await listPresence(root)); return; }
+      if (req.method === 'GET' && pathname === '/api/presence') { json(res, 200, onePerson(await listPresence(root))); return; }
       if (req.method === 'GET' && pathname === '/api/features') { json(res, 200, await featureSummary(root)); return; }
+      const artifactRoute = pathname.match(/^\/api\/features\/([a-z0-9-]+)\/artifacts\/design-preview$/);
+      if (req.method === 'GET' && artifactRoute) {
+        const feature = await getFeature(root, artifactRoute[1]);
+        const preview = feature.completed.design?.checks?.find(check => check.id === 'design-preview' && check.status === 'pass');
+        const path = preview && await artifactFile(root, preview.artifact);
+        if (!path) throw new WaxError('등록된 시안 파일을 찾을 수 없습니다.', 404);
+        const extension = extname(path).toLowerCase();
+        res.setHeader('content-security-policy', "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:; frame-ancestors 'self'; base-uri 'none'; form-action 'none'");
+        if (['.blend', '.rbxl', '.rbxlx'].includes(extension)) res.setHeader('content-disposition', `attachment; filename="preview${extension}"`);
+        res.writeHead(200, { 'content-type': MIME[extension] || ({ '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.mp4': 'video/mp4' })[extension] || 'application/octet-stream' });
+        res.end(await readFile(path)); return;
+      }
       const proofRoute = pathname.match(/^\/api\/features\/([^/]+)\/proofs\/([^/]+)$/);
       if (req.method === 'GET' && proofRoute) {
         const feature = await getFeature(root, proofRoute[1]);
@@ -144,9 +158,10 @@ export function createChatServer({ root, env = process.env, intervalMs = 1000, e
       if (req.method === 'GET' && pathname === '/api/tools') { json(res, 200, { tools: await toolVersions({ fresh: url.searchParams.get('fresh') === '1' }) }); return; }
       if (req.method === 'GET' && pathname === '/api/usage') { json(res, 200, await listUsage(root)); return; }
       if (req.method === 'GET' && pathname === '/api/profiles') { json(res, 200, { profiles: await listProfiles(root) }); return; }
-      if (req.method === 'GET' && pathname === '/api/daily') { json(res, 200, await collectDay(root, url.searchParams.get('date') || undefined)); return; }
+      if (req.method === 'GET' && pathname === '/api/daily') { const day = await collectDay(root, url.searchParams.get('date') || undefined); json(res, 200, { ...day, agents: onePerson(day.agents) }); return; }
       if (req.method === 'GET' && pathname === '/api/daily/draft') {
-        json(res, 200, { markdown: buildDailyDraft(await collectDay(root, url.searchParams.get('date') || undefined)) });
+        const day = await collectDay(root, url.searchParams.get('date') || undefined);
+        json(res, 200, { markdown: buildDailyDraft({ ...day, agents: onePerson(day.agents) }) });
         return;
       }
       const dailyRoute = pathname.match(/^\/api\/daily\/reports\/(\d{4}-\d{2}-\d{2})\/(\d{1,2})$/);
@@ -183,7 +198,7 @@ export function createChatServer({ root, env = process.env, intervalMs = 1000, e
       return await withDashboardUser(root, user, async () => {
       if (req.method === 'POST' && pathname === '/api/requests') {
         const data = await readJson(req, 40000);
-        json(res, 202, await requests.submit({ id: data.id, body: data.body, author: user, tool: data.tool, mode: data.mode }));
+        json(res, 202, await requests.submit({ id: data.id, body: data.body, author: user, tool: data.tool, mode: data.mode, projectType: data.projectType }));
         return;
       }
       const requestRoute = pathname.match(/^\/api\/requests\/(request-[a-f0-9-]{36})\/(reply|stop)$/);

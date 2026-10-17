@@ -19,6 +19,7 @@ import { cardTabs, ceoCard, faceShot, profileCard } from './card.mjs';
 import { isPlaying, startMusic, stopMusic } from './music.mjs';
 import { createOfficeMessenger } from './messenger.mjs';
 import { assignPersonas, faceThumb, loadFaceAssets } from './faces.mjs';
+import { PROJECT_TYPES } from '/project-types.mjs';
 
 const ROOMS = SIDE_ROOMS;
 const ROOM_ORDER = SIDE_ROOM_ORDER;
@@ -151,7 +152,7 @@ function updateScene({ instant = false } = {}) {
   if (!state.config) return;
   const now = Date.now();
   state.events = state.events.filter((event) => now - Date.parse(event.at) < 10 * 60 * 1000);
-  state.scene = officeScene({ agents: state.agents, order: state.order, events: state.events, lastNoteAt: state.lastNoteAt, now, awayAfterMs: state.config.awayAfterMs, pm: state.pm, lab: SIDE_ROOMS.lab, roof: SIDE_ROOMS.roof });
+  state.scene = officeScene({ agents: state.agents, order: state.order, events: state.events, lastNoteAt: state.lastNoteAt, now, awayAfterMs: state.config.awayAfterMs, pm: state.pm, lab: SIDE_ROOMS.lab, roof: SIDE_ROOMS.roof, studio: SIDE_ROOMS.studio, features: state.features });
   const walk = (actor, target, leaving) => walkTo(actor, target, leaving, instant);
   for (const item of state.scene) {
     const place = placeOf(item.room, item.spot);
@@ -346,6 +347,12 @@ function positionOverlay(time) {
     Object.assign(boardButton.style, { left: `${hitArea.x * scale}px`, top: `${hitArea.y * scale}px`, width: `${hitArea.width * scale}px`, height: `${hitArea.height * scale}px` });
   }
   const speaker = stageRoom(state.room).SPEAKER_HIT;
+  const studio = stageRoom(state.room).STUDIO_HIT;
+  if (studio) {
+    seen.add('studio');
+    const button = overlayFor('studio', () => el('button', { type: 'button', class: 'hit', 'aria-label': '디자인실 제작물 보기', onclick: openStudio }));
+    Object.assign(button.style, { left: `${studio.x * scale}px`, top: `${studio.y * scale}px`, width: `${studio.width * scale}px`, height: `${studio.height * scale}px` });
+  }
   if (speaker) {
     seen.add('speaker');
     const button = overlayFor('speaker', () => el('button', { type: 'button', class: 'hit', onclick: toggleMusic }));
@@ -751,7 +758,7 @@ function scrollToFloor(id, behavior = 'smooth') {
   if (top === undefined) return;
   const rect = stage.getBoundingClientRect();
   const scale = rect.width / BUILDING.SIZE.width;
-  window.scrollTo({ top: window.scrollY + rect.top + top * scale - 80, behavior });
+  window.scrollTo({ top: window.scrollY + rect.top + top * scale - 80, behavior: reducedQuery.matches ? 'instant' : behavior });
 }
 
 function renderRoomTabs() {
@@ -902,6 +909,26 @@ async function openAgent(author) {
 }
 
 let boardTab = 'notes', noteFilter = 'all';
+function openStudio() {
+  const panel = clear($('studio-content'));
+  const features = state.features.filter(feature => feature.phase === 'design' || feature.designPreview);
+  panel.append(el('p', { text: '브리프 → 시안 제작 → 실제 화면·실행 환경 확인 → 개발 인계' }),
+    el('p', { text: '화면 설계는 Figma, 이미지·배경·소품은 Midjourney·이미지 도구, 착용 이미지는 FASHN, 3D 모델은 Blender 등 작업에 맞는 도구를 사용합니다. 실제 연결 여부는 담당 AI가 워크플로우에서 확인합니다.' }));
+  if (!features.length) panel.append(el('p', { class: 'empty', text: '현재 설계 중이거나 시안이 등록된 작업이 없습니다. 대시보드에서 만들고 싶은 결과를 요청하세요.' }));
+  for (const feature of features) {
+    const preview = feature.designPreview;
+    const card = el('section', { class: 'card' }, el('h3', { text: feature.title }), el('p', { class: 'kind', text: `${PROJECT_TYPES[feature.projectType]?.label || '프로젝트'} · ${state.config.labels?.[feature.phase] || feature.phase}` }));
+    if (preview) {
+      card.append(el('p', { text: `개발 인계 시안: ${preview.file}` }));
+      if (/\.(png|jpe?g|webp|gif)$/i.test(preview.file)) card.append(el('img', { src: preview.url, alt: `${feature.title} 설계 시안`, class: 'studio-preview-image' }));
+      else if (/\.html$/i.test(preview.file)) card.append(el('iframe', { src: preview.url, sandbox: '', title: `${feature.title} 시안`, class: 'studio-preview-frame' }));
+      card.append(el('a', { href: preview.url, target: '_blank', rel: 'noopener', text: '등록 시안 열기 ↗' }));
+    } else card.append(el('p', { text: '시안을 제작하고 있습니다. 설명 문서만으로 시안을 완료 처리하지 않습니다.' }));
+    card.append(el('p', {}, el('a', { href: feature.id.startsWith('request-') ? `/?request=${encodeURIComponent(feature.id)}` : `/manage?feature=${encodeURIComponent(feature.id)}`, text: '현재 미션과 검증 기록 보기 ↗' })));
+    panel.append(card);
+  }
+  if (!$('studio-dialog').open) $('studio-dialog').showModal();
+}
 function openBoard(id = state.currentBoard) {
   const select = clear($('board-select'));
   const ids = [...new Set([...state.channels.map((c) => c.id), ...state.boards.keys()])];
@@ -1038,6 +1065,8 @@ function connect({ resync = false } = {}) {
   });
   source.addEventListener('features', (event) => {
     state.features = JSON.parse(event.data).features;
+    updateScene();
+    if ($('studio-dialog').open) openStudio();
     refreshSkills();
     if ($('board-dialog').open) renderBoard();
     requestFrame();
@@ -1058,6 +1087,7 @@ for (const dialog of dialogSurface.dialogs) {
 for (const tab of $('board-dialog').querySelectorAll('[data-tab]')) tab.addEventListener('click', () => { boardTab = tab.dataset.tab; renderBoard(); });
 $('board-select').addEventListener('change', renderBoard);
 $('open-board').addEventListener('click', () => openBoard());
+$('open-studio').addEventListener('click', openStudio);
 $('chatter-toggle').addEventListener('click', () => { chatterOn = !chatterOn; store('wax.office.chatter', chatterOn ? 'on' : 'off'); applyChatter(); });
 applyChatter();
 setInterval(chatterTick, 2000);
@@ -1087,6 +1117,7 @@ try {
   applyView();
   updateScene({ instant: true });
   disconnectOffice = connect();
+  if (!demo && new URLSearchParams(location.search).has('room')) requestAnimationFrame(() => scrollToFloor(state.room, 'instant'));
   if (demo) {
     const publishCast = () => demo.cast(state.agents.map((agent) => {
       const portrait = faceOf(agent.author, agent.kind, 64);

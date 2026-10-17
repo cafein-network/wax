@@ -146,7 +146,7 @@ test('프로젝트 소개는 package.json description, 없으면 README 첫 소�
   assert.equal(await projectDescription(root), '패키지 설명');
 });
 
-test('기본 이름이 사용자로 바뀌어도 기존 프로젝트는 쓰던 대시보드 이름(사람)으로 PM 업무를 이어 간다', async (t) => {
+test('기본 이름이 대표로 바뀌어도 기존 프로젝트는 쓰던 대시보드 이름(사람)으로 PM 업무를 이어 간다', async (t) => {
   const root = await project(t, ['chatbot']);
   const legacy = createChatServer({ root, env: { WAX_CHAT_USER: '사람' }, intervalMs: 100 });
   { const server = legacy;
@@ -170,5 +170,5 @@ test('기본 이름이 사용자로 바뀌어도 기존 프로젝트는 쓰던 �
   const brandNew = createChatServer({ root: fresh, env: {}, intervalMs: 100 });
   brandNew.listen(0, '127.0.0.1'); await once(brandNew, 'listening');
   t.after(() => brandNew.shutdown());
-  assert.equal((await (await fetch(`http://127.0.0.1:${brandNew.address().port}/api/config`)).json()).user, '사용자');
+  assert.equal((await (await fetch(`http://127.0.0.1:${brandNew.address().port}/api/config`)).json()).user, '대표');
 });

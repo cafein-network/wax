@@ -3642,7 +3642,8 @@
     "dev": "bg-dev.png",
     "lab": "bg-lab.png",
     "meeting": "bg-meeting.png",
-    "roof": "bg-roof.png"
+    "roof": "bg-roof.png",
+    "studio": "bg-studio.png"
   },
   "props": {
     "bartable": {
@@ -3672,6 +3673,12 @@
       "width": 151,
       "height": 240
     },
+    "chairstack": {
+      "file": "prop-chairstack.png",
+      "width": 44,
+      "height": 60,
+      "native": true
+    },
     "coffeecart": {
       "file": "prop-coffeecart.png",
       "width": 104,
@@ -3688,6 +3695,12 @@
       "file": "prop-dashboard.png",
       "width": 104,
       "height": 240
+    },
+    "design-desk": {
+      "file": "prop-design-desk.png",
+      "width": 112,
+      "height": 78,
+      "native": true
     },
     "desk": {
       "file": "prop-desk.png",
@@ -3756,6 +3769,12 @@
       "width": 300,
       "height": 240
     },
+    "moodboard": {
+      "file": "prop-moodboard.png",
+      "width": 100,
+      "height": 96,
+      "native": true
+    },
     "parasol": {
       "file": "prop-parasol.png",
       "width": 164,
@@ -3782,6 +3801,12 @@
       "width": 300,
       "height": 172
     },
+    "softbox": {
+      "file": "prop-softbox.png",
+      "width": 52,
+      "height": 107,
+      "native": true
+    },
     "standdesk": {
       "file": "prop-standdesk.png",
       "width": 224,
@@ -3796,12 +3821,6 @@
       "file": "prop-whiteboard.png",
       "width": 182,
       "height": 240
-    },
-    "chairstack": {
-      "file": "prop-chairstack.png",
-      "width": 44,
-      "height": 60,
-      "native": true
     }
   }
 }

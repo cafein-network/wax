@@ -77,7 +77,7 @@ export async function listTasks(root, { to, feature, all = false } = {}) {
 export async function assignTask(root, input = {}, { now = new Date() } = {}) {
   const author = v.author(input.author);
   const { pm } = await getTeam(root);
-  if (!pm) throw new WaxError('PM이 지정되지 않았습니다. 사용자가 wax chat team pm <이름>으로 먼저 지정하세요.', 409);
+  if (!pm) throw new WaxError('PM이 지정되지 않았습니다. 대표가 wax chat team pm <이름>으로 먼저 지정하세요.', 409);
   if (pm.author !== author) throw new WaxError(`업무는 PM(${pm.author})만 배정할 수 있습니다.`, 403);
   const feature = await resolveTarget(root, v.channelId(input.feature), { write: true });
   if (!feature) throw new WaxError('업무는 wax 작업에 배정해야 합니다.');

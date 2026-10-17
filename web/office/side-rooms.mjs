@@ -6,6 +6,11 @@ export const FLOOR = Math.round(300 * SCALE);
 const FRONT = FLOOR + Math.round(72 * SCALE), BACK = FLOOR + Math.round(40 * SCALE);
 export const PROP_BOTTOM = FLOOR + Math.round(62 * SCALE);
 const CABINET_HEIGHT = 38;
+const drinkStation = (x) => [
+  { type: 'cabinet', x, w: 100 },
+  { type: 'dispenser', x: x + 8, w: 30, bottom: PROP_BOTTOM - CABINET_HEIGHT },
+  { type: 'espresso', x: x + 62, w: 32, bottom: PROP_BOTTOM - CABINET_HEIGHT },
+];
 export const DESK_SEAT_OFFSET = 4;
 const DESK_SEAT = (deskX, w = 150) => Math.round(deskX + (w * (1 - SCALE)) / 2 + DESK_SEAT_OFFSET * SCALE);
 export const LIFT_X = 1350;
@@ -16,11 +21,32 @@ const SPEAKER = { x: 884, w: 30, h: 20, bottom: PROP_BOTTOM };
 const FREE_SEATS = { d0: [195, 'right'], d1: [305, 'left'], d2: [415, 'right'], d3: [525, 'left'], d4: [635, 'right'] };
 
 export const CHAIR_STACK = { x: 18, gap: 7, count: 3 };
-export const EXTRA_SEATS = ['meeting:w', 'meeting:sw', 'meeting:s', 'meeting:se', 'meeting:e'];
+export const EXTRA_SEATS = ['meeting:w', 'meeting:sw', 'meeting:s', 'meeting:se', 'meeting:e',
+  ...Object.keys(FREE_SEATS).map(seat => `dev:${seat}`), 'studio:a0', 'studio:a1', 'studio:a2'];
 
 export const SIDE_ROOMS = {
+  studio: {
+    id: 'studio', label: '디자인실', floor: 'B1', background: 'studio', wall: '#dfe9e2', accent: '#93b7ab',
+    NODES: {
+      a0: [265, FRONT, 'right'], a1: [470, FRONT, 'right'], a2: [675, FRONT, 'right'],
+      board0: [900, FRONT, 'right'], board1: [1090, BACK, 'left'],
+      preview: [1160, FRONT, 'left'], mid: [770, BACK, 'right'],
+    },
+    SPOTS: { design: ['a0', 'a1', 'a2', 'board0', 'board1', 'preview', 'mid'] },
+    SEATS: {
+      a0: { x: 265, y: FRONT, facing: 'right', kind: 'chair' },
+      a1: { x: 470, y: FRONT, facing: 'right', kind: 'chair' },
+      a2: { x: 675, y: FRONT, facing: 'right', kind: 'chair' },
+    },
+    props: [
+      { type: 'design-desk', x: 285, w: 160, seat: 'a0' }, { type: 'design-desk', x: 490, w: 160, seat: 'a1' }, { type: 'design-desk', x: 695, w: 160, seat: 'a2' },
+      { type: 'moodboard', x: 930, w: 125 }, { type: 'softbox', x: 1140, w: 68 }, { type: 'plant', x: 20, w: 52 },
+      ...drinkStation(110),
+    ],
+    board: { x: 940, y: PROP_BOTTOM - 100, width: 110, height: 100 },
+  },
   dev: {
-    id: 'dev', label: '개발실', background: 'dev', wall: '#f1ece2', accent: '#d9e6dc',
+    id: 'dev', label: '개발실', floor: '2F', background: 'dev', wall: '#f1ece2', accent: '#d9e6dc',
     NODES: {
       door: [70, FRONT, 'right'], hall: [140, FRONT, 'right'], q: [120, BACK, 'right'],
       d0: [FREE_SEATS.d0[0], FRONT, FREE_SEATS.d0[1]], d1: [FREE_SEATS.d1[0], FRONT, FREE_SEATS.d1[1]], d2: [FREE_SEATS.d2[0], FRONT, FREE_SEATS.d2[1]],
@@ -38,13 +64,13 @@ export const SIDE_ROOMS = {
       { type: 'window', x: 170, w: 260 }, { type: 'window', x: 480, w: 260 }, { type: 'sign', x: 790, w: 150 },
       { type: 'table', x: 790, w: 110 }, { type: 'whiteboard', x: 895, w: 130 },
       { type: 'speaker', x: SPEAKER.x, w: SPEAKER.w, bottom: SPEAKER.bottom },
-      { type: 'sofa', x: 1060, w: 160 }, { type: 'cabinet', x: 1194, w: 100 }, { type: 'espresso', x: 1255, w: 32, bottom: PROP_BOTTOM - CABINET_HEIGHT }, { type: 'door', x: 22, w: 96 }, { type: 'plant', x: 130, w: 60 },
+      { type: 'sofa', x: 1060, w: 160 }, ...drinkStation(1194), { type: 'door', x: 22, w: 96 }, { type: 'plant', x: 130, w: 60 },
     ],
     board: { x: 905, y: Math.round(225 * SCALE), width: 110, height: Math.round(80 * SCALE) },
     speaker: { x: SPEAKER.x - 6, y: SPEAKER.bottom - SPEAKER.h - 10, width: SPEAKER.w + 12, height: SPEAKER.h + 14 },
   },
   lab: {
-    id: 'lab', label: '연구소', background: 'lab', wall: '#26324a', accent: '#33425e', dark: true,
+    id: 'lab', label: '연구소', floor: '3F', background: 'lab', wall: '#26324a', accent: '#33425e', dark: true,
     NODES: {
       t0: [300, BACK, 'right'], t1: [510, BACK, 'right'], t2: [720, BACK, 'right'],
       m0: [900, BACK, 'right'], m1: [980, FRONT, 'right'], srv: [1120, FRONT, 'right'],
@@ -54,12 +80,13 @@ export const SIDE_ROOMS = {
     SPOTS: { bench: ['t0', 't1', 't2'], monitor: ['m0', 'm1', 'srv', 'm2', 'm3', 'm4'] },
     SEATS: {},
     props: [
+      ...drinkStation(12),
       { type: 'bugboard', x: 110, w: 120 }, { type: 'standdesk', x: 320, w: 130 }, { type: 'standdesk', x: 530, w: 130 }, { type: 'standdesk', x: 740, w: 130 },
       { type: 'dashboard', x: 900, w: 70 }, { type: 'dashboard', x: 985, w: 70 }, { type: 'devicefarm', x: 1150, w: 110 },
     ],
   },
   meeting: {
-    id: 'meeting', label: '회의실', background: 'meeting', wall: '#e9edf0', accent: '#cfdde4',
+    id: 'meeting', label: '회의실', floor: '1F', background: 'meeting', wall: '#e9edf0', accent: '#cfdde4',
     NODES: {
       door: [70, FRONT, 'right'],
       stack: [120, BACK, 'left'],
@@ -78,11 +105,11 @@ export const SIDE_ROOMS = {
     },
     props: [
       { type: 'screen', x: 1080, w: 180 }, { type: 'longtable', x: 540, w: 340 },
-      { type: 'cabinet', x: 182, w: 100 }, { type: 'dispenser', x: 190, w: 30, bottom: PROP_BOTTOM - CABINET_HEIGHT }, { type: 'whiteboard', x: 1120, w: 120 },
+      ...drinkStation(182), { type: 'whiteboard', x: 1120, w: 120 },
     ],
   },
   boss: {
-    id: 'boss', label: '사장실', background: 'boss', wall: '#efe4d3', accent: '#dccbb0',
+    id: 'boss', label: '사장실', floor: '4F', background: 'boss', wall: '#efe4d3', accent: '#dccbb0',
     NODES: {
       sofa0: [220, FRONT, 'right'], sofa1: [290, FRONT, 'right'], center: [430, FRONT, 'right'], pm: [DESK_SEAT(520), FRONT, 'right'],
       chair: [DESK_SEAT(735, 170), FRONT, 'right'], v2: [900, BACK, 'left'], v0: [960, FRONT, 'left'], v1: [1040, FRONT, 'left'], front: [1110, BACK, 'left'],
@@ -121,12 +148,11 @@ const emptyChair = (room, seat) => {
   const center = x + (facing === 'left' ? 8 : -8);
   return { type: 'chair', x: Math.round(center - CHAIR_W / 2), w: CHAIR_W, flip: facing === 'left', seatOf: seat };
 };
-SIDE_ROOMS.dev.props.unshift(...Object.keys(FREE_SEATS).map((seat) => emptyChair(SIDE_ROOMS.dev, seat)));
 SIDE_ROOMS.boss.props.unshift(emptyChair(SIDE_ROOMS.boss, 'chair'), emptyChair(SIDE_ROOMS.boss, 'pm'));
 SIDE_ROOMS.meeting.props.unshift(...['f0', 'f1', 'f2'].map((seat) => emptyChair(SIDE_ROOMS.meeting, seat)));
 SIDE_ROOMS.meeting.props.push(...['c0', 'c1', 'c2', 'c3'].map((seat) => emptyChair(SIDE_ROOMS.meeting, seat)));
 
-export const FLOORS = ['meeting', 'dev', 'lab', 'boss', 'roof'];
+export const FLOORS = ['studio', 'meeting', 'dev', 'lab', 'boss', 'roof'];
 export const SIDE_ROOM_ORDER = FLOORS;
 
 export function buildBuilding(rooms = SIDE_ROOMS, floors = FLOORS) {
@@ -156,8 +182,9 @@ export function buildBuilding(rooms = SIDE_ROOMS, floors = FLOORS) {
     id: 'building', label: '건물', side: true, scale: 1,
     SIZE: { width: WIDTH, height }, NODES, SEATS, EDGES, floorOf, floors,
     floorTop: Object.fromEntries(floors.map((id, i) => [id, top(i)])),
-    SPOTS: { entrance: `${floors[0]}:door` },
+    SPOTS: { entrance: `${floors.includes('meeting') ? 'meeting' : floors[0]}:door` },
     WHITEBOARD_HIT: rooms.dev?.board ? { ...rooms.dev.board, y: rooms.dev.board.y + top(floors.indexOf('dev')) } : null,
+    STUDIO_HIT: rooms.studio?.board ? { ...rooms.studio.board, y: rooms.studio.board.y + top(floors.indexOf('studio')) } : null,
     SPEAKER_HIT: rooms.dev?.speaker ? { ...rooms.dev.speaker, y: rooms.dev.speaker.y + top(floors.indexOf('dev')) } : null,
     rooms,
   };

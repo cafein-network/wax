@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { mkdtemp, mkdir, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -9,26 +9,42 @@ import { joinPresence } from '../src/chat/presence.mjs';
 import { setPm, assignTask } from '../src/chat/team.mjs';
 import { createFeature, listFeatures } from '../src/workflow.mjs';
 import { runTestProof } from '../src/evidence.mjs';
+import { qualityRequirements } from '../web/project-types.mjs';
+import { BUILDING, FLOOR_HEIGHT } from '../web/office/side-rooms.mjs';
 
 const modulePath = process.env.WAX_PLAYWRIGHT_MODULE || process.argv[2];
 if (!modulePath) throw new Error('설치된 Playwright index.mjs 경로를 첫 인수로 지정하세요.');
 const { chromium } = await import(pathToFileURL(resolve(modulePath)).href);
 const root = await mkdtemp(join(tmpdir(), 'wax-request-browser-'));
 const screenshots = process.env.WAX_SCREENSHOT_DIR || process.argv[4];
-let server, browser, executions = 0, toolsInstalled = false, projectExecutions = 0;
+let server, browser, executions = 0, toolsInstalled = false, projectExecutions = 0, failTypedReview = false;
 try {
   await joinPresence(root, { author: 'codex-app', kind: 'codex' });
   server = createChatServer({ root, env: { WAX_TOOL_NEWS: 'off' }, requestTools: async () => ['codex', 'claude', 'gemini', 'copilot', 'antigravity'].map((id) => ({ id, label: id, installed: toolsInstalled && id !== 'gemini' })), executeRequest: async (root, { signal, tool, prompt }) => {
     assert.equal(tool, 'claude');
     if (prompt.includes('프로젝트 모드입니다')) {
       projectExecutions++;
-      const feature = (await listFeatures(root)).find((f) => prompt.includes(`현재 작업: ${f.id},`));
-      const proofIds = [];
-      if (['implement', 'review'].includes(feature.phase)) {
+      let feature = (await listFeatures(root)).find((f) => prompt.includes(`현재 작업: ${f.id},`));
+      const proofIds = [], checks = [];
+      for (const rule of qualityRequirements(feature.projectType, feature.phase, feature.workMode)) {
+        let artifact = '', ids = [];
+        if (rule.kind === 'preview') {
+          artifact = 'preview.html';
+          await writeFile(join(root, artifact), '<h1>디자인 시안 · 브라우저 테스트 픽스처</h1><script>parent.fixturePreviewRan=true</script>');
+        } else {
+          const result = await runTestProof(root, feature.id, [process.execPath, '-e', 'require("node:assert/strict").equal(1+1,2)'], { revision: feature.revision, verification: rule.kind, checks: [rule.id] });
+          feature = result.feature; proofIds.push(result.proof.id); ids = [result.proof.id];
+          if (rule.kind === 'visual') { artifact = 'capture.png'; await writeFile(join(root, artifact), Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==', 'base64')); }
+        }
+        checks.push({ id: rule.id, artifact, proofIds: ids, status: feature.phase === 'review' && failTypedReview && checks.length === 0 ? 'fail' : 'pass', detail: '실제 도메인 실행이 아닌 로컬 브라우저 테스트 픽스처' });
+      }
+      if (['implement', 'review'].includes(feature.phase) && !proofIds.length) {
         const proof = await runTestProof(root, feature.id, [process.execPath, '-e', 'require("node:assert/strict").equal(1+1,2)'], { revision: feature.revision });
         assert.equal(proof.recorded, true); proofIds.push(proof.proof.id);
       }
-      return { threadId: 'project-browser-thread', message: JSON.stringify({ outcome: 'complete', report: `${feature.phase} 결과 보고`, document: '# 프로젝트 워크플로우\n\n목표: 예약 서비스\n\n1. 기획 · 범위와 완료 기준\n2. 설계 · 데이터와 화면\n3. 구현 · 예약 기능\n4. 검토 · 회귀 검사\n5. 보고 · 결과와 검증', evidence: '로컬 브라우저 픽스처 확인', proofIds }) };
+      const failed = checks.some(check => check.status === 'fail');
+      if (failed) failTypedReview = false;
+      return { threadId: 'project-browser-thread', message: JSON.stringify({ outcome: failed ? 'blocked' : 'complete', report: `${feature.phase} 결과 보고 · 로컬 픽스처${failed ? ' 검증 실패' : ''}`, document: '# 프로젝트 워크플로우\n\n목표: 예약 서비스\n\n1. 기획 · 범위와 완료 기준\n2. 설계 · 데이터와 화면\n3. 구현 · 예약 기능\n4. 검토 · 회귀 검사\n5. 보고 · 결과와 검증', evidence: '로컬 브라우저 픽스처 확인', proofIds, checks }) };
     }
     executions++;
     if (executions === 1) return { threadId: 'browser-thread', message: JSON.stringify({ outcome: 'question', report: '어떤 화면에서 발생하나요? <img src=x onerror=alert(1)>', document: '', evidence: '', proofIds: [] }) };
@@ -147,8 +163,55 @@ try {
   assert.match(await page.textContent('#tasks'), new RegExp(task.id));
   await page.goto(base + '/chat');
   assert.match(await page.textContent('.channel-start-hint'), /시작 가이드/);
+  for (const type of ['roblox', 'lookbook']) {
+    await page.goto(base);
+    await page.locator('#connection[data-online="true"]').waitFor();
+    await page.locator('#project-type').selectOption(type);
+    await page.check('input[name="mode"][value="project"]');
+    await page.fill('#request-body', `${type} 프로젝트의 작은 흐름을 완성해줘`);
+    failTypedReview = true;
+    await page.click('#send');
+    await page.locator('#request-status').filter({ hasText: '워크플로우 확인' }).waitFor();
+    assert.equal(await page.locator('#project-type').isDisabled(), true);
+    await page.click('#request-next-action');
+    await page.locator('#request-next-action').filter({ hasText: '수정 후 다시 검증' }).waitFor();
+    assert.match(await page.textContent('#mission-checks'), /수정 필요/);
+    const id = new URL(page.url()).searchParams.get('request');
+    const artifactResponse = await fetch(`${base}/api/features/${id}/artifacts/design-preview`);
+    assert.equal(artifactResponse.status, 200);
+    assert.match(artifactResponse.headers.get('content-security-policy'), /sandbox; default-src 'none'/);
+    assert.equal((await fetch(`${base}/api/features/login/artifacts/design-preview`)).status, 404, 'unregistered project files are not served');
+    await page.reload();
+    await page.locator('#request-next-action').filter({ hasText: '수정 후 다시 검증' }).waitFor();
+    if (screenshots) await page.screenshot({ path: join(screenshots, `${type}-quality-failed.png`), fullPage: true });
+    await page.click('#request-next-action');
+    await page.locator('#request-status').filter({ hasText: /^완료$/ }).waitFor();
+    assert.ok((await listFeatures(root)).find(feature => feature.id === id).iteration === 1);
+    for (const width of [390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `${type} ${width}px: mission fits`);
+    }
+  }
+  await page.goto(base + '/office?room=studio');
+  await page.locator('#notice[hidden]').waitFor({ state: 'attached' });
+  await page.locator('#room-tabs button').filter({ hasText: '디자인실' }).waitFor();
+  await page.locator('#room-tabs button').filter({ hasText: '디자인실' }).click();
+  assert.equal(await page.locator('#room-tabs button').count(), 6);
+  assert.ok(await page.evaluate(() => scrollY > 0), 'room selection moves to the requested floor immediately with reduced motion');
+  if (screenshots) {
+    await page.screenshot({ path: join(screenshots, 'studio-office.png') });
+    const bounds = await page.locator('#stage').boundingBox();
+    const scale = bounds.width / BUILDING.SIZE.width;
+    await page.screenshot({ path: join(screenshots, 'studio-floor.png'), clip: { x: bounds.x, y: bounds.y + BUILDING.floorTop.studio * scale, width: bounds.width, height: FLOOR_HEIGHT * scale } });
+  }
+  await page.click('#open-studio');
+  await page.locator('#studio-dialog[open]').waitFor();
+  assert.match(await page.textContent('#studio-content'), /개발 인계 시안/);
+  assert.equal(await page.locator('#studio-content iframe').first().getAttribute('sandbox'), '');
+  assert.equal(await page.evaluate(() => window.fixturePreviewRan), undefined, 'preview scripts cannot reach the office');
+  if (screenshots) await page.screenshot({ path: join(screenshots, 'studio-deliverables.png') });
   assert.deepEqual(errors, []);
-  console.log('PASS: project/SM mode selection, workflow preview/confirmation/reload, five-phase completion, startup guide, idle reason, PM/task handoff, question/reply, stop, responsive layout, channel guidance.');
+  console.log('PASS: project/SM onboarding, workflow confirmation, stop/resume, Roblox/lookbook quality gates and repair iterations, six-floor office, sandboxed design previews, responsive layout.');
 } finally {
   await browser?.close(); await server?.shutdown();
   await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });

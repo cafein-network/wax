@@ -50,7 +50,7 @@ export function encodePng(width, height, rgba) {
   return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw, { level: 9 })), chunk('IEND', Buffer.alloc(0))]);
 }
 
-export function removeBackground({ width, height, rgba }) {
+export function removeBackground({ width, height, rgba }, { seeds = [] } = {}) {
   const isBackground = (i) => {
     const r = rgba[i * 4], g = rgba[i * 4 + 1], b = rgba[i * 4 + 2], max = Math.max(r, g, b), min = Math.min(r, g, b);
     return (min >= 236 && max - min <= 14) || (min >= 80 && max - min <= 48 && b >= r);
@@ -58,6 +58,10 @@ export function removeBackground({ width, height, rgba }) {
   const seen = new Uint8Array(width * height), stack = [];
   for (let x = 0; x < width; x++) stack.push(x, (height - 1) * width + x);
   for (let y = 0; y < height; y++) stack.push(y * width, y * width + width - 1);
+  for (const [x, y] of seeds) {
+    if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= width || y >= height) throw new Error('배경 시드 좌표가 이미지 밖입니다.');
+    stack.push(y * width + x);
+  }
   while (stack.length) {
     const i = stack.pop();
     if (seen[i] || !isBackground(i)) continue;

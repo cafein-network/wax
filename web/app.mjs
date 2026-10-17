@@ -89,7 +89,7 @@ function messageNode(message) {
     el('header', {},
       avatarNode(message.author, message.kind),
       el('span', { class: 'who', text: message.author }),
-      el('span', { class: 'kind', text: message.kind === 'human' ? '사용자' : message.kind }),
+      el('span', { class: 'kind', text: message.kind === 'human' ? '대표' : message.kind }),
       message.type !== 'message' ? el('span', { class: `badge type-${message.type}`, text: TYPE_LABELS[message.type] }) : null,
       message.phase ? el('span', { class: 'badge', text: message.phase }) : null,
       el('time', { class: 'when', datetime: message.at, text: timeLabel(message.at) }),

@@ -34,3 +34,20 @@ test('every published lock already contains its owner, including fallback stat f
  const source=`import fs from 'node:fs';import {syncBuiltinESMExports} from 'node:module';import assert from 'node:assert/strict';import {join} from 'node:path';const original=fs.promises.rename,stat=fs.promises.lstat;let published=0;fs.promises.lstat=async(...args)=>{const s=await stat(...args);s.birthtimeMs=0;return s;};fs.promises.rename=async(from,to)=>{if(from.includes('.pending-')){const owner=JSON.parse(await fs.promises.readFile(join(from,'owner.json'),'utf8'));assert.equal(owner.pid,process.pid);assert.ok(owner.token);published++;}return original(from,to);};syncBuiltinESMExports();const {withFileLock}=await import(${JSON.stringify(moduleUrl)});for(let i=0;i<20;i++)assert.equal(await withFileLock(join(process.argv[1],'x.lock'),()=>i),i);assert.equal(published,20);assert.deepEqual(await fs.promises.readdir(process.argv[1]),[]);`;
  const child=spawnSync(process.execPath,['--input-type=module','-e',source,root],{encoding:'utf8',timeout:3000});assert.equal(child.status,0,child.stderr);
 });
+
+test('the dashboard shows one person, the 대표, even when older human names remain in presence', async t => {
+  const root = await project(t), now = new Date();
+  await setPresence(root, { author: '사람', kind: 'human', state: 'idle' }, { now });
+  await setPresence(root, { author: '대표', kind: 'human', state: 'idle' }, { now });
+  await setPresence(root, { author: 'worker', kind: 'codex', state: 'idle' }, { now });
+  const server = createChatServer({ root, env: { WAX_TOOL_NEWS: 'off' } });
+  await new Promise(done => server.listen(0, '127.0.0.1', done)); t.after(() => server.shutdown());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const config = await (await fetch(`${base}/api/config`)).json();
+  assert.equal(config.user, '대표');
+  const presence = await (await fetch(`${base}/api/presence`)).json();
+  assert.deepEqual(presence.filter(a => a.kind === 'human').map(a => a.author), ['대표']);
+  assert.ok(presence.some(a => a.author === 'worker'));
+  const day = await (await fetch(`${base}/api/daily`)).json();
+  assert.deepEqual(day.agents.filter(a => a.kind === 'human').map(a => a.author), ['대표']);
+});

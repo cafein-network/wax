@@ -102,7 +102,7 @@ export function profileCard({ author, kindLabel, profile, sprite, look, face, ex
         el('span', { class: 'hr-badge-desc', text: b.desc })))) },
       ...tabs,
     ]),
-    el('p', { class: 'kind hr-note', text: '모든 수치와 레벨은 모델 이름이 아니라 이 프로젝트의 wax 기록(업무 완료, 테스트·커밋 근거, 대화, 보고)으로 계산합니다. 직급 없이 부서(프로젝트)의 PM은 팀장, 나머지 AI 세션은 팀원으로 표시하고 사용자는 대표입니다. 기록이 없으면 보통(50)에서 시작합니다. 테스트·커밋은 그 시각 같은 작업·단계의 업무를 수락한 담당자에게 돌립니다.' }),
+    el('p', { class: 'kind hr-note', text: '모든 수치와 레벨은 모델 이름이 아니라 이 프로젝트의 wax 기록(업무 완료, 테스트·커밋 근거, 대화, 보고)으로 계산합니다. 직급 없이 부서(프로젝트)의 PM은 팀장, 나머지 AI 세션은 팀원, 사람은 대표로 표시합니다. 기록이 없으면 보통(50)에서 시작합니다. 테스트·커밋은 그 시각 같은 작업·단계의 업무를 수락한 담당자에게 돌립니다.' }),
   );
 }
 
@@ -119,9 +119,8 @@ export function ceoCard({ author, profile, sprite, look, face, team, department,
         el('div', { class: 'hr-tags' },
           el('span', { class: 'hr-chip hr-team', text: '대표 · CEO' }),
           team.pm === author ? el('span', { class: 'hr-chip hr-role', text: `${department} 팀장 겸임` }) : null,
-          el('span', { class: 'hr-chip', text: '사용자' }),
           el('span', { class: 'hr-chip hr-join', text: `입사 ${date(profile?.firstAt)}` })))),
-    el('p', { class: 'hr-summary', text: '지시하고 최종 결정하는 사용자입니다. PM이 선택지와 추천안을 드리고, 결정하면 PM이 업무를 배정하고 진행·지연을 보고합니다.' }),
+    el('p', { class: 'hr-summary', text: '지시하고 최종 결정하는 대표입니다. PM이 선택지와 추천안을 드리고, 결정하면 PM이 업무를 배정하고 진행·지연을 보고합니다.' }),
     cardTabs([
       { label: '팀 현황', content: el('dl', { class: 'hr-metrics' },
         metric('AI 세션', `${team.ai}명`, `일하는 중 ${team.working}명`),

@@ -63,6 +63,20 @@ test('office snapshots preserve questions, replies, reports and role allocation 
   assert.throws(() => readDemoOfficeApi(done, '/api/unknown'), /제공하지 않는/);
 });
 
+test('design steps send their working assignees to the B1 studio for every team size', () => {
+  for (const task of Object.values(DEMO_TASKS)) {
+    const options = { task }, scenario = demoScenario(options);
+    for (const [position, step] of scenario.steps.entries()) {
+      if (step.phase !== 1) continue;
+      const snapshot = demoOfficeSnapshot(position, options);
+      assert.equal(snapshot.room, 'studio');
+      assert.equal(snapshot.features[0].phase, 'design');
+      assert.equal(snapshot.agents.find(person => person.author === step.actor).state, 'working');
+      assert.ok(!snapshot.agents.some(person => person.state === 'discussing'));
+    }
+  }
+});
+
 test('office demo accepts only its parent on the same origin and never falls through to live writes', async () => {
   const listeners = new Map(), parent = { postMessage() {} };
   const win = { parent, location: { origin: 'http://localhost:4330' }, addEventListener: (name, callback) => listeners.set(name, callback), removeEventListener() {} };

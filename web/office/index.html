@@ -18,6 +18,7 @@
     <div class="office-toolbar">
       <button type="button" id="view-toggle" aria-pressed="false">목록 보기</button>
       <button type="button" id="open-board">화이트보드 열기</button>
+      <button type="button" id="open-studio" aria-haspopup="dialog" aria-controls="studio-dialog">디자인실 제작물</button>
       <button type="button" id="open-messenger" aria-haspopup="dialog" aria-controls="messenger-dialog" aria-expanded="false">팀 메시지 <span class="message-count" id="message-count" hidden></span></button>
       <button type="button" id="chatter-toggle" aria-pressed="true" title="안내 NPC(제이크·써니·에밀리·브라이언)와 캐릭터의 가벼운 잡담. 화면에만 보이고 기록되지 않습니다">NPC·잡담 켜짐</button>
       <div class="legend" aria-label="노트 색상">
@@ -50,6 +51,10 @@
   <dialog id="agent-dialog" aria-labelledby="agent-title">
     <header><h2 id="agent-title"></h2><button type="button" data-close>닫기</button></header>
     <div class="content" id="agent-content"></div>
+  </dialog>
+  <dialog id="studio-dialog" aria-labelledby="studio-title">
+    <header><h2 id="studio-title">B1 디자인실 · 제작물과 인계</h2><button type="button" data-close>닫기</button></header>
+    <div class="content" id="studio-content"></div>
   </dialog>
 
   <dialog id="board-dialog" aria-labelledby="board-title">

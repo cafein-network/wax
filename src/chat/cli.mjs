@@ -33,7 +33,7 @@ export const USAGE = `사용법: wax chat [--project <dir>] <명령> [옵션]
   board report <작업ID> --author <이름> [--session <ID>] --file <보고서.md> [--kind <종류>] [--covers-through <노트ID>] [--json]
   team [--json]                                             PM과 진행 중 업무
   usage [--json]                                            Claude 플랜 사용량(5시간·주간)과 세션별 컨텍스트(Claude Code 2.1.287 이상에서 wax 모드가 기록)
-  team pm <이름> [--kind <종류>] [--replace] | team pm --clear  프로젝트 PM 지정·해제(사용자가 요청할 때만, 다른 PM이 있으면 --replace)
+  team pm <이름> [--kind <종류>] [--replace] | team pm --clear  프로젝트 PM 지정·해제(대표가 요청할 때만, 다른 PM이 있으면 --replace)
   assign <작업ID> --to <담당자> --author <PM> [--session <ID>] (--message <지시> | --file <경로>) [--phase <단계|any>] [--json]
   tasks [--to <이름>] [--feature <작업ID>] [--all] [--json]   배정된 업무
   task accept|done|block|cancel <업무ID> --author <이름> [--session <ID>] [--message <메모>] [--json]

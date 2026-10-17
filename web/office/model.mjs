@@ -4,7 +4,7 @@ import { ROOMS } from './rooms.mjs';
 export const MEETING_WINDOW_MS = 5 * 60 * 1000;
 export const BOARD_VISIT_MS = 8000;
 export const STATE_LABELS = { working: '작업 중', discussing: '논의 중', reviewing: '검토 중', idle: '휴식', away: '자리 비움' };
-export const KIND_LABELS = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini', antigravity: 'Antigravity', copilot: 'GitHub Copilot', human: '사용자', other: '기타' };
+export const KIND_LABELS = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini', antigravity: 'Antigravity', copilot: 'GitHub Copilot', human: '대표', other: '기타' };
 
 export function effectiveState(entry, now, awayAfterMs) {
   return now - Date.parse(entry.lastActive) > awayAfterMs ? 'away' : entry.state;
@@ -112,7 +112,7 @@ export function sceneFor({ agents, order, events = [], lastNoteAt = new Map(), n
 
 export const VISIT_MS = 2 * 60 * 1000;
 
-export function officeScene({ agents, order, events = [], lastNoteAt = new Map(), now, awayAfterMs, pm = null, lab = null, roof = null }) {
+export function officeScene({ agents, order, events = [], lastNoteAt = new Map(), now, awayAfterMs, pm = null, lab = null, roof = null, studio = null, features = [] }) {
   const states = new Map(agents.map((agent) => [agent.author, effectiveState(agent, now, awayAfterMs)]));
   const present = (author) => states.has(author) && states.get(author) !== 'away';
   const placed = new Map();
@@ -150,6 +150,15 @@ export function officeScene({ agents, order, events = [], lastNoteAt = new Map()
       if (spot) placed.set(author, { room: 'boss', spot, activity: 'talking' });
     }
   }
+  const studioSpots = studio ? [...studio.SPOTS.design] : [];
+  if (studio) {
+    const featureById = new Map(features.map(feature => [feature.id, feature]));
+    for (const agent of agents) {
+      if (placed.has(agent.author) || !['working', 'discussing'].includes(states.get(agent.author)) || featureById.get(agent.feature)?.phase !== 'design') continue;
+      const spot = studioSpots.shift();
+      if (spot) placed.set(agent.author, { room: 'studio', spot, activity: 'reading' });
+    }
+  }
   const labSpots = lab ? [...lab.SPOTS.bench, ...lab.SPOTS.monitor] : [];
   const roofSpots = roof ? [...roof.SPOTS.rest] : [];
   if (lab) {
@@ -178,7 +187,7 @@ export function officeScene({ agents, order, events = [], lastNoteAt = new Map()
   for (const agent of agents) {
     const place = placed.get(agent.author);
     if (!place) continue;
-    const room = place.room === 'lab' ? lab : place.room === 'roof' ? roof : ROOMS[place.room];
+    const room = place.room === 'studio' ? studio : place.room === 'lab' ? lab : place.room === 'roof' ? roof : ROOMS[place.room];
     byAuthor.set(agent.author, {
       author: agent.author, kind: agent.kind ?? 'other', state: states.get(agent.author), feature: agent.feature ?? null,
       group: place.group ?? null, room: place.room, spot: place.spot, activity: place.activity, seated: true,

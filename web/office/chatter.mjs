@@ -119,7 +119,7 @@ function timeLine(hour) {
 
 const OPEN_TASK = new Set(['open', 'accepted', 'blocked']);
 const openTasks = (tasks = []) => tasks.filter((task) => OPEN_TASK.has(task.status ?? 'open'));
-const toolLabel = (kind) => TOOLS.find((tool) => tool.kind === kind)?.label ?? (kind === 'human' ? '사용자' : '세션');
+const toolLabel = (kind) => TOOLS.find((tool) => tool.kind === kind)?.label ?? (kind === 'human' ? '대표' : '세션');
 
 export function nextSteps({ features = [], pm, tasks = [], agents = [] }) {
   const steps = [];
@@ -180,7 +180,7 @@ const ASSIGN_RULES = [
   '대표가 지시하면 PM이 선택지와 추천안을 드리고, 대표가 결정하면 PM이 업무를 배정해요',
   '진행 상황과 지연은 PM이 대표에게 보고해요. pm 명령을 다시 부르면 보고를 받을 수 있어요',
   '업무 배정은 PM만 할 수 있어요',
-  '배정은 그 단계의 작업만 허락해요. 사용자 지시가 늘 우선이에요',
+  '배정은 그 단계의 작업만 허락해요. 대표 지시가 늘 우선이에요',
   '배정받은 세션은 work 명령으로 시작하고, 끝나면 업무 상태로 결과를 남겨요',
   'PM에게 보고하면 잠깐 이 방에 들르게 돼요',
 ];
@@ -231,7 +231,7 @@ function guideDeck({ project, description, features = [], labels, agents = [], t
   }
   for (const agent of agents) {
     const doing = (DOING[agent.state] ?? (() => ''))(agent.feature);
-    const who = agent.kind === 'human' ? '사용자예요. 대시보드에서 글을 쓰고 PM도 맡을 수 있어요' : `${toolLabel(agent.kind)}${agent.model ? `(${agent.model})` : ''} 세션이에요`;
+    const who = agent.kind === 'human' ? '대표예요. 대시보드에서 글을 쓰고 PM도 맡을 수 있어요' : `${toolLabel(agent.kind)}${agent.model ? `(${agent.model})` : ''} 세션이에요`;
     deck.push({ text: `👋 ${agent.name}님은 ${who}. ${doing}`.trim(), topic: 'intro', subject: agent.name });
     const next = agent.kind === 'human' ? null : nextCommand({ agent: { author: agent.name, kind: agent.kind, feature: agent.feature }, features, tasks });
     if (next) deck.push({ text: `▶️ ${agent.name}님 다음 명령: ${next.text}`, topic: 'intro', subject: agent.name });

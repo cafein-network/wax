@@ -54,7 +54,7 @@ test('request guide identifies queued work, actual executor, answer, recovery an
   assert.equal(requestAction({ ...request, status: 'workflow' }).action, 'workflow');
   for (const status of ['blocked', 'paused']) assert.equal(requestAction({ ...request, status }).action, 'resume');
   const restart = requestAction({ ...request, status: 'blocked', newRequest: true });
-  assert.equal(restart.action, undefined); assert.match(restart.title, /새 요청/);
+  assert.equal(restart.action, 'new'); assert.match(restart.title, /새 요청/);
   assert.match(requestAction({ ...request, status: 'completed' }).title, /마쳤/);
 });
 

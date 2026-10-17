@@ -125,5 +125,8 @@ export class ChatWatcher extends EventEmitter {
 
 export async function featureSummary(root) {
   return (await listFeatures(root)).filter((feature) => !feature.archivedAt)
-    .map(({ id, title, phase, updatedAt }) => ({ id, title, phase, updatedAt }));
+    .map(({ id, title, phase, updatedAt, projectType, completed }) => {
+      const preview = completed.design?.checks?.find(check => check.id === 'design-preview' && check.status === 'pass');
+      return { id, title, phase, updatedAt, ...(projectType ? { projectType } : {}), ...(preview ? { designPreview: { file: preview.artifact, url: `/api/features/${id}/artifacts/design-preview` } } : {}) };
+    });
 }

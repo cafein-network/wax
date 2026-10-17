@@ -33,6 +33,7 @@
           <label><input type="radio" name="mode" value="project" checked><span><strong>프로젝트</strong><small>워크플로우를 먼저 만들고 확인한 뒤 실행</small></span></label>
           <label><input type="radio" name="mode" value="sm"><span><strong>SM · 유지보수</strong><small>오류 수정·개선 요청을 분석부터 처리 보고까지</small></span></label>
         </fieldset>
+        <div class="project-type-picker"><label for="project-type">무엇을 만드나요?</label><select id="project-type"><option value="auto">요청에서 자동으로 확인</option><option value="roblox">Roblox 게임</option><option value="lookbook">쇼핑몰 AI 룩북</option><option value="general">일반 프로젝트</option></select><p id="project-type-note"></p></div>
         <section class="start-guide" aria-label="시작 가이드">
           <h2>처음이라면, 이 순서로 시작하세요</h2>
           <ol>
@@ -45,13 +46,15 @@
         <div class="suggestions" aria-label="요청 예시">
           <button type="button" data-example="최근 변경에서 오류를 찾아 고쳐줘">오류 찾아 고치기 <span>↗</span></button>
           <button type="button" data-example="첫 화면을 더 간결하고 사용하기 쉽게 개선해줘">사용 경험 개선하기 <span>↗</span></button>
-          <button type="button" data-example="이 프로젝트에 필요한 기능을 조사하고 가장 유용한 하나를 구현해줘">새 기능 만들기 <span>↗</span></button>
+          <button type="button" data-example="Roblox에서 입장 → 코인 획득 → 보상 → 재시작까지 작은 게임 한 판을 만들고 Studio에서 검증해줘" data-project-type="roblox">작은 Roblox 게임 만들기 <span>↗</span></button>
+          <button type="button" data-example="FASHN API로 상품 하나의 착용 이미지를 생성하고 저장·편집·상품 연결까지 되는 룩북 사이트를 만들어줘" data-project-type="lookbook">AI 룩북 한 장 만들기 <span>↗</span></button>
         </div>
       </div>
       <section id="progress" class="request-progress" aria-label="현재 진행 상황" hidden>
         <div class="progress-heading"><span id="request-mode-label" class="request-status"></span><span id="request-status" class="request-status"></span><h1 id="request-title"></h1><span class="spacer"></span><button id="stop" type="button" class="quiet" hidden>중지</button><button id="resume" type="button" class="quiet" hidden>이어서 진행</button></div>
         <p id="progress-detail" role="status"></p>
         <div class="request-next" role="status"><strong id="request-next-title"></strong><p id="request-next-detail"></p><button id="request-next-action" type="button" class="quiet" hidden></button></div>
+        <section id="mission" class="project-mission" aria-label="현재 미션"><div class="mission-heading"><strong id="mission-room"></strong><span id="mission-type"></span><a id="mission-office" href="/office">이 방 보기 ↗</a></div><p id="mission-goal"></p><ul id="mission-checks"></ul></section>
         <ol id="steps" class="request-steps" aria-label="작업 단계"></ol>
         <a id="detail-link" class="detail-link" href="/manage">자세한 기록 ↗</a>
       </section>

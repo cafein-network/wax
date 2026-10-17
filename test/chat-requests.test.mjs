@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -115,7 +115,7 @@ test('workflow edits require reviewing the rebuilt revision; modes are immutable
   assert.equal((await runner.list()).find((item) => item.id === sm.id).mode, 'sm');
 });
 
-test('project workflow survives dashboard restart and stale feature edits never authorize execution', async (t) => {
+test('project workflow survives dashboard restart and a plan saved elsewhere is shown for review before it runs', async (t) => {
   const { root, runner } = await runnerFor(t);
   const r = await runner.submit({ author: '사장', body: '새 서비스 만들기', mode: 'project' }); await runner.settled();
   const [saved] = await runner.list(); await runner.close();
@@ -123,37 +123,52 @@ test('project workflow survives dashboard restart and stale feature edits never 
   t.after(() => reopened.close());
   assert.equal((await reopened.list())[0].status, 'workflow'); assert.equal(calls.length, 0);
   const feature = await getFeature(root, r.id);
-  await updateFeature(root, r.id, 'edit', { title: '변경된 서비스', description: feature.description, revision: feature.revision });
+  await updateFeature(root, r.id, 'save', { phase: 'plan', content: '# 직접 고친 워크플로우', revision: feature.revision });
   await reopened.reply(r.id, { approveWorkflow: true, workflowRevision: saved.workflow.revision }); await reopened.settled();
-  const [blocked] = await reopened.list();
-  assert.equal(blocked.status, 'blocked'); assert.match(blocked.detail, /워크플로우가 변경/);
-  assert.equal(calls.length, 0, 'an old confirmation must not run a changed feature');
+  const [review] = await reopened.list();
+  assert.equal(review.status, 'workflow'); assert.equal(review.workflow.approved, false);
+  assert.equal(review.workflow.document, '# 직접 고친 워크플로우');
+  assert.equal(calls.length, 0, 'an old confirmation must not run a changed plan');
   assert.equal((await getFeature(root, r.id)).phase, 'plan');
-  await reopened.reply(r.id, { body: '최신 내용을 반영해 다시 작성해줘' }); await reopened.settled();
-  assert.equal((await reopened.list())[0].status, 'workflow'); assert.equal(calls.length, 1);
+  await reopened.reply(r.id, { approveWorkflow: true, workflowRevision: review.workflow.revision }); await reopened.settled();
+  assert.equal((await reopened.list())[0].status, 'completed');
+  assert.deepEqual(calls.map((c) => c.phase), PHASES.slice(1));
+  assert.equal((await getFeature(root, r.id)).artifacts.plan, '# 직접 고친 워크플로우', 'the reviewed manual plan is kept');
 });
 
-test('evidence attached after review keeps the workflow approvable; a stale approval resumes by rewriting it', async (t) => {
+test('evidence, title edits and evidence racing the start keep a reviewed workflow startable', async (t) => {
   const { root, calls, runner } = await runnerFor(t);
   const r = await runner.submit({ author: '사장', body: '예약 서비스', mode: 'project' }); await runner.settled();
-  let [saved] = await runner.list();
-  const feature = await getFeature(root, r.id);
+  const [saved] = await runner.list();
+  let feature = await getFeature(root, r.id);
   assert.equal((await runTestProof(root, r.id, [process.execPath, '-e', ''], { revision: feature.revision })).recorded, true);
+  feature = await getFeature(root, r.id);
+  await updateFeature(root, r.id, 'edit', { title: '바뀐 제목', description: feature.description, revision: feature.revision });
   await runner.reply(r.id, { approveWorkflow: true, workflowRevision: saved.workflow.revision }); await runner.settled();
   assert.equal((await runner.list())[0].status, 'completed');
   assert.deepEqual(calls.map((c) => c.phase), PHASES);
+});
 
-  const other = await runner.submit({ author: '사장', body: '관리 화면', mode: 'project' }); await runner.settled();
-  saved = (await runner.list()).find((item) => item.id === other.id);
-  const edited = await getFeature(root, other.id);
-  await updateFeature(root, other.id, 'edit', { title: '바뀐 제목', description: edited.description, revision: edited.revision });
-  await runner.reply(other.id, { approveWorkflow: true, workflowRevision: saved.workflow.revision }); await runner.settled();
-  const blocked = (await runner.list()).find((item) => item.id === other.id);
-  assert.equal(blocked.status, 'blocked'); assert.equal(blocked.workflow, null);
-  await runner.reply(other.id, { resume: true }); await runner.settled();
-  const rewritten = (await runner.list()).find((item) => item.id === other.id);
-  assert.equal(rewritten.status, 'workflow'); assert.equal(rewritten.workflow.approved, false);
-  assert.equal(calls.filter((c) => c.phase === 'plan').length, 3, 'resume rewrites the workflow instead of repeating the failed approval');
+test('evidence attached between claiming the start and completing the plan is retried, not blocked', async (t) => {
+  const root = await project(t), calls = [], id = `request-${randomUUID()}`;
+  let raced = false;
+  const runner = createRequestRunner({ root, execute: executor(calls), notify: () => {
+    if (raced) return;
+    const r = JSON.parse(readFileSync(join(root, '.wax', 'chat', 'requests', `${id}.json`), 'utf8'));
+    if (!r.workflow?.starting) return;
+    raced = true;
+    const file = join(root, '.wax', 'features', `${id}.json`), feature = JSON.parse(readFileSync(file, 'utf8'));
+    feature.revision += 1; feature.history.push({ action: 'attach-evidence', phase: 'plan', at: new Date().toISOString() });
+    writeFileSync(file, JSON.stringify(feature));
+  } });
+  t.after(() => runner.close());
+  await runner.submit({ id, author: '사장', body: '예약 서비스', mode: 'project' }); await runner.settled();
+  const [saved] = await runner.list();
+  await runner.reply(id, { approveWorkflow: true, workflowRevision: saved.workflow.revision }); await runner.settled();
+  assert.equal(raced, true);
+  const [done] = await runner.list();
+  assert.equal(done.status, 'completed', done.detail); assert.equal(done.workflow.starting, undefined);
+  assert.deepEqual(calls.map((c) => c.phase), PHASES);
 });
 
 test('a lost start record resumes from design only when the completed plan is exactly the approved one', async (t) => {
@@ -203,7 +218,7 @@ test('a correction sent right after approval rewrites the workflow instead of fa
   assert.equal((await getFeature(root, r.id)).phase, 'plan');
 });
 
-test('approving while the plan job is still finishing is refused instead of becoming a silent pause', async (t) => {
+test('approving while the plan job is still finishing starts once that job is done instead of pausing', async (t) => {
   const root = await project(t), calls = [], id = `request-${randomUUID()}`;
   let runner, approval;
   runner = createRequestRunner({ root, execute: executor(calls), notify: () => {
@@ -214,11 +229,10 @@ test('approving while the plan job is still finishing is refused instead of beco
   t.after(() => runner.close());
   const r = await runner.submit({ id, author: '사장', body: '예약 서비스', mode: 'project' });
   await runner.settled();
-  assert.equal(await approval, 409);
-  const [saved] = await runner.list();
-  assert.equal(saved.status, 'workflow');
-  await runner.reply(r.id, { approveWorkflow: true, workflowRevision: saved.workflow.revision }); await runner.settled();
+  assert.equal(await approval, 'approved');
+  await runner.settled();
   assert.equal((await runner.list())[0].status, 'completed');
+  assert.deepEqual(calls.map((c) => c.phase), PHASES);
 });
 
 test('input arriving while a project workflow is being written is included before confirmation', async (t) => {
@@ -309,6 +323,19 @@ test('follow-up delivery is idempotent and completed work keeps its previous ite
   await runner.reply(r.id, reply); await runner.settled();
   assert.equal(calls.length, 8);
   assert.equal((await runner.list())[0].messages.filter((m) => m.text === reply.body).length, 1);
+});
+
+test('a run waits for another dashboard that is only finishing its cleanup instead of blocking', async (t) => {
+  const { root, calls, runner } = await runnerFor(t);
+  await runner.submit({ author: '사장', body: '준비 요청' }); await runner.settled();
+  await withLock(join(root, '.wax', 'chat', 'requests', 'runner.lock'), async () => {
+    await runner.submit({ author: '사장', body: '정리 중에 들어온 요청' });
+    await sleep(1500);
+  });
+  await runner.settled();
+  const late = (await runner.list()).find((item) => item.title === '정리 중에 들어온 요청');
+  assert.equal(late.status, 'completed', late.detail);
+  assert.equal(calls.length, 10);
 });
 
 test('separate dashboards cannot run agents concurrently in one project', async (t) => {

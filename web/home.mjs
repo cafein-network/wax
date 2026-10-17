@@ -1,6 +1,7 @@
 import { api, el, clear, timeLabel, commandLine } from './dom.mjs';
 import { commandFor } from './commands.mjs';
 import { requestAction, sessionGuide } from './start-guide.mjs';
+import { PHASE_ROOMS, PROJECT_TYPES, projectType, qualityRequirements } from './project-types.mjs';
 
 const $ = (id) => document.getElementById(id);
 const PHASES = ['plan', 'design', 'implement', 'review', 'report'];
@@ -10,7 +11,8 @@ const labelsFor = (mode) => mode === 'project' ? PHASE_LABELS : SM_LABELS;
 const modeLabel = (mode) => mode === 'project' ? '프로젝트' : 'SM · 유지보수';
 const STATUS = { queued: '준비 중', running: '진행 중', workflow: '워크플로우 확인', question: '답변 필요', blocked: '확인 필요', paused: '일시 중지', completed: '완료' };
 let config, requests = [], currentId = new URLSearchParams(location.search).get('request'), sending = false, online = false, loading, again = false;
-let createId, submittedBody, replyId, repliedBody, replyTarget, messageSignature = '', listSignature = '';
+let createId, submittedBody, submittedType, replyId, repliedBody, replyTarget, messageSignature = '', listSignature = '';
+let preferredType = 'auto';
 const drafts = new Map();
 let tools = [], preferred = 'codex', submittedTool;
 const requestedMode = new URLSearchParams(location.search).get('mode');
@@ -37,10 +39,15 @@ function render() {
   const mode = selectedMode(), labels = labelsFor(mode);
   $('connection').dataset.online = String(online);
   $('connection').textContent = online ? '연결됨' : '연결 확인 중';
-  $('send').disabled = sending || !online || (!current() && !tools.some((t) => t.id === preferred && t.installed));
+  $('send').disabled = sending || !online || current()?.newRequest || (!current() && !tools.some((t) => t.id === preferred && t.installed));
+  $('request-body').disabled = Boolean(current()?.newRequest);
   $('request-tool').disabled = Boolean(current()) || sending;
   $('request-tool').value = selectedTool();
   $('request-mode').disabled = Boolean(current()) || sending;
+  $('project-type').disabled = Boolean(current()) || sending;
+  $('project-type').value = current()?.projectType || preferredType;
+  const type = projectType(current()?.projectType || preferredType, $('request-body').value);
+  $('project-type-note').textContent = `${preferredType === 'auto' && !current() ? '요청 기준: ' : ''}${PROJECT_TYPES[type].label} · ${PROJECT_TYPES[type].brief}`;
   for (const radio of document.querySelectorAll('input[name="mode"]')) radio.checked = radio.value === mode;
   $('guide-request-detail').textContent = mode === 'project' ? '프로젝트 목표를 입력하면 워크플로우를 먼저 만들어요. PM 지정과 수동 배정은 필요 없어요.' : '오류·개선 요청과 재현 방법을 적고 시작하기를 누르세요. 요청 범위에서 바로 진행합니다.';
   $('guide-flow-detail').textContent = mode === 'project' ? '범위·작업 순서·산출물·완료 기준을 확인한 뒤 이 워크플로우로 시작을 누르세요.' : '접수·분석 → 영향 확인 → 수정 → 회귀 검증 → 처리 보고. 질문과 실행 승인에는 이 화면에서 답하세요.';
@@ -53,7 +60,7 @@ function render() {
   const r = current();
   $('welcome').hidden = Boolean(r); $('progress').hidden = !r;
   $('send').firstChild.textContent = sending ? '보내는 중 ' : r?.status === 'workflow' ? '워크플로우 수정 ' : r ? '보내기 ' : mode === 'project' ? '워크플로우 만들기 ' : '시작하기 ';
-  $('request-body').placeholder = r?.status === 'workflow' ? '워크플로우에서 바꿀 점을 입력하세요' : r ? '추가 요청이나 질문에 대한 답변을 입력하세요' : mode === 'project' ? '예: 예약 서비스를 만들고 싶어. 필요한 기능과 작업 흐름부터 정리해줘' : '예: 회원가입이 안 되는 문제를 찾아서 고쳐줘';
+  $('request-body').placeholder = r?.newRequest ? '이 요청은 이어갈 수 없어요. 새 요청 만들기를 눌러 주세요' : r?.status === 'workflow' ? '워크플로우에서 바꿀 점을 입력하세요' : r ? '추가 요청이나 질문에 대한 답변을 입력하세요' : mode === 'project' ? '예: 예약 서비스를 만들고 싶어. 필요한 기능과 작업 흐름부터 정리해줘' : '예: 회원가입이 안 되는 문제를 찾아서 고쳐줘';
   $('composer-hint').textContent = r && active(r) ? '추가 요청은 현재 단계가 끝나면 반영해요' : `${toolLabel()}가 이 프로젝트에서 작업합니다`;
   $('request-count').textContent = requests.length || '';
   const nextList = JSON.stringify([currentId, requests.map((item) => [item.id, item.title, item.status, item.phase, item.mode])]);
@@ -77,6 +84,19 @@ function render() {
     $('progress-detail').textContent = r.detail;
     $('stop').hidden = !active(r); $('resume').hidden = !['paused', 'blocked'].includes(r.status) || r.newRequest;
     $('stop').disabled = !online; $('resume').disabled = !online;
+    $('resume').textContent = r.needsFix ? '수정 후 다시 검증' : '이어서 진행';
+    const room = PHASE_ROOMS[r.phase] || PHASE_ROOMS.plan;
+    $('mission-room').textContent = room.label;
+    $('mission-type').textContent = PROJECT_TYPES[r.projectType]?.label || '일반 프로젝트';
+    $('mission-office').href = `/office?room=${room.id}&board=${encodeURIComponent(r.id)}`;
+    const requirements = qualityRequirements(r.projectType, r.phase, r.mode);
+    const previous = r.quality;
+    const visible = requirements.length ? requirements : r.status === 'completed' ? previous?.checks || [] : [];
+    $('mission-goal').textContent = r.needsFix ? '발견한 결함을 수정하고 해당 흐름을 다시 검증하세요.' : r.status === 'completed' ? '결과와 연결된 검증 근거를 확인하세요.' : r.phase === 'plan' ? '실행 환경·작은 목표·작업 순서와 완료 기준을 먼저 정해요.' : r.phase === 'design' ? '개발에 전달할 시안과 실제 산출물을 만들어요.' : r.phase === 'implement' ? '작은 흐름 하나를 실제 실행 환경에서 연결해요.' : r.phase === 'review' ? '사용자 흐름과 화면을 직접 검증해요.' : '실제 변경·검증·남은 일을 보고해요.';
+    clear($('mission-checks')).append(...visible.map(rule => {
+      const saved = previous?.phase === r.phase || r.status === 'completed' ? previous?.checks?.find(check => check.id === rule.id) : null;
+      return el('li', { text: `${saved?.status === 'pass' ? '확인됨' : saved?.status === 'fail' ? '수정 필요' : '검증 필요'} · ${rule.label}` });
+    }));
     $('detail-link').href = `/manage?feature=${encodeURIComponent(r.id)}`;
     const index = r.phase === 'done' ? 5 : PHASES.indexOf(r.phase);
     clear($('steps')).append(...PHASES.map((phase, i) => el('li', { class: i < index ? 'done' : i === index ? 'current' : '', 'aria-current': i === index ? 'step' : undefined, text: mode === 'project' && phase === 'plan' ? '워크플로우' : labels[phase] })));
@@ -189,6 +209,7 @@ $('request-next-action').addEventListener('click', async () => {
     } catch (error) { showError(error); }
     finally { startingWorkflow = false; render(); }
   } else if ($('request-next-action').dataset.action === 'resume') $('resume').click();
+  else if ($('request-next-action').dataset.action === 'new') $('new-request').click();
   else $('request-body').focus();
 });
 $('request-mode').addEventListener('change', (event) => {
@@ -202,20 +223,22 @@ $('request-tool').addEventListener('change', () => {
   try { localStorage.setItem('wax-request-tool', preferred); } catch {   }
   render();
 });
+$('project-type').addEventListener('change', () => { preferredType = $('project-type').value; render(); });
+$('request-body').addEventListener('input', () => { if (!current()) render(); });
 $('new-request').addEventListener('click', () => { select(null); $('request-body').focus(); });
-for (const button of document.querySelectorAll('[data-example]')) button.addEventListener('click', () => { $('request-body').value = button.dataset.example; $('request-body').focus(); });
+for (const button of document.querySelectorAll('[data-example]')) button.addEventListener('click', () => { $('request-body').value = button.dataset.example; preferredType = button.dataset.projectType || 'auto'; render(); $('request-body').focus(); });
 $('request-body').addEventListener('keydown', (event) => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && !event.isComposing) { event.preventDefault(); $('request-form').requestSubmit(); } });
 $('request-form').addEventListener('submit', async (event) => {
   event.preventDefault();
-  if (sending || !online || (!current() && !tools.some((t) => t.id === preferred && t.installed))) return;
+  if (sending || !online || current()?.newRequest || (!current() && !tools.some((t) => t.id === preferred && t.installed))) return;
   const body = $('request-body').value.trim();
   if (!body) return;
-  const target = current()?.id ?? null, tool = selectedTool(), mode = selectedMode();
+  const target = current()?.id ?? null, tool = selectedTool(), mode = selectedMode(), type = preferredType;
   sending = true; showError(null); render();
   try {
-    if (!target && (!createId || submittedBody !== body || submittedTool !== tool || submittedMode !== mode)) { createId = `request-${crypto.randomUUID()}`; submittedBody = body; submittedTool = tool; submittedMode = mode; }
+    if (!target && (!createId || submittedBody !== body || submittedTool !== tool || submittedMode !== mode || submittedType !== type)) { createId = `request-${crypto.randomUUID()}`; submittedBody = body; submittedTool = tool; submittedMode = mode; submittedType = type; }
     if (target && (!replyId || repliedBody !== body || replyTarget !== target)) { replyId = crypto.randomUUID(); repliedBody = body; replyTarget = target; }
-    const result = await api(target ? `/api/requests/${target}/reply` : '/api/requests', { method: 'POST', token: config.token, body: target ? { body, messageId: replyId } : { id: createId, body, tool, mode } });
+    const result = await api(target ? `/api/requests/${target}/reply` : '/api/requests', { method: 'POST', token: config.token, body: target ? { body, messageId: replyId } : { id: createId, body, tool, mode, projectType: type } });
     if (currentId === target && $('request-body').value.trim() === body) $('request-body').value = '';
     if (drafts.get(target)?.trim() === body) drafts.delete(target);
     createId = null; submittedBody = null;

@@ -7,7 +7,7 @@ import { createLatestRefresh } from '/dashboard-refresh.mjs';
 const $ = (id) => document.getElementById(id);
 const PHASE_ORDER = ['plan', 'design', 'implement', 'review', 'report'];
 const STATE_LABELS = { working: '작업 중', discussing: '논의 중', reviewing: '검토 중', idle: '대기', away: '자리 비움' };
-const KIND_LABELS = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini', antigravity: 'Antigravity', copilot: 'GitHub Copilot', human: '사용자', other: '기타' };
+const KIND_LABELS = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini', antigravity: 'Antigravity', copilot: 'GitHub Copilot', human: '대표', other: '기타' };
 const TASK_LABELS = { open: '대기', accepted: '진행 중', blocked: '막힘', done: '완료', cancelled: '취소' };
 const EVENT_LABELS = { phase: '단계', feature: '작업', proof: '근거', message: '대화', note: '노트', report: '보고', daily: '일일 보고', task: '업무' };
 const FILTERS = [

@@ -22,7 +22,7 @@ export const DEMO_TEAM = [
   { author: 'reviewer', kind: 'codex', role: '코드 리뷰', phases: [3] },
   { author: 'docs', kind: 'claude', role: '문서·보고', phases: [4] },
 ];
-export const DEMO_KIND_LABELS = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini', copilot: 'Copilot', antigravity: 'Antigravity', human: '사용자' };
+export const DEMO_KIND_LABELS = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini', copilot: 'Copilot', antigravity: 'Antigravity', human: '대표' };
 export function assessDemoTask(input = DEMO_TASKS.system) {
   const scope = ['ui', 'feature', 'system'].includes(input?.scope) ? input.scope : 'ui';
   let score = { ui: 1, feature: 2, system: 3 }[scope];
@@ -50,7 +50,7 @@ export const DEMO_STEPS = [
   { phase: 0, actor: 'PM', title: '작업과 팀 준비', state: '준비', detail: '역할에 필요한 인원을 구성했습니다. 재생하면 사무실에서 실제 UX를 체험할 수 있습니다.', action: '캐릭터·화이트보드를 눌러 보세요.' },
   { phase: 0, actor: 'PM', title: '역할별 업무 배정', detail: '기획·설계·구현·검증·보고의 담당자와 수용 기준을 배정합니다.' },
   { phase: 0, actor: 'planner', title: '기획과 수용 기준 정리', checkpoint: 0, detail: '문제, 사용자의 기대, 완료 조건과 검증 방법을 정리하고 UX 담당자와 논의합니다.', type: 'decision' },
-  { phase: 1, actor: 'ux', title: 'UX·오류 상태 설계', detail: '정상 동작뿐 아니라 좁은 화면, 진행 중 상태와 실패 후 복구 동작을 설계합니다.' },
+  { phase: 1, actor: 'ux', title: 'UX·오류 상태 설계', detail: 'B1 디자인실에서 정상·좁은 화면·진행 중·실패 후 복구 시안을 만들고 개발 인계 기준을 정리합니다.' },
   { phase: 1, actor: 'backend', title: '인터페이스·데이터 설계', checkpoint: 1, detail: '프론트엔드와 API 계약, 데이터 변경 범위와 중복 요청 방지 기준을 합의합니다.', requires: 'backend', type: 'decision' },
   { phase: 2, actor: 'frontend', title: '화면 구현 시작', detail: 'UX 설계에 맞춰 화면과 진행·오류 상태를 구현합니다.' },
   { phase: 2, actor: 'backend', title: '서버 병렬 구현', detail: '화면 구현과 병렬로 요청 처리와 데이터 무결성을 구현합니다.', requires: 'backend' },
@@ -87,7 +87,8 @@ export function demoSnapshot(position, options = {}) {
   const team = scenario.team.map((person) => {
     let state = 'idle';
     if (index > 0 && !step.done) {
-      if (step.phase < 2 && ['planner', 'ux', ...(step.phase === 1 ? ['backend'] : [])].includes(person.author)) state = 'discussing';
+      if (step.phase === 0 && ['planner', 'ux'].includes(person.author)) state = 'discussing';
+      if (step.phase === 1 && ['ux', 'backend'].includes(person.author)) state = 'working';
       if (step.phase === 2 && ['frontend', 'backend'].includes(person.author)) state = 'working';
       if (step.phase === 2 && person.author === 'qa' && events.some((event) => event.actor === 'qa')) state = 'reviewing';
       if (step.phase === 3 && ['qa', 'reviewer'].includes(person.author)) state = 'reviewing';
@@ -139,7 +140,7 @@ export function demoOfficeSnapshot(position, options = {}, now = Date.now()) {
       metrics: { bugRate: mine.some((event) => event.proof === 'fail') ? .5 : null, bugsFound: mine.filter((event) => event.proof === 'fail').length, commits: 0, workMs: mine.length * 30_000, tasksDone: tasks.filter((task) => task.to === person.author && task.status === 'done').length, tests: mine.filter((event) => event.proof).length },
       counts: { assigned: view.team.length - 1, tasksDone: view.step.done ? 1 : 0, testsPassed: view.passed, testsFailed: view.failed } };
   });
-  const room = view.index === 0 || view.step.done ? 'roof' : ['qa', 'reviewer'].includes(view.step.actor) ? 'lab' : view.step.phase < 2 ? 'meeting' : view.step.phase === 4 ? 'boss' : 'dev';
+  const room = view.index === 0 || view.step.done ? 'roof' : ['qa', 'reviewer'].includes(view.step.actor) ? 'lab' : view.step.phase === 0 ? 'meeting' : view.step.phase === 1 ? 'studio' : view.step.phase === 4 ? 'boss' : 'dev';
   return { view, room, agents, profiles, tasks, notes,
     features: [{ id: 'demo-work', title: `[가상 데모] ${view.task.title}`, phase, iteration: 0, updatedAt: iso(view.index) }],
     messages: view.events.map((event) => ({ id: `m-${String(event.index).padStart(6, '0')}-000000`, author: event.actor, kind: agents.find((a) => a.author === event.actor)?.kind,

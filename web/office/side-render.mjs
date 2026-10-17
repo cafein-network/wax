@@ -205,13 +205,14 @@ export function occupiedSeats(building, actors) {
 }
 
 function deskSprite(assets, prop) {
-  return prop.seat ? assets?.props?.['desk-bare'] : null;
+  return prop.seat ? assets?.props?.[prop.type === 'design-desk' ? 'design-desk' : 'desk-bare'] : null;
 }
 
 function drawOccupiedDesk(ctx, assets, prop) {
   const desk = deskSprite(assets, prop);
   if (!desk) { PROP_DRAW[prop.type]?.(ctx, prop); return; }
   drawPropImage(ctx, prop, desk);
+  if (prop.type === 'design-desk') return;
   const w = prop.w * SCALE, x0 = prop.x + (prop.w - w) / 2, top = PROP_BOTTOM - Math.round((desk.height * w) / desk.width) + 5;
   const laptop = assets?.props?.desklaptop, lamp = assets?.props?.desklamp;
   if (laptop) drawPropImage(ctx, { x: x0 + 10, w: laptop.width, bottom: top }, laptop);
@@ -254,7 +255,7 @@ export function render(ctx, { assets, actors, board, room: building, music = nul
       if (floor !== id || occupied.has(key)) continue;
       const place = room.SEATS[seat];
       if (!place) continue;
-      const prop = { type: 'chair', x: Math.round(place.x + (place.facing === 'left' ? 8 : -8) - 26), w: 52, bottom: PROP_BOTTOM + place.y - room.SEATS.s.y, flip: place.facing === 'left' };
+      const prop = { type: 'chair', x: Math.round(place.x + (place.facing === 'left' ? 8 : -8) - 26), w: 52, bottom: PROP_BOTTOM + place.y - (FLOOR + Math.round(72 * SCALE)), flip: place.facing === 'left' };
       const sprite = assets?.props?.foldchair;
       if (sprite) drawPropImage(ctx, prop, sprite); else PROP_DRAW.chair(ctx, prop);
     }

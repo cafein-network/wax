@@ -14,7 +14,8 @@ export async function collectGitProof(root, feature, ref = 'HEAD') {
   if (files.length > 1000) throw new WaxError('변경 파일이 1,000개를 넘습니다. 더 작은 커밋으로 근거를 연결하세요.');
   return { id: randomUUID(), kind: 'git', phase: feature.phase, iteration: feature.iteration, at: new Date().toISOString(), commit, files };
 }
-export async function runTestProof(root, id, command, { revision, timeout = 120_000 } = {}) {
+export async function runTestProof(root, id, command, { revision, timeout = 120_000, verification, checks = [] } = {}) {
+  if ((verification !== undefined && !['static', 'runtime', 'integration', 'visual'].includes(verification)) || !Array.isArray(checks) || checks.length > 20 || !checks.every(check => typeof check === 'string' && /^[a-z][a-z0-9-]{0,63}$/.test(check))) throw new WaxError('검증 종류 또는 검증 항목 ID가 올바르지 않습니다.');
   if (!Array.isArray(command) || !command.length || command.length > 100 || command.some((arg) => typeof arg !== 'string' || arg.length > 2000) || !command[0] ||
       !Number.isInteger(timeout) || timeout < 100 || timeout > 300_000) throw new WaxError('실행할 명령과 100~300000ms 제한이 필요합니다.');
   const feature = await getFeature(root, id);
@@ -36,7 +37,8 @@ export async function runTestProof(root, id, command, { revision, timeout = 120_
     child.on('error', () => { cleanup(); reject(new WaxError('테스트 명령을 실행하지 못했습니다. 실행 파일 경로를 확인하세요.')); });
     child.on('close', (exitCode, signal) => { cleanup(); resolve({ exitCode, signal, output, truncated, timedOut }); });
   });
-  const proof = { id: randomUUID(), kind: 'test', phase: feature.phase, iteration: feature.iteration, at: new Date().toISOString(), command, commit, dirty, durationMs: Date.now() - started, ...result };
+  const proof = { id: randomUUID(), kind: 'test', phase: feature.phase, iteration: feature.iteration, at: new Date().toISOString(), command, commit, dirty, durationMs: Date.now() - started, ...result,
+    ...(verification !== undefined || checks.length ? { verification: verification || 'static', checks: [...new Set(checks)] } : {}) };
   try { return { recorded: true, proof, feature: await updateFeature(root, id, 'attach-evidence', { proof, revision: feature.revision }) }; }
   catch (error) { return { recorded: false, proof, error: '테스트 도중 작업이 변경되었거나 기록을 저장하지 못했습니다. 이 JSON 결과를 보관하고 최신 기록을 확인하세요.' }; }
 }

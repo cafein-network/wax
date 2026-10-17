@@ -13,7 +13,8 @@ export function requestAction(request, requests = []) {
     }
     case 'running': return { title: `${request.agent || '담당 AI'}가 작업하고 있어요`, detail: '현재 단계의 결과가 나오면 여기에 보고합니다. 실행 승인 카드가 나타나면 내용을 확인해 응답해 주세요.' };
     case 'question': return { title: '답변을 기다리고 있어요', detail: '아래 질문에 답하고 보내기를 누르면 멈춘 단계부터 계속합니다.', action: 'reply', label: '답변 입력하기' };
-    case 'blocked': if (request.newRequest) return { title: '새 요청이 필요해요', detail: '다른 세션이 이 프로젝트의 단계를 바꿔 같은 요청에서는 이어갈 수 없습니다. 상세 기록을 확인한 뒤 새 요청으로 워크플로우를 작성하세요.' };
+    case 'blocked': if (request.newRequest) return { title: '새 요청이 필요해요', detail: '다른 세션이 이 프로젝트의 단계를 바꿔 같은 요청에서는 이어갈 수 없습니다. 상세 기록을 확인한 뒤 새 요청으로 워크플로우를 작성하세요.', action: 'new', label: '새 요청 만들기' };
+      if (request.needsFix) return { title: '검증에서 결함을 발견했어요', detail: '수정 후 다시 검증을 누르면 개발 단계로 돌아가 결함을 수정하고 새 실행 근거로 다시 확인합니다.', action: 'resume', label: '수정 후 다시 검증' };
       return { title: '진행이 막힌 이유를 확인해 주세요', detail: '위에 표시된 원인을 해결한 뒤 이어서 진행을 누르세요. 필요한 정보는 아래에 입력해 보낼 수 있습니다.', action: 'resume', label: '이어서 진행' };
     case 'paused': return { title: '저장된 단계에서 멈춰 있어요', detail: '이어서 진행을 누르면 저장된 단계부터 다시 실행합니다.', action: 'resume', label: '이어서 진행' };
     case 'completed': return { title: '요청한 작업을 마쳤어요', detail: '결과와 검증 보고를 확인하세요. 수정할 점을 아래에 보내면 같은 작업을 이어갑니다.' };

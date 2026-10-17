@@ -106,3 +106,13 @@
 .terminal-guide .next-cmd { display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
 .terminal-guide .next-cmd code { white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (max-width: 640px) { .start-guide { padding: 16px; } .start-guide li { grid-template-columns: 1fr; gap: 2px; } .terminal-guide { padding: 16px; } .mode-picker { grid-template-columns: 1fr; } }
+.project-type-picker { display: grid; gap: .45rem; margin: 1rem 0; }
+.project-type-picker select { width: 100%; max-width: 30rem; padding: .65rem; font: inherit; color: inherit; background: var(--panel, #fff); border: 1px solid var(--border, #d8dce2); border-radius: .5rem; }
+.project-type-picker p { margin: 0; color: var(--muted, #64748b); font-size: .875rem; }
+.project-mission { border-left: 3px solid var(--accent, #258477); padding: .8rem 1rem; margin: 1rem 0; }
+.mission-heading { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; }
+.mission-heading a { margin-left: auto; }
+.mission-heading span { color: var(--muted, #64748b); font-size: .875rem; }
+.project-mission p { margin: .65rem 0; }
+.project-mission ul { margin: .5rem 0; padding-left: 1.25rem; }
+.project-mission li { margin: .35rem 0; }

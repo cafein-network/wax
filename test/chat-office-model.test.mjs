@@ -343,8 +343,8 @@ test('사이드뷰 건물: 자리 배정에 쓰는 모든 자리와 NPC 자리�
 test('사이드뷰 층 순서: 아래에서 위로 회의(기획·설계) → 개발(구현) → 연구(검토) → 사장실(보고), 맨 위는 옥상 정원이고 입구는 1층', async () => {
   const { BUILDING } = await import('../web/office/side-rooms.mjs');
   const { floorName } = await import('../web/office/side-render.mjs');
-  assert.deepEqual(BUILDING.floors, ['meeting', 'dev', 'lab', 'boss', 'roof']);
-  assert.deepEqual(BUILDING.floors.map((id) => floorName(BUILDING, id)), ['1F', '2F', '3F', '4F', 'RF']);
+  assert.deepEqual(BUILDING.floors, ['studio', 'meeting', 'dev', 'lab', 'boss', 'roof']);
+  assert.deepEqual(BUILDING.floors.map((id) => floorName(BUILDING, id)), ['B1', '1F', '2F', '3F', '4F', 'RF']);
   assert.equal(BUILDING.SPOTS.entrance, 'meeting:door');
   const tops = BUILDING.floors.map((id) => BUILDING.floorTop[id]);
   assert.ok(tops.every((top, i) => i === 0 || top < tops[i - 1]), '위층일수록 화면 위');
@@ -443,6 +443,28 @@ test('사이드뷰 걷기 주기: 다리가 앞뒤로 반대로 오가고, 앞�
   assert.ok(Math.abs(strides[0]) < 1e-9 && strides[1] > 0.99 && Math.abs(strides[2]) < 1e-9 && strides[3] < -0.99);
 });
 
+test('다른 층의 접이식 의자는 유효한 바닥 위치에 남고 앉은 디자이너 앞에는 태블릿 작업대를 그린다', async () => {
+  const { render } = await import('../web/office/side-render.mjs');
+  const { buildBuilding, SIDE_ROOMS } = await import('../web/office/side-rooms.mjs');
+  const BUILDING = buildBuilding(SIDE_ROOMS, ['studio', 'meeting', 'dev']);
+  const { restingChairs } = await import('../web/office/behavior.mjs');
+  const parked = ['meeting:w', 'dev:d0', 'studio:a1'];
+  const chairs = restingChairs(parked.map(home => ({ visible: true, chair: true, stroll: { home } })), parked);
+  const calls = [];
+  const ctx = new Proxy({}, { get: (target, key) => key in target ? target[key] : (...args) => { if (key === 'drawImage') calls.push(args); }, set: (target, key, value) => { target[key] = value; return true; } });
+  const image = {}, fold = {}, tablet = {}, bare = {};
+  const art = (image, width = 30, height = 58) => ({ image, width, height, native: true });
+  const seat = BUILDING.SEATS['studio:a0'];
+  const info = { image, width: 60, height: 100, anchor: { x: 30, y: 100 } };
+  render(ctx, { room: BUILDING, chairs, board: null,
+    actors: [{ x: seat.x, y: seat.y, sit: true, persona: 'designer', pose: { dy: 0 }, scale: 1 }],
+    assets: { backgrounds: Object.fromEntries(BUILDING.floors.map(id => [id, image])), characters: { designer: { views: { front: info }, poses: { type: info } } }, props: { chairstack: art(image, 44, 60), foldchair: art(fold), 'design-desk': art(tablet, 112, 78), 'desk-bare': art(bare, 100, 50) } } });
+  assert.equal(calls.filter(([image]) => image === fold).length, 3);
+  assert.ok(calls.filter(([image]) => image === fold).every(([, ...position]) => position.every(Number.isFinite)));
+  assert.equal(calls.filter(([image]) => image === tablet).length, 3, '시안 작업대 3개를 유지한다');
+  assert.equal(calls.filter(([image]) => image === bare).length, 0, '태블릿 작업대를 일반 노트북 책상으로 바꾸지 않는다');
+});
+
 test('소파 앉기: 다리를 접은 만큼 몸이 내려오고 발은 바닥에 그대로 있다', async () => {
   const { sofaLayout } = await import('../web/office/side-render.mjs');
   const { split, legs, folded, drop } = sofaLayout(180);
@@ -463,14 +485,21 @@ test('이름표 쌓기: 아래로 내리다 화면 밖으로 나가면 위로 �
   assert.deepEqual(tops, [80, 62]);
 });
 
-test('사이드뷰 빈 의자·책상: 앉은 사람이 있는 자리만 찾고, 빈 의자는 개발실·회의실·사장실 자리마다 하나씩 있다', async () => {
+test('사이드뷰 의자: 개발실·디자인실은 접이식 의자를 가져와 쓰고 회의실·사장실의 고정 의자는 유지한다', async () => {
   const { occupiedSeats } = await import('../web/office/side-render.mjs');
-  const { BUILDING, SIDE_ROOMS } = await import('../web/office/side-rooms.mjs');
+  const { BUILDING, SIDE_ROOMS, EXTRA_SEATS } = await import('../web/office/side-rooms.mjs');
   const seat = BUILDING.SEATS['dev:d1'];
   const taken = occupiedSeats(BUILDING, [{ sit: true, x: seat.x, y: seat.y }, { sit: false, x: BUILDING.SEATS['dev:d0'].x, y: BUILDING.SEATS['dev:d0'].y }]);
   assert.deepEqual([...taken], ['dev:d1']);
   const chairs = (id) => SIDE_ROOMS[id].props.filter((prop) => prop.seatOf).map((prop) => prop.seatOf).sort();
-  assert.deepEqual(chairs('dev'), ['d0', 'd1', 'd2', 'd3', 'd4']);
+  assert.deepEqual(chairs('dev'), []);
+  assert.deepEqual(chairs('studio'), []);
+  for (const [id, seats] of [['dev', ['d0', 'd1', 'd2', 'd3', 'd4']], ['studio', ['a0', 'a1', 'a2']]]) {
+    for (const seat of seats) {
+      assert.ok(EXTRA_SEATS.includes(`${id}:${seat}`));
+      assert.ok(BUILDING.SEATS[`${id}:${seat}`]);
+    }
+  }
   assert.deepEqual(chairs('meeting'), ['c0', 'c1', 'c2', 'c3', 'f0', 'f1', 'f2']);
   assert.deepEqual(chairs('boss'), ['chair', 'pm']);
   for (const id of ['dev', 'meeting', 'boss']) for (const prop of SIDE_ROOMS[id].props.filter((item) => item.seatOf)) {
