@@ -12,6 +12,13 @@ import { joinPresence as joinSession, setPresence as updatePresence } from './pr
 import * as v from './validate.mjs';
 
 const ACTIVE = new Set(['queued', 'running']);
+const modeOf = (mode = 'sm') => {
+  if (!['project', 'sm'].includes(mode)) throw new WaxError('진행 모드는 project 또는 sm이어야 합니다.');
+  return mode;
+};
+const replanned = () => Object.assign(new WaxError('다른 세션이 프로젝트 단계를 변경해 이 요청은 이어서 진행할 수 없습니다. 상세 기록을 확인하고 새 프로젝트 요청으로 워크플로우를 작성하세요.'), { newRequest: true });
+const SM_LABELS = { plan: '접수·분석', design: '영향 확인', implement: '수정', review: '회귀 검증', report: '처리 보고' };
+const phaseLabel = (request, phase) => request.mode === 'sm' ? SM_LABELS[phase] : phase === 'plan' ? '워크플로우 작성' : LABELS[phase];
 const CLI = fileURLToPath(new URL('../../bin/wax.mjs', import.meta.url));
 const RESULT_SCHEMA = {
   type: 'object', additionalProperties: false,
@@ -35,6 +42,7 @@ async function read(root, id) {
     if (!file) throw Object.assign(new Error(), { code: 'ENOENT' });
     const record = JSON.parse(await readFile(file, 'utf8'));
     record.tool = agentTool(record.tool).id;
+    record.mode = modeOf(record.mode);
     if (record.id !== id || !Array.isArray(record.messages) || !PHASES.includes(record.phase) && record.phase !== 'done') throw new Error('invalid record');
     return record;
   } catch (error) {
@@ -62,6 +70,9 @@ const addMessage = (r, role, text, extra = {}) => r.messages.push({ id: randomUU
 export function requestPrompt(request, feature) {
   return [
     '사용자가 한 줄로 요청한 작업을 기획부터 결과 보고까지 진행하는 wax 담당자입니다.',
+    request.mode === 'project'
+      ? '프로젝트 모드입니다. plan에서는 구현에 앞서 워크플로우를 작성하세요: 목표, 범위와 제외 범위, 기능별 작업 순서와 선행 관계, 단계별 산출물, 완료 기준과 검증 방법을 구체적으로 정리하세요. 실행 담당은 이 요청에서 선택한 도구의 별도 세션입니다. 다른 AI에 실제 배정했다고 주장하지 마세요. 워크플로우 문서는 사용자가 확인하고 시작할 때까지 plan에 머뭅니다. plan 중에는 제품 코드를 변경하거나 구현을 시작하지 마세요. 이후 단계는 확정한 워크플로우를 따르세요.'
+      : 'SM(유지보수) 모드입니다. 기존 동작을 보존하며 요청 단위로 접수·원인 분석(plan), 영향·수정 방안 확인(design), 수정(implement), 회귀 검증(review), 처리 보고(report)를 이어서 진행하세요. plan/design은 요청 규모에 맞게 간결히 작성하고 새 프로젝트 전체의 기획이나 사용자가 요구하지 않은 재설계를 반복하지 마세요. 재현 조건, 영향 범위, 최소 수정, 회귀 검사와 남은 위험을 기록하세요.',
     '사용자는 아래 요청의 전체 작업 흐름을 허용했습니다. 이 호출에서는 지정된 현재 단계 하나만 수행하세요.',
     '저장소 AGENTS.md를 먼저 읽고 다른 세션의 변경과 배포 담당 범위를 존중하세요. 배포·게시·외부 전송은 별도 명시적 요청 없이는 하지 마세요.',
     '일반적인 선택은 판단해서 진행하고, 실제로 진행을 막는 질문만 outcome=question으로 반환하세요.',
@@ -108,16 +119,34 @@ export function createRequestRunner({ root, execute = runAgentSession, notify = 
         try { feature = await getFeature(root, id); }
         catch (error) { if (error.status !== 404) throw error; feature = await createFeature(root, { id, title: r.title, description: r.messages[0].text }); }
         if (feature.archivedAt) throw new WaxError('보관된 작업입니다. 상세 기록에서 복원한 뒤 이어서 진행하세요.');
+        if (r.mode === 'project' && r.workflow?.approved && !r.workflow.started) {
+          let stale = false;
+          r = await patch(id, async (current) => {
+            if (!ACTIVE.has(current.status) || !current.workflow?.approved || current.workflow.started || controller.signal.aborted) return;
+            const workflow = current.workflow, tracked = Number.isInteger(workflow.historyLength);
+            const moves = tracked ? feature.history.slice(workflow.historyLength).filter((event) => event.action !== 'attach-evidence') : [];
+            const same = feature.iteration === workflow.iteration && feature.artifacts.plan === workflow.document;
+            if (same && feature.phase === 'plan' && (feature.revision === workflow.revision || tracked && !moves.length)) {
+              feature = await updateFeature(root, id, 'complete', { phase: 'plan', evidence: workflow.evidence, proofIds: workflow.proofIds, revision: feature.revision });
+            } else if (!(same && tracked && feature.phase === 'design' && moves.length === 1 && moves[0].action === 'complete' && moves[0].phase === 'plan' && feature.completed.plan?.evidence === workflow.evidence)) {
+              current.workflow = null; stale = true; return;
+            }
+            workflow.started = true;
+          });
+          if (stale) throw feature.phase === 'plan' ? new WaxError('워크플로우가 변경되었습니다. 이어서 진행하면 최신 내용으로 워크플로우를 다시 작성합니다.') : replanned();
+          if (!ACTIVE.has(r.status) || controller.signal.aborted) return;
+        }
+        if (r.mode === 'project' && feature.phase !== 'plan' && !r.workflow?.started) throw replanned();
         if (feature.phase === 'done') feature = await updateFeature(root, id, 'iterate', { revision: feature.revision, reason: r.messages.filter((m) => m.role === 'user').at(-1).text.slice(0, 5000) });
         let polling = false, lastPresence = 0;
         heartbeat = setInterval(async () => {
           if (polling) return; polling = true;
           try {
             const current = await read(root, id);
-            if (current.status !== 'running' || current.owner.instance !== instance) controller.abort();
+            if (!ACTIVE.has(current.status) || current.owner.instance !== instance) controller.abort();
             if (!controller.signal.aborted && Date.now() - lastPresence > 30_000) {
               lastPresence = Date.now();
-              await updatePresence(root, { author: agent.author, session: agent.session, kind: r.tool, state: 'working', feature: id, note: `${LABELS[current.phase]} 진행 중` });
+              await updatePresence(root, { author: agent.author, session: agent.session, kind: r.tool, state: 'working', feature: id, note: `${phaseLabel(current, current.phase)} 진행 중` });
             }
           } catch { controller.abort(); }
           finally { polling = false; }
@@ -127,7 +156,7 @@ export function createRequestRunner({ root, execute = runAgentSession, notify = 
           if (stopped || controller.signal.aborted) break;
           r = await patch(id, (current) => {
             if (!ACTIVE.has(current.status)) { controller.abort(); return; }
-            current.status = 'running'; current.phase = feature.phase; current.detail = `${LABELS[feature.phase]} 진행 중`;
+            current.status = 'running'; current.phase = feature.phase; current.agent = agent.author; current.detail = `${phaseLabel(current, feature.phase)} 진행 중`;
           });
           if (controller.signal.aborted) break;
           const phase = feature.phase, inputCount = r.messages.filter((m) => m.role === 'user').length;
@@ -156,13 +185,24 @@ export function createRequestRunner({ root, execute = runAgentSession, notify = 
           const docs = await safeDir(root, ['docs', 'wax', id], { create: true });
           await writeFile(await checkFile(join(docs, `${phase}.md`)), `${reply.document}\n`, { mode: 0o600 });
           feature = await updateFeature(root, id, 'save', { phase, content: reply.document, revision: latest.revision });
+          if (r.mode === 'project' && phase === 'plan') {
+            await patch(id, (current) => {
+              if (!ACTIVE.has(current.status)) return;
+              const hasNewInput = current.messages.filter((m) => m.role === 'user').length > inputCount;
+              current.phase = 'plan';
+              current.status = hasNewInput ? 'queued' : 'workflow';
+              current.workflow = hasNewInput ? null : { document: feature.artifacts.plan, evidence: reply.evidence, proofIds: reply.proofIds, revision: feature.revision, iteration: feature.iteration, historyLength: feature.history.length, approved: false };
+              current.detail = hasNewInput ? '추가 요청을 반영해 워크플로우를 다시 작성합니다.' : '워크플로우를 만들었습니다. 내용을 확인한 뒤 이 워크플로우로 시작을 눌러주세요.';
+            });
+            break;
+          }
           feature = await updateFeature(root, id, 'complete', { phase, evidence: reply.evidence, proofIds: reply.proofIds, verdict: phase === 'review' ? 'pass' : undefined, revision: feature.revision });
           r = await patch(id, (current) => {
             current.phase = feature.phase;
             if (!ACTIVE.has(current.status)) return;
             const hasNewInput = current.messages.filter((m) => m.role === 'user').length > inputCount;
             current.status = feature.phase === 'done' ? (hasNewInput ? 'queued' : 'completed') : 'running';
-            current.detail = hasNewInput && feature.phase === 'done' ? '추가 요청을 이어서 반영합니다.' : feature.phase === 'done' ? '요청한 작업을 마쳤습니다.' : `${LABELS[phase]} 완료 · ${LABELS[feature.phase]} 준비 중`;
+            current.detail = hasNewInput && feature.phase === 'done' ? '추가 요청을 이어서 반영합니다.' : feature.phase === 'done' ? '요청한 작업을 마쳤습니다.' : `${phaseLabel(current, phase)} 완료 · ${phaseLabel(current, feature.phase)} 준비 중`;
           });
           if (!ACTIVE.has(r.status) || feature.phase === 'done') break;
         }
@@ -170,6 +210,7 @@ export function createRequestRunner({ root, execute = runAgentSession, notify = 
         await patch(id, (current) => {
           if (!ACTIVE.has(current.status)) return;
           current.status = controller.signal.aborted ? 'paused' : 'blocked';
+          if (error.newRequest && !controller.signal.aborted) current.newRequest = true;
           current.detail = controller.signal.aborted ? '실행이 중단되었거나 제한 시간을 초과했습니다. 저장된 단계부터 이어갈 수 있습니다.' : String(error.message).slice(0, 2000);
           addMessage(current, 'assistant', current.detail, { outcome: 'blocked' });
         });
@@ -193,18 +234,18 @@ export function createRequestRunner({ root, execute = runAgentSession, notify = 
     jobs.set(id, job);
     job.catch(() => {});
   }
-  async function submit({ id = `request-${randomUUID()}`, body, author, tool = 'codex' }) {
+  async function submit({ id = `request-${randomUUID()}`, body, author, tool = 'codex', mode = 'sm' }) {
     if (stopped) throw new WaxError('실행 연결이 종료되었습니다. 새로고침하세요.', 409);
-    requestId(id); body = v.body(body, 8000, '요청'); author = v.author(author); tool = agentTool(tool).id;
+    requestId(id); body = v.body(body, 8000, '요청'); author = v.author(author); tool = agentTool(tool).id; mode = modeOf(mode);
     const file = await requestFile(root, id, true);
     const r = await withLock(`${file}.lock`, async () => {
       try {
         const existing = await read(root, id);
-        if (existing.author !== author || existing.messages[0].text !== body || existing.tool !== tool) throw new WaxError('같은 요청 ID에 다른 내용 또는 실행 도구가 있습니다.', 409);
+        if (existing.author !== author || existing.messages[0].text !== body || existing.tool !== tool || existing.mode !== mode) throw new WaxError('같은 요청 ID에 다른 내용, 실행 도구 또는 진행 모드가 있습니다.', 409);
         return existing;
       } catch (error) { if (error.status !== 404) throw error; }
       const now = new Date().toISOString();
-      const created = { schema: 1, id, author, tool, title: body.replace(/\s+/g, ' ').slice(0, 100), phase: 'plan', status: 'queued', detail: '기획을 준비하고 있습니다.', owner, createdAt: now, updatedAt: now, messages: [] };
+      const created = { schema: 1, id, author, tool, mode, title: body.replace(/\s+/g, ' ').slice(0, 100), phase: 'plan', status: 'queued', detail: mode === 'project' ? '프로젝트 워크플로우를 준비하고 있습니다.' : '유지보수 요청을 접수하고 있습니다.', owner, createdAt: now, updatedAt: now, messages: [] };
       addMessage(created, 'user', body);
       await writeJsonAtomic(file, created);
       return created;
@@ -212,12 +253,24 @@ export function createRequestRunner({ root, execute = runAgentSession, notify = 
     if (r.status === 'queued' && r.owner.instance === instance) schedule(id);
     changed(); return publicRecord(r);
   }
-  async function reply(id, { body, messageId = randomUUID(), resume = false } = {}) {
+  async function reply(id, { body, messageId = randomUUID(), resume = false, approveWorkflow = false, workflowRevision } = {}) {
     if (stopped) throw new WaxError('실행 연결이 종료되었습니다.', 409);
     if (body !== undefined) body = v.body(body, 8000, '메시지');
     if (typeof messageId !== 'string' || !/^[a-f0-9-]{36}$/.test(messageId)) throw new WaxError('잘못된 메시지 ID입니다.');
-    if (!body && !resume) throw new WaxError('메시지 또는 이어서 진행 요청이 필요합니다.');
+    if (!body && !resume && !approveWorkflow) throw new WaxError('메시지 또는 이어서 진행 요청이 필요합니다.');
+    if (approveWorkflow && (body || resume)) throw new WaxError('워크플로우 시작과 수정 요청은 따로 보내주세요.');
     const r = await patch(id, (current) => {
+      if (approveWorkflow) {
+        if (current.mode !== 'project' || !current.workflow || current.workflow.revision !== workflowRevision) throw new WaxError('시작할 워크플로우가 변경되었습니다. 새로고침해 최신 내용을 확인하세요.', 409);
+        if (current.workflow.approved) return;
+        if (current.status !== 'workflow') throw new WaxError('워크플로우를 먼저 작성하고 확인해 주세요.', 409);
+        if (jobs.has(id)) throw new WaxError('현재 실행을 마무리하고 있습니다. 잠시 후 다시 시작해 주세요.', 409);
+        current.workflow.approved = true;
+        current.status = 'queued'; current.owner = owner; current.detail = '확인한 워크플로우로 프로젝트를 시작합니다.';
+        return;
+      }
+      if (current.newRequest) throw new WaxError('이 요청은 이어서 진행할 수 없습니다. 새 프로젝트 요청을 만들어 주세요.', 409);
+      if (!body && current.status === 'workflow') throw new WaxError('워크플로우를 확인하고 이 워크플로우로 시작을 눌러주세요.', 409);
       const duplicate = current.messages.find((m) => m.id === messageId);
       if (duplicate) {
         if (duplicate.role !== 'user' || duplicate.text !== body) throw new WaxError('같은 메시지 ID에 다른 내용이 있습니다.', 409);
@@ -227,6 +280,7 @@ export function createRequestRunner({ root, execute = runAgentSession, notify = 
       if (body) {
         if (current.messages.filter((m) => m.role === 'user').reduce((sum, m) => sum + m.text.length, body.length) > 40000) throw new WaxError('대화가 길어졌습니다. 새 요청으로 이어주세요.');
         addMessage(current, 'user', body, { id: messageId });
+        if (current.phase === 'plan' && !current.workflow?.started) current.workflow = null;
       }
       if (!ACTIVE.has(current.status) || interrupted(current)) {
         if (current.status === 'completed' && !body) throw new WaxError('완료된 작업입니다. 추가 요청을 입력하세요.');

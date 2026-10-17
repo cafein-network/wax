@@ -561,3 +561,4 @@ body.office-demo.embed { overflow-y: auto; }
 @media (max-width: 800px) { .demo-environment-steps { grid-template-columns: 1fr; } }
 
 .hr-chat-button { margin-top: 10px; padding: 6px 12px; border-radius: 999px; background: var(--chat-outgoing); border-color: var(--chat-line); font-size: 12px; }
+.channel-start-hint { margin: 0; padding: 12px 20px; background: #f0f5f1; border-bottom: 1px solid var(--line); font-size: 12px; line-height: 1.7; }

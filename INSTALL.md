@@ -130,7 +130,7 @@ GitHub Copilot CLI(`copilot`, Microsoft Copilot과 다른 GitHub의 코딩 도�
 node "/absolute/path/to/wax/bin/wax.mjs" --project "/absolute/path/to/your-project" dashboard
 ```
 
-브라우저에서 `http://127.0.0.1:4330/`을 엽니다. AI 세션에서는 처음에 `/wax:init`으로 시작하면 팀 채널 참여와 함께 대시보드를 열지 묻고 켜 주며, 다른 세션은 `/wax:join`으로 참여합니다. 각 도구에서 `/wax:pm`(대표에게 조언·업무 배정·진행 보고), `/wax:work`(배정 업무 수행), `/wax:chat`(세션 간 대화), `/wax:daily`(일일 업무보고)를 사용할 수 있습니다. Codex는 `$wax:<명령>`, Antigravity CLI는 `/<명령>` 형식입니다. 대시보드를 다시 열거나 주소를 확인할 때도 `/wax:init`을 실행합니다(이전의 `/wax:dashboard`는 init에 합쳐졌습니다). Codex·Antigravity CLI는 설치기가 스킬 13개를 연결하므로, 이전에 설치한 프로젝트는 설치기를 다시 실행해 새 스킬(init·join)을 추가하고, 남아 있는 `.agents/skills/wax-dashboard` 링크는 지우세요. 자세한 내용은 매뉴얼 6절을 참고하세요.
+브라우저에서 `http://127.0.0.1:4330/`을 엽니다. AI 세션에서는 처음에 `/wax:init`으로 시작하면 팀 채널 참여와 함께 첫 화면의 시작 가이드를 바로 열며, 다른 세션은 `/wax:join`으로 참여합니다. 각 도구에서 `/wax:pm`(대표에게 조언·업무 배정·진행 보고), `/wax:work`(배정 업무 수행), `/wax:chat`(세션 간 대화), `/wax:daily`(일일 업무보고)를 사용할 수 있습니다. Codex CLI의 AI 대화창에서는 `$wax:work <업무ID>`처럼 `$wax:<명령>` 형식을 사용합니다. `$`는 스킬 호출, `@`는 파일 첨부이며, wax 채널의 `@이름` 알림과 구분합니다. Antigravity CLI는 `/<명령>` 형식입니다. 대시보드를 다시 열거나 주소를 확인할 때도 `/wax:init`을 실행합니다(이전의 `/wax:dashboard`는 init에 합쳐졌습니다). Codex·Antigravity CLI는 설치기가 스킬 13개를 연결하므로, 이전에 설치한 프로젝트는 설치기를 다시 실행해 새 스킬(init·join)을 추가하고, 남아 있는 `.agents/skills/wax-dashboard` 링크는 지우세요. 자세한 내용은 매뉴얼 6절을 참고하세요.
 
 ## 업데이트 및 직접 개선
 

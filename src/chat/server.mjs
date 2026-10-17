@@ -183,13 +183,13 @@ export function createChatServer({ root, env = process.env, intervalMs = 1000, e
       return await withDashboardUser(root, user, async () => {
       if (req.method === 'POST' && pathname === '/api/requests') {
         const data = await readJson(req, 40000);
-        json(res, 202, await requests.submit({ id: data.id, body: data.body, author: user, tool: data.tool }));
+        json(res, 202, await requests.submit({ id: data.id, body: data.body, author: user, tool: data.tool, mode: data.mode }));
         return;
       }
       const requestRoute = pathname.match(/^\/api\/requests\/(request-[a-f0-9-]{36})\/(reply|stop)$/);
       if (req.method === 'POST' && requestRoute) {
         const data = await readJson(req, 40000);
-        json(res, 200, requestRoute[2] === 'stop' ? await requests.stop(requestRoute[1]) : await requests.reply(requestRoute[1], { body: data.body, messageId: data.messageId, resume: data.resume === true }));
+        json(res, 200, requestRoute[2] === 'stop' ? await requests.stop(requestRoute[1]) : await requests.reply(requestRoute[1], { body: data.body, messageId: data.messageId, resume: data.resume === true, approveWorkflow: data.approveWorkflow === true, workflowRevision: data.workflowRevision }));
         return;
       }
       const approvalRoute = pathname.match(/^\/api\/approvals\/([a-f0-9-]{36})\/decision$/);

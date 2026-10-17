@@ -1,6 +1,6 @@
 import { icon } from '/icons.mjs';
 import { api, clear, commandLine, el, richText, storage, store, timeLabel } from '/dom.mjs';
-import { assignmentCommand, nextCommand } from '/commands.mjs';
+import { assignmentCommand, commandFor, nextCommand } from '/commands.mjs';
 import { deriveAttention, deriveDecisions, paginateTimeline, deriveTimelineFlow } from '/dashboard-model.mjs';
 import { createLatestRefresh } from '/dashboard-refresh.mjs';
 
@@ -253,6 +253,7 @@ function taskNode(task) {
     el('div', { class: 'detail', text: task.note }),
     task.updates.at(-1)?.note ? el('div', { class: 'doing', text: `${TASK_LABELS[task.updates.at(-1).status]}: ${task.updates.at(-1).note}` }) : null,
     el('div', { class: 'kind', text: `${task.id} · ${timeLabel(task.at)} 배정` }),
+    ((text) => text ? commandLine(`${task.to} 세션에서 실행`, text, '배정만으로 실행되지 않는 세션은 이 명령으로 시작합니다') : null)(commandFor(day.agents.find((a) => a.author === task.to)?.kind, 'work', task.id)),
     isPm() ? el('button', { type: 'button', class: 'link', onclick: () => cancelTask(task) }, '배정 취소') : null);
 }
 

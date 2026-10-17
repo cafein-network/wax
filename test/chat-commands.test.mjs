@@ -13,6 +13,7 @@ test('도구별 명령 문법: 같은 명령을 각 도구의 방식으로 부�
   assert.equal(commandFor('copilot', 'status'), 'wax status 스킬로 진행해줘');
   assert.equal(commandFor('human', 'plan', 'login'), null, '사람은 명령을 실행하지 않는다');
   assert.equal(assignmentCommand('codex'), '$wax:work');
+  assert.equal(commandFor('codex', 'work', 't-1'), '$wax:work t-1', 'Codex work is a skill invocation with $, not a file mention');
   assert.deepEqual(TOOLS.map((t) => t.kind), ['claude', 'codex', 'copilot', 'gemini', 'antigravity']);
   assert.equal(COMMANDS.length, 13, '플러그인 명령 13개와 같은 표');
 });

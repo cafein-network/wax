@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -8,6 +9,7 @@ import { once } from 'node:events';
 import { project } from './chat-helpers.mjs';
 import { createRequestRunner } from '../src/chat/requests.mjs';
 import { createChatServer } from '../src/chat/server.mjs';
+import { withLock } from '../src/chat/lock.mjs';
 import { getFeature, listFeatures, PHASES, updateFeature } from '../src/workflow.mjs';
 import { runTestProof } from '../src/evidence.mjs';
 import { listPresence } from '../src/chat/presence.mjs';
@@ -67,6 +69,169 @@ test('duplicate submission is idempotent and queued requests never execute in pa
   await runner.settled();
   assert.equal((await runner.list()).length, 2); assert.equal(calls.length, 10); assert.equal(peak, 1);
   await assert.rejects(runner.submit({ ...input, body: '다른 내용' }), { status: 409 });
+});
+
+test('project creates a workflow first and runs later phases only after that revision is confirmed', async (t) => {
+  const { root, calls, runner } = await runnerFor(t);
+  const r = await runner.submit({ author: '사장', body: '예약 서비스 프로젝트', mode: 'project' });
+  await runner.settled();
+  let [saved] = await runner.list();
+  assert.equal(saved.mode, 'project'); assert.equal(saved.status, 'workflow');
+  assert.deepEqual(calls.map((c) => c.phase), ['plan']);
+  assert.match(calls[0].prompt, /프로젝트 모드/);
+  assert.match(calls[0].prompt, /선행 관계/);
+  assert.equal((await getFeature(root, r.id)).completed.plan, undefined);
+  assert.equal(saved.workflow.document, (await getFeature(root, r.id)).artifacts.plan);
+  await assert.rejects(runner.reply(r.id, { resume: true }), /워크플로우를 확인/);
+  await assert.rejects(runner.reply(r.id, { approveWorkflow: true, workflowRevision: saved.workflow.revision + 1 }), { status: 409 });
+  const approval = { approveWorkflow: true, workflowRevision: saved.workflow.revision };
+  await Promise.all([runner.reply(r.id, approval), runner.reply(r.id, approval)]);
+  await runner.settled();
+  [saved] = await runner.list();
+  assert.equal(saved.status, 'completed'); assert.equal(saved.workflow.started, true);
+  assert.deepEqual(calls.map((c) => c.phase), PHASES);
+  await runner.reply(r.id, approval); await runner.settled();
+  assert.equal(calls.length, 5, 'repeated confirmation never reruns completed work');
+});
+
+test('workflow edits require reviewing the rebuilt revision; modes are immutable and legacy requests remain SM', async (t) => {
+  const { root, calls, runner } = await runnerFor(t);
+  const input = { author: '사장', body: '새 프로젝트', mode: 'project' };
+  const r = await runner.submit(input); await runner.settled();
+  const oldRevision = (await runner.list())[0].workflow.revision;
+  await runner.reply(r.id, { body: '결제 기능은 다음으로 미루자' }); await runner.settled();
+  const [saved] = await runner.list();
+  assert.equal(saved.status, 'workflow'); assert.ok(saved.workflow.revision > oldRevision);
+  assert.deepEqual(calls.map((c) => c.phase), ['plan', 'plan']);
+  assert.match(calls[1].prompt, /결제 기능은 다음으로/);
+  await assert.rejects(runner.reply(r.id, { approveWorkflow: true, workflowRevision: oldRevision }), { status: 409 });
+  await assert.rejects(runner.submit({ ...input, id: r.id, mode: 'sm' }), { status: 409 });
+  await assert.rejects(runner.submit({ author: '사장', body: '잘못된 모드', mode: 'unknown' }), /진행 모드/);
+  const sm = await runner.submit({ author: '사장', body: '로그인 오류 수정', mode: 'sm' }); await runner.settled();
+  assert.equal((await runner.list()).find((item) => item.id === sm.id).status, 'completed');
+  assert.match(calls[2].prompt, /SM\(유지보수\) 모드/);
+  const file = join(root, '.wax', 'chat', 'requests', `${sm.id}.json`);
+  const raw = JSON.parse(await readFile(file, 'utf8')); delete raw.mode; await writeFile(file, JSON.stringify(raw));
+  assert.equal((await runner.list()).find((item) => item.id === sm.id).mode, 'sm');
+});
+
+test('project workflow survives dashboard restart and stale feature edits never authorize execution', async (t) => {
+  const { root, runner } = await runnerFor(t);
+  const r = await runner.submit({ author: '사장', body: '새 서비스 만들기', mode: 'project' }); await runner.settled();
+  const [saved] = await runner.list(); await runner.close();
+  const calls = [], reopened = createRequestRunner({ root, execute: executor(calls) });
+  t.after(() => reopened.close());
+  assert.equal((await reopened.list())[0].status, 'workflow'); assert.equal(calls.length, 0);
+  const feature = await getFeature(root, r.id);
+  await updateFeature(root, r.id, 'edit', { title: '변경된 서비스', description: feature.description, revision: feature.revision });
+  await reopened.reply(r.id, { approveWorkflow: true, workflowRevision: saved.workflow.revision }); await reopened.settled();
+  const [blocked] = await reopened.list();
+  assert.equal(blocked.status, 'blocked'); assert.match(blocked.detail, /워크플로우가 변경/);
+  assert.equal(calls.length, 0, 'an old confirmation must not run a changed feature');
+  assert.equal((await getFeature(root, r.id)).phase, 'plan');
+  await reopened.reply(r.id, { body: '최신 내용을 반영해 다시 작성해줘' }); await reopened.settled();
+  assert.equal((await reopened.list())[0].status, 'workflow'); assert.equal(calls.length, 1);
+});
+
+test('evidence attached after review keeps the workflow approvable; a stale approval resumes by rewriting it', async (t) => {
+  const { root, calls, runner } = await runnerFor(t);
+  const r = await runner.submit({ author: '사장', body: '예약 서비스', mode: 'project' }); await runner.settled();
+  let [saved] = await runner.list();
+  const feature = await getFeature(root, r.id);
+  assert.equal((await runTestProof(root, r.id, [process.execPath, '-e', ''], { revision: feature.revision })).recorded, true);
+  await runner.reply(r.id, { approveWorkflow: true, workflowRevision: saved.workflow.revision }); await runner.settled();
+  assert.equal((await runner.list())[0].status, 'completed');
+  assert.deepEqual(calls.map((c) => c.phase), PHASES);
+
+  const other = await runner.submit({ author: '사장', body: '관리 화면', mode: 'project' }); await runner.settled();
+  saved = (await runner.list()).find((item) => item.id === other.id);
+  const edited = await getFeature(root, other.id);
+  await updateFeature(root, other.id, 'edit', { title: '바뀐 제목', description: edited.description, revision: edited.revision });
+  await runner.reply(other.id, { approveWorkflow: true, workflowRevision: saved.workflow.revision }); await runner.settled();
+  const blocked = (await runner.list()).find((item) => item.id === other.id);
+  assert.equal(blocked.status, 'blocked'); assert.equal(blocked.workflow, null);
+  await runner.reply(other.id, { resume: true }); await runner.settled();
+  const rewritten = (await runner.list()).find((item) => item.id === other.id);
+  assert.equal(rewritten.status, 'workflow'); assert.equal(rewritten.workflow.approved, false);
+  assert.equal(calls.filter((c) => c.phase === 'plan').length, 3, 'resume rewrites the workflow instead of repeating the failed approval');
+});
+
+test('a lost start record resumes from design only when the completed plan is exactly the approved one', async (t) => {
+  const { root, calls, runner } = await runnerFor(t);
+  const approveWithoutStart = async (id) => {
+    const file = join(root, '.wax', 'chat', 'requests', `${id}.json`);
+    const raw = JSON.parse(await readFile(file, 'utf8'));
+    raw.workflow.approved = true; raw.status = 'blocked';
+    await writeFile(file, JSON.stringify(raw));
+    return raw.workflow;
+  };
+  const r = await runner.submit({ author: '사장', body: '예약 서비스', mode: 'project' }); await runner.settled();
+  const workflow = await approveWithoutStart(r.id);
+  let feature = await getFeature(root, r.id);
+  await updateFeature(root, r.id, 'complete', { phase: 'plan', evidence: workflow.evidence, proofIds: workflow.proofIds, revision: feature.revision });
+  await runner.reply(r.id, { resume: true }); await runner.settled();
+  assert.equal((await runner.list())[0].status, 'completed');
+  assert.deepEqual(calls.map((c) => c.phase), PHASES);
+
+  const other = await runner.submit({ author: '사장', body: '관리 화면', mode: 'project' }); await runner.settled();
+  const approved = await approveWithoutStart(other.id);
+  feature = await getFeature(root, other.id);
+  feature = await updateFeature(root, other.id, 'save', { phase: 'plan', content: '# 다른 세션이 바꾼 계획', revision: feature.revision });
+  await updateFeature(root, other.id, 'complete', { phase: 'plan', evidence: approved.evidence, revision: feature.revision });
+  await runner.reply(other.id, { resume: true }); await runner.settled();
+  const blocked = (await runner.list()).find((item) => item.id === other.id);
+  assert.equal(blocked.status, 'blocked'); assert.equal(blocked.newRequest, true); assert.match(blocked.detail, /새 프로젝트 요청/);
+  await assert.rejects(runner.reply(other.id, { resume: true }), { status: 409 });
+  await assert.rejects(runner.reply(other.id, { body: '다시 해줘' }), /새 프로젝트 요청/);
+  assert.equal(calls.length, 6, 'a plan changed by another session never runs without a new review');
+});
+
+test('a correction sent right after approval rewrites the workflow instead of failing the start', async (t) => {
+  const { root, calls, runner } = await runnerFor(t);
+  const r = await runner.submit({ author: '사장', body: '예약 서비스', mode: 'project' }); await runner.settled();
+  const [saved] = await runner.list();
+  await withLock(join(root, '.wax', 'chat', 'presence.json.lock'), async () => {
+    await runner.reply(r.id, { approveWorkflow: true, workflowRevision: saved.workflow.revision });
+    await sleep(200);
+    await runner.reply(r.id, { body: '결제는 빼줘' });
+  });
+  await runner.settled();
+  const [rewritten] = await runner.list();
+  assert.equal(rewritten.status, 'workflow'); assert.equal(rewritten.workflow.approved, false);
+  assert.deepEqual(calls.map((c) => c.phase), ['plan', 'plan']);
+  assert.match(calls[1].prompt, /결제는 빼줘/);
+  assert.equal((await getFeature(root, r.id)).phase, 'plan');
+});
+
+test('approving while the plan job is still finishing is refused instead of becoming a silent pause', async (t) => {
+  const root = await project(t), calls = [], id = `request-${randomUUID()}`;
+  let runner, approval;
+  runner = createRequestRunner({ root, execute: executor(calls), notify: () => {
+    if (approval) return;
+    const r = JSON.parse(readFileSync(join(root, '.wax', 'chat', 'requests', `${id}.json`), 'utf8'));
+    if (r.status === 'workflow') approval = runner.reply(id, { approveWorkflow: true, workflowRevision: r.workflow.revision }).then(() => 'approved', (error) => error.status);
+  } });
+  t.after(() => runner.close());
+  const r = await runner.submit({ id, author: '사장', body: '예약 서비스', mode: 'project' });
+  await runner.settled();
+  assert.equal(await approval, 409);
+  const [saved] = await runner.list();
+  assert.equal(saved.status, 'workflow');
+  await runner.reply(r.id, { approveWorkflow: true, workflowRevision: saved.workflow.revision }); await runner.settled();
+  assert.equal((await runner.list())[0].status, 'completed');
+});
+
+test('input arriving while a project workflow is being written is included before confirmation', async (t) => {
+  let added = false;
+  const { calls, runner } = await runnerFor(t, { before: async (root, input, feature) => {
+    if (!added) { added = true; await runner.reply(feature.id, { body: '모바일 화면도 범위에 포함해줘' }); }
+  } });
+  await runner.submit({ author: '사장', body: '예약 서비스를 만들자', mode: 'project' });
+  await until(async () => (await runner.list())[0].status === 'workflow');
+  await runner.settled();
+  assert.deepEqual(calls.map((c) => c.phase), ['plan', 'plan']);
+  assert.match(calls[1].prompt, /모바일 화면도/);
+  assert.equal((await runner.list())[0].workflow.approved, false);
 });
 
 test('questions pause and a chat answer resumes the same phase', async (t) => {

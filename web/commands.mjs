@@ -8,7 +8,7 @@ export const TOOLS = [
 ];
 
 export const COMMANDS = [
-  { name: 'init', args: '', label: '시작하기(참여·작업·대시보드·PM)' },
+  { name: 'init', args: '', label: '시작 가이드 열기·팀 참여' },
   { name: 'join', args: '', label: '팀 채널에 참여' },
   { name: 'plan', args: '<작업ID> [요청]', label: '기획' },
   { name: 'design', args: '<작업ID>', label: '설계' },
