@@ -4,15 +4,17 @@ import { agentTool, resolveAgentCommand } from './agent-tools.mjs';
 import { runCodexSession } from './codex-session.mjs';
 import { createApproval, waitForApproval, finishDelivery, cancelApproval } from './approvals.mjs';
 import { WaxError } from './workflow.mjs';
+import { acpServers } from './chat/design-mcp.mjs';
 
 export async function runAgentSession(root, options = {}) {
   const { tool = 'codex', prompt, thread, outputSchema, signal, launch = spawn,
-    requestTimeoutMs = 30_000, approvalTimeoutMs = 120_000, executable } = options;
+    requestTimeoutMs = 30_000, approvalTimeoutMs = 120_000, executable, mcpServers = [] } = options;
   const { label } = agentTool(tool);
   if (tool === 'codex') return runCodexSession(root, options);
   if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 100_000) throw new WaxError('실행 요청은 100000자 이하여야 합니다.');
   if (thread !== undefined && (typeof thread !== 'string' || !thread || thread.length > 256)) throw new WaxError('잘못된 도구 세션 ID입니다.');
   signal?.throwIfAborted();
+  const servers = acpServers(mcpServers);
   root = await realpath(root);
   const [command, prefix] = executable ? [process.execPath, [executable]] : await resolveAgentCommand(tool);
   const acp = ['gemini', 'copilot'].includes(tool);
@@ -153,13 +155,13 @@ export async function runAgentSession(root, options = {}) {
   if (signal?.aborted) abort();
   try {
     if (acp) {
-      const init = await rpc('initialize', { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: 'wax', version: '0.12.10' } });
+      const init = await rpc('initialize', { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: 'wax', version: '0.12.11' } });
       if (init.protocolVersion !== 1) throw new WaxError('지원하지 않는 ACP 버전입니다.');
       if (thread && init.agentCapabilities?.loadSession) {
         sessionId = thread;
-        await rpc('session/load', { sessionId, cwd: root, mcpServers: [] });
+        await rpc('session/load', { sessionId, cwd: root, mcpServers: servers });
       } else {
-        const session = await rpc('session/new', { cwd: root, mcpServers: [] });
+        const session = await rpc('session/new', { cwd: root, mcpServers: servers });
         sessionId = session.sessionId;
       }
       if (typeof sessionId !== 'string' || !sessionId || sessionId.length > 256) throw new WaxError('ACP 세션 ID가 없습니다.');

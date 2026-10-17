@@ -20,6 +20,7 @@ import { isPlaying, startMusic, stopMusic } from './music.mjs';
 import { createOfficeMessenger } from './messenger.mjs';
 import { assignPersonas, faceThumb, loadFaceAssets } from './faces.mjs';
 import { PROJECT_TYPES } from '/project-types.mjs';
+import { renderStudioCollab } from './studio.mjs';
 
 const ROOMS = SIDE_ROOMS;
 const ROOM_ORDER = SIDE_ROOM_ORDER;
@@ -908,11 +909,18 @@ async function openAgent(author) {
   $('agent-dialog').showModal();
 }
 
-let boardTab = 'notes', noteFilter = 'all';
-function openStudio() {
+let boardTab = 'notes', noteFilter = 'all', designData = null;
+async function refreshDesign() {
+  try { designData = await api('/api/design'); } catch { designData ??= { targets: [], jobs: [] }; }
+  if ($('studio-dialog').open) openStudio({ fetch: false });
+}
+function openStudio({ fetch = true } = {}) {
   const panel = clear($('studio-content'));
+  const collab = el('div', { class: 'studio-collab' });
+  renderStudioCollab(collab, { data: designData ?? { targets: [], jobs: [] }, features: state.features.filter((f) => f.phase !== 'done'), api, token: state.config?.token, refresh: refreshDesign, demo: Boolean(demo || designData?.demo) });
+  if (fetch) refreshDesign();
   const features = state.features.filter(feature => feature.phase === 'design' || feature.designPreview);
-  panel.append(el('p', { text: '브리프 → 시안 제작 → 실제 화면·실행 환경 확인 → 개발 인계' }),
+  panel.append(collab, el('h3', { text: '워크플로우 시안' }), el('p', { text: '브리프 → 시안 제작 → 실제 화면·실행 환경 확인 → 개발 인계' }),
     el('p', { text: '화면 설계는 Figma, 이미지·배경·소품은 Midjourney·이미지 도구, 착용 이미지는 FASHN, 3D 모델은 Blender 등 작업에 맞는 도구를 사용합니다. 실제 연결 여부는 담당 AI가 워크플로우에서 확인합니다.' }));
   if (!features.length) panel.append(el('p', { class: 'empty', text: '현재 설계 중이거나 시안이 등록된 작업이 없습니다. 대시보드에서 만들고 싶은 결과를 요청하세요.' }));
   for (const feature of features) {
@@ -1063,10 +1071,11 @@ function connect({ resync = false } = {}) {
     if (team) state.tasks = team.tasks ?? [];
     if (team && (team.pm?.author ?? null) !== state.pm) { state.pm = team.pm?.author ?? null; updateScene(); }
   });
+  source.addEventListener('design', () => { if ($('studio-dialog').open) refreshDesign(); });
   source.addEventListener('features', (event) => {
     state.features = JSON.parse(event.data).features;
     updateScene();
-    if ($('studio-dialog').open) openStudio();
+    if ($('studio-dialog').open) openStudio({ fetch: false });
     refreshSkills();
     if ($('board-dialog').open) renderBoard();
     requestFrame();
@@ -1087,7 +1096,7 @@ for (const dialog of dialogSurface.dialogs) {
 for (const tab of $('board-dialog').querySelectorAll('[data-tab]')) tab.addEventListener('click', () => { boardTab = tab.dataset.tab; renderBoard(); });
 $('board-select').addEventListener('change', renderBoard);
 $('open-board').addEventListener('click', () => openBoard());
-$('open-studio').addEventListener('click', openStudio);
+$('open-studio').addEventListener('click', () => openStudio());
 $('chatter-toggle').addEventListener('click', () => { chatterOn = !chatterOn; store('wax.office.chatter', chatterOn ? 'on' : 'off'); applyChatter(); });
 applyChatter();
 setInterval(chatterTick, 2000);

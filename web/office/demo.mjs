@@ -1,4 +1,5 @@
 import { CLI_NEWS } from './cli-news.mjs';
+import { DEMO_DESIGN } from './studio-demo.mjs';
 import { demoOfficeSnapshot, normalizeDemoOptions } from '../workflow-demo-model.mjs';
 
 export function readDemoOfficeApi(snapshot, path) {
@@ -12,6 +13,7 @@ export function readDemoOfficeApi(snapshot, path) {
   if (route === '/api/profiles') return { profiles: snapshot.profiles };
   if (route === '/api/tools/news') return { ...CLI_NEWS, mode: 'bundled' };
   if (route === '/api/tools') return { tools: [] };
+  if (route === '/api/design') return DEMO_DESIGN;
   if (route === '/api/usage') return { claude: { limits: [{ kind: 'five_hour', percentUsed: Math.min(75, 20 + snapshot.view.index * 2) }], sessions: [], limitsAt: new Date().toISOString() } };
   if (route === '/api/channels/demo-work/messages') return { messages: snapshot.messages };
   if (route === '/api/board/demo-work') return { notes: snapshot.notes, reports: snapshot.reports };

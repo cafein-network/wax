@@ -12,6 +12,7 @@ import { joinPresence as joinSession, setPresence as updatePresence } from './pr
 import * as v from './validate.mjs';
 import { projectType, PROJECT_TYPES, qualityRequirements } from '../../web/project-types.mjs';
 import { assessQuality, qualityMessage } from '../quality.mjs';
+import { designHandoffs } from './design.mjs';
 
 const ACTIVE = new Set(['queued', 'running']);
 const modeOf = (mode = 'sm') => {
@@ -103,6 +104,7 @@ export function requestPrompt(request, feature) {
     'preview 항목에는 실제 시안(이미지·HTML·Blender·Studio 파일)을 만드세요. Markdown 설명만으로 시안을 대신하지 마세요. visual 항목은 실제 비교·검토 캡처(이미지·동영상)를 artifact에 연결하세요. 외부 디자인 결과는 프로젝트에 내보내세요.',
     'runtime/integration/visual 검사는 CLI test <id> --revision <현재 revision> --verification <해당 kind> --checks <항목 id,항목 id> -- <실행파일> <인수>로 기록하세요. 검증 종류는 실제 검사에 맞게 지정하고 문법·파일 존재·샘플 검사를 runtime/integration/visual로 표시하지 마세요. 도구 미연결·실행 불가 항목은 unverified입니다. checks의 proofIds는 최상위 proofIds에도 넣으세요.',
     request.quality ? `직전 검증과 수정 필요 사항: ${JSON.stringify(request.quality)}` : '',
+    request.handoffs?.length ? `대표가 확정해 인계한 디자인(이 시안을 기준으로 구현하세요): ${JSON.stringify(request.handoffs)}` : '',
     '보고에는 실제 변경과 검증, 다음 할 일을 간결한 한국어로 적으세요. document는 해당 단계의 구체적인 Markdown 문서입니다.',
     '반환 형식: outcome(complete/question/blocked), report, document, evidence, proofIds, checks. 검토에서 실제 결함을 찾으면 checks의 status=fail로 남기세요. 환경이 없어 검증하지 못했다면 unverified이며, 확인하지 못한 항목을 통과로 바꾸지 마세요. 질문/막힘일 때는 사용자에게 필요한 질문과 이유를 report에 적으세요.',
     `사용자 요청과 추가 지시(최신 지시를 반영):\n${JSON.stringify(request.messages.filter((m) => m.role === 'user').map((m) => m.text))}`,
@@ -209,7 +211,8 @@ export function createRequestRunner({ root, execute = runAgentSession, notify = 
           if (controller.signal.aborted) break;
           const phase = feature.phase, inputCount = r.messages.filter((m) => m.role === 'user').length;
           timeout = setTimeout(() => controller.abort(), phaseTimeoutMs);
-          const result = await execute(root, { tool: r.tool, prompt: requestPrompt({ ...r, root }, feature), thread: r.thread,
+          const handoffs = await designHandoffs(root, id).catch(() => []);
+          const result = await execute(root, { tool: r.tool, prompt: requestPrompt({ ...r, root, handoffs }, feature), thread: r.thread,
             outputSchema: RESULT_SCHEMA, signal: controller.signal, output() {}, log() {} });
           clearTimeout(timeout);
           if (controller.signal.aborted) break;

@@ -13,7 +13,7 @@ from strip_comments import strip
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMANDS = ('init', 'join', 'plan', 'design', 'implement', 'review', 'report', 'status', 'iterate', 'chat', 'daily', 'pm', 'work')
-CHAT = ('paths', 'validate', 'store', 'lock', 'channels', 'presence', 'board', 'digest', 'watcher', 'listeners', 'watch', 'skills', 'daily', 'team', 'usage', 'tools', 'tool-news', 'requests', 'server', 'cli')
+CHAT = ('paths', 'validate', 'store', 'lock', 'channels', 'presence', 'board', 'digest', 'watcher', 'listeners', 'watch', 'skills', 'daily', 'team', 'usage', 'tools', 'tool-news', 'requests', 'design-mcp', 'design', 'server', 'cli')
 WEB_TYPES = {'.html', '.mjs', '.css', '.svg', '.png', '.json'}
 
 
@@ -28,11 +28,11 @@ FILES = (
     'claude-mods/hooks.json', 'claude-mods/usage.mjs', 'hooks/hooks.json',
     'bin/wax-approval-hook.mjs', 'src/approvals.mjs', 'src/approval-hosts.mjs', 'src/approval-cli.mjs', 'src/codex-session.mjs', 'src/agent-tools.mjs', 'src/agent-session.mjs', 'docs/APPROVALS.md', 'scripts/verify-approvals-browser.mjs',
     'bin/wax.mjs', 'src/workflow.mjs', 'src/quality.mjs', 'src/context.mjs', 'src/file-lock.mjs', 'src/backup.mjs', 'src/evidence.mjs', 'src/proof-schema.mjs', 'src/diagnostics.mjs', 'docs/USER_GUIDE.md', 'docs/DESIGN_STUDIO.md', 'SECURITY.md', '.gitignore',
-    'scripts/build-commands.mjs', 'scripts/build-faces.mjs', 'scripts/import-side-prop.mjs', 'scripts/import-studio-art.mjs', 'scripts/package-release.py', 'scripts/strip_comments.py', 'scripts/install-codex.mjs', 'scripts/verify-windows.mjs', 'scripts/chat-demo.mjs', 'scripts/verify-requests-browser.mjs',
+    'scripts/build-commands.mjs', 'scripts/build-faces.mjs', 'scripts/import-side-prop.mjs', 'scripts/import-studio-art.mjs', 'scripts/package-release.py', 'scripts/strip_comments.py', 'scripts/install-codex.mjs', 'scripts/verify-windows.mjs', 'scripts/chat-demo.mjs', 'scripts/verify-requests-browser.mjs', 'scripts/verify-design-browser.mjs',
     *(f'src/chat/{name}.mjs' for name in CHAT),
     *web_files(ROOT),
     'test/workflow.test.mjs', 'test/project-quality.test.mjs', 'test/context.test.mjs', 'test/approvals.test.mjs', 'test/approvals-ui.test.mjs', 'test/approval-retention.test.mjs', 'test/backup-evidence.test.mjs', 'test/codex.test.mjs', 'test/diagnostics.test.mjs', 'test/package_test.py', 'test/chat-helpers.mjs', 'test/chat-requests.test.mjs', 'test/chat-start-guide.test.mjs', 'test/agent-session.test.mjs',
-    *(f'test/chat-{name}.test.mjs' for name in ('board', 'channels', 'cli', 'digest', 'presence', 'server', 'validate', 'office-model', 'ui-safety', 'team-daily', 'watch', 'skills', 'commands', 'usage', 'tools', 'dashboard-model', 'dashboard-proof', 'dialog-surface', 'workflow-demo', 'review-regressions', 'round4', 'round5', 'round6', 'tool-news', 'cross-session', 'inbox', 'faces')),
+    *(f'test/chat-{name}.test.mjs' for name in ('board', 'channels', 'cli', 'digest', 'presence', 'server', 'validate', 'office-model', 'ui-safety', 'team-daily', 'watch', 'skills', 'commands', 'usage', 'tools', 'dashboard-model', 'dashboard-proof', 'dialog-surface', 'workflow-demo', 'review-regressions', 'round4', 'round5', 'round6', 'tool-news', 'cross-session', 'inbox', 'faces', 'design')),
     *(f'commands/{name}.md' for name in COMMANDS),
     *(f'commands/wax/{name}.toml' for name in COMMANDS),
     *(f'skills/{name}/{file}' for name in COMMANDS for file in ('SKILL.md', 'run.mjs')),

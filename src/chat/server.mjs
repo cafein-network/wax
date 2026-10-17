@@ -19,6 +19,7 @@ import { toolNews } from './tool-news.mjs';
 import { listApprovals, decideApproval } from '../approvals.mjs';
 import { requestTools as discoverRequestTools } from '../agent-tools.mjs';
 import { createRequestRunner } from './requests.mjs';
+import { createDesignRunner, versionPreview } from './design.mjs';
 import { artifactFile } from '../quality.mjs';
 
 const publicDir = fileURLToPath(new URL('../../web/', import.meta.url));
@@ -69,7 +70,7 @@ async function readJson(req, maxBytes = 1_000_000) {
   return data;
 }
 
-export function createChatServer({ root, env = process.env, intervalMs = 1000, executeRequest, requestTools = discoverRequestTools } = {}) {
+export function createChatServer({ root, env = process.env, intervalMs = 1000, executeRequest, executeDesign, designMcp, requestTools = discoverRequestTools } = {}) {
   const token = randomBytes(32).toString('hex');
   const user = validAuthor(env.WAX_CHAT_USER || storedDashboardUser(root) || '대표');
   const onePerson = (agents) => agents.filter((agent) => agent.kind !== 'human' || agent.author === user);
@@ -82,6 +83,7 @@ export function createChatServer({ root, env = process.env, intervalMs = 1000, e
   const clients = new Set();
   const broadcast = (event, data) => { const frame = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`; for (const res of clients) res.write(frame); };
   const requests = createRequestRunner({ root, execute: executeRequest, notify: broadcast });
+  const design = createDesignRunner({ root, execute: executeDesign, mcp: designMcp, notify: broadcast });
   for (const event of ['message', 'note', 'report', 'presence', 'features', 'daily', 'tasks', 'approvals']) watcher.on(event, (data) => broadcast(event, event === 'presence' ? { ...data, agents: onePerson(data.agents) } : data));
   watcher.on('error', (error) => console.error('wax 대시보드 감시:', error.message));
   const heartbeat = setInterval(() => { for (const res of clients) res.write(': ping\n\n'); }, 15_000);
@@ -132,6 +134,14 @@ export function createChatServer({ root, env = process.env, intervalMs = 1000, e
       if (req.method === 'GET' && pathname === '/api/approvals') { json(res, 200, await listApprovals(root)); return; }
       if (req.method === 'GET' && pathname === '/api/presence') { json(res, 200, onePerson(await listPresence(root))); return; }
       if (req.method === 'GET' && pathname === '/api/features') { json(res, 200, await featureSummary(root)); return; }
+      if (req.method === 'GET' && pathname === '/api/design') { json(res, 200, await design.list()); return; }
+      const previewRoute = pathname.match(/^\/api\/design\/jobs\/(design-[a-f0-9-]{36})\/versions\/([1-9][0-9]{0,3})\/preview$/);
+      if (req.method === 'GET' && previewRoute) {
+        const path = await versionPreview(root, previewRoute[1], Number(previewRoute[2]));
+        res.writeHead(200, { 'content-type': { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg' }[extname(path).toLowerCase()], 'content-security-policy': "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox" });
+        res.end(await readFile(path));
+        return;
+      }
       const artifactRoute = pathname.match(/^\/api\/features\/([a-z0-9-]+)\/artifacts\/design-preview$/);
       if (req.method === 'GET' && artifactRoute) {
         const feature = await getFeature(root, artifactRoute[1]);
@@ -207,6 +217,35 @@ export function createChatServer({ root, env = process.env, intervalMs = 1000, e
         json(res, 200, requestRoute[2] === 'stop' ? await requests.stop(requestRoute[1]) : await requests.reply(requestRoute[1], { body: data.body, messageId: data.messageId, resume: data.resume === true, approveWorkflow: data.approveWorkflow === true, workflowRevision: data.workflowRevision }));
         return;
       }
+      if (req.method === 'POST' && pathname === '/api/design/targets') {
+        const data = await readJson(req, 8000);
+        const target = await design.saveTarget({ id: data.id, tool: data.tool, label: data.label, server: data.server, url: data.url, file: data.file, scene: data.scene, collection: data.collection });
+        broadcast('design', {});
+        json(res, 200, target);
+        return;
+      }
+      const checkRoute = pathname.match(/^\/api\/design\/targets\/(target-[a-f0-9]{8})\/check$/);
+      if (req.method === 'POST' && checkRoute) {
+        const data = await readJson(req, 1000);
+        const result = await design.check(checkRoute[1], data.agent);
+        broadcast('design', {});
+        json(res, 200, result);
+        return;
+      }
+      if (req.method === 'POST' && pathname === '/api/design/jobs') {
+        const data = await readJson(req, 12000);
+        json(res, 202, await design.submit({ targetId: data.targetId, agent: data.agent, title: data.title, brief: data.brief, feature: data.feature || undefined, clientId: data.clientId, author: user }));
+        return;
+      }
+      const jobRoute = pathname.match(/^\/api\/design\/jobs\/(design-[a-f0-9-]{36})\/(feedback|approve|reopen|handoff|stop|resume)$/);
+      if (req.method === 'POST' && jobRoute) {
+        const data = await readJson(req, 12000), [, id, action] = jobRoute;
+        const input = { version: data.version, revision: data.revision, author: user };
+        json(res, 200, action === 'feedback' ? await design.feedback(id, { ...input, text: data.text, clientId: data.clientId })
+          : action === 'approve' ? await design.approve(id, input) : action === 'reopen' ? await design.reopen(id, input) : action === 'handoff' ? await design.handoff(id, input)
+          : action === 'stop' ? await design.stop(id) : await design.resume(id));
+        return;
+      }
       const approvalRoute = pathname.match(/^\/api\/approvals\/([a-f0-9-]{36})\/decision$/);
       if (req.method === 'POST' && approvalRoute) {
         const data = await readJson(req, 4096);
@@ -262,8 +301,10 @@ export function createChatServer({ root, env = process.env, intervalMs = 1000, e
   };
   server.watcher = watcher;
   server.requests = requests;
+  server.design = design;
   server.shutdown = async () => {
     await requests.close();
+    await design.close();
     watcher.stop();
     clearInterval(heartbeat);
     for (const res of clients) res.end();

@@ -46,6 +46,7 @@ createInterface({ input:process.stdin }).on('line', (line) => {
     emit({jsonrpc:'2.0',id:m.id,result:{protocolVersion:1,agentCapabilities:{loadSession:true}}});
   } else if (m.method === 'session/new' || m.method === 'session/load') {
     if (config.resume) assert.equal(m.method,'session/load');
+    assert.deepEqual(m.params.mcpServers, config.mcp ?? []);
     emit({jsonrpc:'2.0',id:m.id,result:{sessionId:'session-1'}});
   } else if (m.method === 'session/prompt') {
     assert.equal(m.params.sessionId,'session-1'); promptId=m.id;
@@ -137,4 +138,12 @@ test('request retains chosen provider across reply and restart and rejects confl
   assert.deepEqual(calls.map((c) => c.tool), ['claude', 'claude']);
   assert.equal(calls[1].thread, 'session-1');
   assert.equal((await next.list())[0].tool, 'claude');
+});
+
+test('ACP sessions receive only validated stdio MCP servers and never their environment', async (t) => {
+  const mcp = [{ name: 'blender', command: '/opt/homebrew/bin/uvx', args: ['blender-mcp'], env: [] }];
+  const { root, options } = await setup(t, { tool: 'gemini', mcp });
+  const r = await runAgentSession(root, { ...options, mcpServers: [{ ...mcp[0], env: [{ name: 'TOKEN', value: 'secret' }] }] });
+  assert.equal(JSON.parse(r.message).outcome, 'question');
+  await assert.rejects(runAgentSession(root, { ...options, mcpServers: [{ name: 'figma', command: 'npx', args: [] }] }), /절대 경로/);
 });

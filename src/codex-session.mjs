@@ -88,7 +88,7 @@ export async function runCodexSession(root, { prompt, thread, executable, signal
         send({ id: message.id, error: { code: -32601, message: 'wax does not support this user interaction; no permission granted' } }).catch(fail);
         return;
       }
-      if (p.threadId !== threadId || (turnId && p.turnId !== turnId) || approvals.has(message.id)) {
+      if (p.threadId !== threadId || (turnId && p.turnId != null && p.turnId !== turnId) || (turnId && p.turnId == null && message.method !== 'mcpServer/elicitation/request') || approvals.has(message.id)) {
         fail(new Error('Codex 승인 요청의 세션 또는 요청 ID가 일치하지 않습니다.')); return;
       }
       const controller = new AbortController();
@@ -99,7 +99,7 @@ export async function runCodexSession(root, { prompt, thread, executable, signal
         timeoutMs: approvalTimeoutMs, emit: async (reply) => { if (controller.signal.aborted) throw new Error('Codex 요청이 종료되었습니다.'); replied = true; await send(reply); } })
         .catch(async (error) => {
           log(`wax 승인 연결: ${error.message}\n`);
-          if (!replied && !controller.signal.aborted && !closing) await send({ id: message.id, result: { decision: 'decline' } }).catch(fail);
+          if (!replied && !controller.signal.aborted && !closing) await send({ id: message.id, result: message.method === 'mcpServer/elicitation/request' ? { action: 'decline', content: null } : { decision: 'decline' } }).catch(fail);
         }).finally(() => approvals.delete(message.id));
       return;
     }

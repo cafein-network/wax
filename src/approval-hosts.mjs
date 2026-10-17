@@ -51,11 +51,14 @@ export async function handleClaudeApproval(input, { env = process.env, signal, e
   } finally { await cancelApproval(root, pending.request.id, pending.secret, 'Claude 연결 종료').catch(() => {}); }
 }
 
-export const CODEX_APPROVAL_METHODS = new Set(['item/commandExecution/requestApproval', 'item/fileChange/requestApproval']);
+export const CODEX_APPROVAL_METHODS = new Set(['item/commandExecution/requestApproval', 'item/fileChange/requestApproval', 'mcpServer/elicitation/request']);
+
+export const confirmOnly = (p) => p?.mode === 'form' && p.requestedSchema && typeof p.requestedSchema === 'object' && !Object.keys(p.requestedSchema.properties || {}).length;
 
 export async function handleCodexApproval(root, message, { item, signal, emit, timeoutMs = 120_000 } = {}) {
   if (!CODEX_APPROVAL_METHODS.has(message.method)) return false;
   const p = message.params;
+  if (message.method === 'mcpServer/elicitation/request') return handleCodexElicitation(root, message, { signal, emit, timeoutMs });
   if (!p || typeof p.threadId !== 'string' || typeof p.turnId !== 'string' || typeof p.itemId !== 'string') throw new WaxError('Codex 승인 요청의 세션·턴·항목 ID가 필요합니다.');
   const fileChange = message.method === 'item/fileChange/requestApproval';
   if (fileChange && (!item?.changes || !Object.keys(item.changes).length)) throw new WaxError('승인할 파일 변경 내용을 받지 못했습니다.');
@@ -71,6 +74,21 @@ export async function handleCodexApproval(root, message, { item, signal, emit, t
     const decision = await waitForApproval(root, pending, { signal });
     if (signal?.aborted) return true;
     await emit({ id: message.id, result: { decision: decision === 'allow' ? 'accept' : 'decline' } });
+    if (decision) await finishDelivery(root, pending.request.id, pending.secret);
+    return true;
+  } finally { await cancelApproval(root, pending.request.id, pending.secret, 'Codex 연결 종료').catch(() => {}); }
+}
+
+async function handleCodexElicitation(root, message, { signal, emit, timeoutMs }) {
+  const p = message.params;
+  if (!p || typeof p.threadId !== 'string' || typeof p.serverName !== 'string' || typeof p.message !== 'string') throw new WaxError('MCP 확인 요청의 세션·서버 정보가 필요합니다.');
+  if (!confirmOnly(p)) throw new WaxError('입력값이 필요한 MCP 요청은 wax에서 답할 수 없습니다. Codex 앱이나 터미널에서 진행하세요.');
+  const pending = await createApproval(root, { tool: 'codex', session: p.threadId, callId: String(message.id),
+    action: `MCP 도구 실행 (${p.serverName.slice(0, 60)})`, details: { serverName: p.serverName, message: p.message.slice(0, 4000), ...(p.turnId ? { turnId: p.turnId } : {}) } }, { timeoutMs });
+  try {
+    const decision = await waitForApproval(root, pending, { signal });
+    if (signal?.aborted) return true;
+    await emit({ id: message.id, result: decision === 'allow' ? { action: 'accept', content: {} } : { action: 'decline', content: null } });
     if (decision) await finishDelivery(root, pending.request.id, pending.secret);
     return true;
   } finally { await cancelApproval(root, pending.request.id, pending.secret, 'Codex 연결 종료').catch(() => {}); }
