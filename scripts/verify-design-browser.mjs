@@ -14,7 +14,7 @@ const root = await mkdtemp(join(tmpdir(), 'wax-design-browser-'));
 let server, browser;
 try {
   browser = await chromium.launch({ executablePath: process.env.WAX_CHROMIUM_EXECUTABLE || process.argv[3], headless: true });
-  const shooter = await browser.newPage({ viewport: { width: 360, height: 640 } });
+  const shooter = await browser.newPage({ locale: 'ko-KR', viewport: { width: 360, height: 640 } });
   const shots = [];
   for (const version of DEMO_DESIGN.jobs[0].versions) { await shooter.goto(version.previewUrl); shots.push(await shooter.screenshot()); }
   await shooter.close();
@@ -36,7 +36,7 @@ try {
   } });
   await new Promise((done) => server.listen(0, '127.0.0.1', done));
   const base = `http://127.0.0.1:${server.address().port}`;
-  const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' });
+  const context = await browser.newContext({ locale: 'ko-KR', viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' });
   const page = await context.newPage();
   const errors = []; page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(`${base}/office`);

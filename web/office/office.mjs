@@ -1,4 +1,4 @@
-import { api as liveApi, clear, commandLine, el, richText, storage as liveStorage, store as liveStore, timeLabel } from '/dom.mjs';
+import { api as liveApi, clear, commandLine, dateLocale, el, richText, storage as liveStorage, store as liveStore, timeLabel, tr } from '/dom.mjs';
 import { COMMANDS, TOOLS, commandFor, nextCommand } from '/commands.mjs';
 import { createDialogSurface } from '/dialog-surface.mjs';
 import { createOfficeDemo } from './demo.mjs';
@@ -416,7 +416,7 @@ function positionOverlay(time) {
       : quiet ? { text: reducedQuery.matches ? '…' : '.'.repeat(1 + Math.floor(time / 500) % 3), kind: 'quiet' } : null;
     if (bubble) {
       seen.add(bubbleKey);
-      const node = overlayFor(bubbleKey, () => el('div', { class: 'bubble', 'aria-hidden': 'true' }));
+      const node = overlayFor(bubbleKey, () => el('div', { class: 'bubble', 'aria-hidden': 'true', translate: 'no' }));
       node.textContent = bubble.text;
       node.dataset.kind = bubble.kind;
       node.style.setProperty('--tone', tone);
@@ -493,8 +493,8 @@ function openUsage() {
   if (claude.limits.length) {
     content.push(el('h3', { text: '플랜 사용량(계정 전체)' }), el('dl', { class: 'dl' }, claude.limits.flatMap((limit) => [
       el('dt', { text: LIMIT_LABELS[limit.kind] ?? limit.kind }),
-      el('dd', { text: `${limit.percentUsed}%${limit.resetsAt ? ` · ${new Date(limit.resetsAt).toLocaleString('ko-KR')} 초기화` : ''}` }),
-    ])), el('p', { class: 'kind', text: `${claude.limitsAt ? new Date(claude.limitsAt).toLocaleString('ko-KR') : ''}에 읽은 값입니다. 같은 계정의 모든 Claude Code 세션이 함께 씁니다.` }));
+      el('dd', { text: `${limit.percentUsed}%${limit.resetsAt ? ` · ${new Date(limit.resetsAt).toLocaleString(dateLocale())} 초기화` : ''}` }),
+    ])), el('p', { class: 'kind', text: `${claude.limitsAt ? new Date(claude.limitsAt).toLocaleString(dateLocale()) : ''}에 읽은 값입니다. 같은 계정의 모든 Claude Code 세션이 함께 씁니다.` }));
   } else {
     content.push(el('p', { class: 'empty', text: '아직 기록이 없습니다.' }));
   }
@@ -561,7 +561,7 @@ function refreshSkills({ initial = false } = {}) {
 }
 
 function showBubble(author, text, kind, ms = BUBBLE_MS, message = null) {
-  const flat = String(text).replace(/\s+/g, ' ').trim();
+  const flat = String(kind === 'message' || kind === 'note' ? text : tr(text)).replace(/\s+/g, ' ').trim();
   const max = kind === 'npc' ? 120 : 60;
   const shown = flat.length > max ? `${flat.slice(0, max)}…` : flat;
   ms = kind === 'emote' ? ms : bubbleMs(shown, ms);
@@ -890,7 +890,7 @@ async function openAgent(author) {
     el('dt', { text: '위치' }), el('dd', { text: item?.spot ? `${roomOf(item.room).label}${item.ceo ? ' (대표)' : state.pm === author ? ' (PM)' : ''}` : '-' }),
     el('dt', { text: '작업' }), el('dd', {}, agent?.feature ? (demo ? el('button', { type: 'button', class: 'link', text: '데모 화이트보드 열기', onclick: () => { $('agent-dialog').close(); openBoard('demo-work'); } }) : el('a', { href: `/chat?channel=${encodeURIComponent(agent.feature)}`, text: `${agent.feature} 채널 열기` })) : '-'),
     el('dt', { text: '메모' }), el('dd', { text: agent?.note ?? '-' }),
-    el('dt', { text: '마지막 활동' }), el('dd', { text: agent ? new Date(agent.lastActive).toLocaleString('ko-KR') : '-' }),
+    el('dt', { text: '마지막 활동' }), el('dd', { text: agent ? new Date(agent.lastActive).toLocaleString(dateLocale()) : '-' }),
     );
   const recentList = recent.length ? el('ul', { class: 'note-list' }, recent.map((r) => el('li', {},
     el('div', {}, el('span', { class: 'badge', text: r.label }), ' ', el('span', { class: 'kind', text: `${r.channel === 'general' ? state.config.project : r.channel} · ${timeLabel(r.at)}` })),
@@ -982,10 +982,10 @@ function renderBoard() {
     const viewer = el('div');
     panel.append(board.reports.length ? el('ul', { class: 'note-list' }, board.reports.slice().reverse().map((report) => el('li', {},
       el('button', { type: 'button', text: `보고서 ${String(report.number).padStart(3, '0')}`, onclick: async () => {
-        try { clear(viewer).append(el('pre', { class: 'markdown', text: await api(`/api/board/${encodeURIComponent(id)}/reports/${report.number}`) })); }
+        try { clear(viewer).append(el('pre', { class: 'markdown', translate: 'no', text: await api(`/api/board/${encodeURIComponent(id)}/reports/${report.number}`) })); }
         catch (error) { clear(viewer).append(el('p', { class: 'error', text: error.message })); }
       } }), ' ',
-      el('span', { class: 'kind', text: `${report.author} · ${new Date(report.at).toLocaleString('ko-KR')} · 노트 ${report.noteCount}개 · ${report.path}` }),
+      el('span', { class: 'kind', text: `${report.author} · ${new Date(report.at).toLocaleString(dateLocale())} · 노트 ${report.noteCount}개 · ${report.path}` }),
     ))) : el('p', { class: 'empty', text: '아직 보고서가 없습니다.' }), viewer);
   }
 }
@@ -1005,7 +1005,7 @@ function digestSection(id) {
         el('div', { class: 'row' },
           el('button', { type: 'button', text: '복사', onclick: () => navigator.clipboard?.writeText(digest.markdown) }), ' ',
           el('a', { href: blob, download: `${id}-digest.md`, text: '다운로드' })),
-        el('pre', { class: 'markdown', text: digest.markdown }));
+        el('pre', { class: 'markdown', translate: 'no', text: digest.markdown }));
     } catch (error) { clear(out).append(el('p', { class: 'error', text: error.message })); }
   } });
   return el('section', {}, el('h3', { text: '요약 보고서' }),
@@ -1046,7 +1046,7 @@ function connect({ resync = false } = {}) {
     addNote(board, note);
     addToOrder([note.author]);
     state.currentBoard = board;
-    showBubble(note.author, `[${TYPE_LABELS[note.type]}] ${note.body}`, 'note');
+    showBubble(note.author, `[${tr(TYPE_LABELS[note.type])}] ${note.body}`, 'note');
     refreshSkills();
     announce(`${note.author}: ${board} 화이트보드에 ${TYPE_LABELS[note.type]}`);
     updateScene();

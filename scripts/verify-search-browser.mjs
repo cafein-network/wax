@@ -25,7 +25,7 @@ try {
   await new Promise((done) => server.listen(0, '127.0.0.1', done));
   const base = `http://127.0.0.1:${server.address().port}`;
   browser = await chromium.launch({ executablePath: process.env.WAX_CHROMIUM_EXECUTABLE || process.argv[3], headless: true });
-  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  const page = await browser.newPage({ locale: 'ko-KR', viewport: { width: 1280, height: 900 } });
   const errors = []; page.on('pageerror', (error) => errors.push(error.message));
   page.on('dialog', (dialog) => { errors.push(`dialog: ${dialog.message()}`); dialog.dismiss(); });
   await page.goto(`${base}/search`);
@@ -108,7 +108,7 @@ try {
   await page.locator('#search-q').fill('복구확인');
   await page.locator('.search-item', { hasText: '중단 뒤에 쓴 복구확인 메모' }).waitFor();
 
-  const phone = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const phone = await browser.newPage({ locale: 'ko-KR', viewport: { width: 390, height: 844 } });
   await phone.goto(`${base}/search?q=${encodeURIComponent('Claude Code')}`);
   await phone.locator('.search-item').first().waitFor();
   assert.equal(await phone.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);

@@ -67,7 +67,7 @@ function render() {
   if (listSignature !== nextList) {
     listSignature = nextList;
     clear($('requests')).append(...requests.map((item) => el('li', {}, el('button', { type: 'button', 'aria-current': String(item.id === currentId), onclick: () => select(item.id) },
-      el('span', { class: 'request-name', text: item.title }), el('span', { class: 'request-meta', text: `${modeLabel(item.mode)} · ${STATUS[item.status] ?? item.status} · ${labelsFor(item.mode)[item.phase] ?? '완료'}` })))));
+      el('span', { class: 'request-name', translate: 'no', text: item.title }), el('span', { class: 'request-meta', text: `${modeLabel(item.mode)} · ${STATUS[item.status] ?? item.status} · ${labelsFor(item.mode)[item.phase] ?? '완료'}` })))));
   }
   if (r) {
     const next = requestAction(r, requests);
@@ -114,7 +114,7 @@ function render() {
       if (previousIds.has(m.id)) continue;
       $('conversation').append(el('article', { class: m.role === 'user' ? 'user-message' : 'assistant-message', dataset: { message: m.id } },
         el('header', {}, el('strong', { text: m.role === 'user' ? '나' : toolLabel() }), el('span', { text: `${m.phase ? labels[m.phase] + ' · ' : ''}${timeLabel(m.at)}` })),
-        el('div', { class: 'message-body', text: m.text })));
+        el('div', { class: 'message-body', translate: 'no', text: m.text })));
     }
     messageSignature = signature;
   }

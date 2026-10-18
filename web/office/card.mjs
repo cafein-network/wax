@@ -1,4 +1,4 @@
-import { el } from '/dom.mjs';
+import { dateLocale, el } from '/dom.mjs';
 import { dressed } from './paint.mjs';
 import { icon, achievementIcon } from '../icons.mjs';
 
@@ -71,7 +71,7 @@ export function cardTabs(panels) {
 }
 
 const hours = (ms) => (ms >= 3_600_000 ? `${(ms / 3_600_000).toFixed(1)}시간` : `${Math.round(ms / 60_000)}분`);
-const date = (iso) => (iso ? new Date(iso).toLocaleDateString('ko-KR') : '-');
+const date = (iso) => (iso ? new Date(iso).toLocaleDateString(dateLocale()) : '-');
 
 export function profileCard({ author, kindLabel, profile, sprite, look, face, extra, department, lead = false, tabs = [] }) {
   const m = profile?.metrics ?? { bugRate: null, bugsFound: 0, commits: 0, workMs: 0, tasksDone: 0, tests: 0 };

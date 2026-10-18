@@ -97,7 +97,7 @@ function renderAttention() {
   const items = deriveAttention(day, { feature: focus, limit: 5 });
   $('attention-count').textContent = focus ? `${focus} · 최대 5건` : '최대 5건';
   clear($('attention')).append(...(items.length ? items.map((item) => el('li', { class: 'attention-item', dataset: { kind: item.kind } },
-    el('strong', { text: item.title }), el('p', { class: 'attention-detail', text: item.detail }),
+    el('strong', { text: item.title }), el('p', { class: 'attention-detail', translate: 'no', text: item.detail }),
     el('span', { class: 'record-meta', text: `${item.feature ?? '전체'} · ${item.kind === 'test' ? day.date + ' 기록' : '현재 현황'} · ${timeLabel(item.at)} · ${item.recordId}` }),
     el('div', { class: 'attention-actions' },
       el('button', { type: 'button', class: 'link', text: item.kind === 'test' ? '타임라인에서 확인' : item.kind === 'blocked' ? '업무 확인' : '질문 확인', onclick: () => item.kind === 'test' ? showTimeline('fail', item.recordId) : goTo(item.target, item.recordId) }),
@@ -134,7 +134,7 @@ function eventNode(event) {
         event.feature ? el('span', { class: 'kind', text: event.feature }) : null,
         el('strong', { text: event.title })),
       event.doing ? el('div', { class: 'doing' }, el('span', { class: 'kind', text: '하는 일 ' }), event.doing) : null,
-      event.detail && event.type !== 'message' ? el('div', { class: 'detail', text: event.detail }) : null,
+      event.detail && event.type !== 'message' ? el('div', { class: 'detail', translate: 'no', text: event.detail }) : null,
       event.type === 'message' ? el('div', { class: 'detail' }, richText(event.body ?? event.detail)) : null,
       ['proof', 'note', 'message'].includes(event.type) ? recordActions(event) : null));
 }
@@ -231,7 +231,7 @@ function renderTeam() {
       el('span', { class: 'kind', text: agent.model ? `${KIND_LABELS[agent.kind] ?? agent.kind} · ${agent.model}` : KIND_LABELS[agent.kind] ?? agent.kind, title: agent.model ? '모델은 세션이 스스로 밝힌 값입니다' : null }),
       el('span', { class: 'badge', text: STATE_LABELS[agent.effectiveState] ?? agent.effectiveState }),
       agent.listening ? el('span', { class: 'badge', text: '듣는 중', title: '채널을 듣고 있어 @이름으로 부르면 곧 답합니다' }) : null),
-    agent.note ? el('div', { class: 'doing', text: agent.note }) : null,
+    agent.note ? el('div', { class: 'doing', translate: 'no', text: agent.note }) : null,
     ((next) => (next ? commandLine('다음 명령', next.text, next.reason) : null))(nextCommand({ agent, features: day.features, tasks: day.tasks })),
     el('div', { class: 'kind', text: `${agent.feature ?? '전체'} · ${timeLabel(agent.lastActive)}${tasksFor(agent.author).length ? ` · 맡은 업무 ${tasksFor(agent.author).length}` : ''}` })))
     : [el('li', { class: 'empty', text: '아직 참여한 AI 세션이 없습니다. 쓰는 도구에서 /wax:init(처음) 또는 /wax:join(다른 세션)을 실행하면 들어옵니다. Codex는 $wax:join, Antigravity CLI는 /join입니다.' })]));
@@ -250,8 +250,8 @@ function taskNode(task) {
       el('span', { class: 'badge', text: TASK_LABELS[task.status] }),
       el('strong', { text: `${task.to}` }),
       el('span', { class: 'kind', text: `${task.feature} · ${phaseLabel(task.phase)}` })),
-    el('div', { class: 'detail', text: task.note }),
-    task.updates.at(-1)?.note ? el('div', { class: 'doing', text: `${TASK_LABELS[task.updates.at(-1).status]}: ${task.updates.at(-1).note}` }) : null,
+    el('div', { class: 'detail', translate: 'no', text: task.note }),
+    task.updates.at(-1)?.note ? el('div', { class: 'doing' }, `${TASK_LABELS[task.updates.at(-1).status]}: `, el('span', { translate: 'no', text: task.updates.at(-1).note })) : null,
     el('div', { class: 'kind', text: `${task.id} · ${timeLabel(task.at)} 배정` }),
     ((text) => text ? commandLine(`${task.to} 세션에서 실행`, text, '배정만으로 실행되지 않는 세션은 이 명령으로 시작합니다') : null)(commandFor(day.agents.find((a) => a.author === task.to)?.kind, 'work', task.id)),
     isPm() ? el('button', { type: 'button', class: 'link', onclick: () => cancelTask(task) }, '배정 취소') : null);
@@ -280,7 +280,7 @@ function renderTasks() {
     const open = day.features.filter((f) => f.phase !== 'done');
     const signature = JSON.stringify(open.map((f) => [f.id, f.title]));
     if ($('assign-feature').dataset.signature !== signature) {
-      clear($('assign-feature')).append(...open.map((f) => el('option', { value: f.id, text: `${f.id} — ${f.title}` })));
+      clear($('assign-feature')).append(...open.map((f) => el('option', { value: f.id, translate: 'no', text: `${f.id} — ${f.title}` })));
       $('assign-feature').dataset.signature = signature;
     }
     $('assign-empty').hidden = open.length > 0;
@@ -297,7 +297,7 @@ function renderFeatures() {
   clear($('features')).append(...(day.features.length ? day.features.map((feature) => {
     const index = feature.phase === 'done' ? PHASE_ORDER.length : PHASE_ORDER.indexOf(feature.phase);
     return el('li', { class: feature.id === focus ? 'focused' : '' },
-      el('div', { class: 'agent-head' }, el('button', { type: 'button', class: 'link', onclick: () => setFocus(feature.id), text: feature.id }), el('span', { class: 'kind', text: feature.title })),
+      el('div', { class: 'agent-head' }, el('button', { type: 'button', class: 'link', onclick: () => setFocus(feature.id), text: feature.id }), el('span', { class: 'kind', translate: 'no', text: feature.title })),
       el('ol', { class: 'stepper', 'aria-label': `${feature.id} 진행 단계: ${phaseLabel(feature.phase)}` }, PHASE_ORDER.map((phase, i) => el('li', {
         class: i < index ? 'done' : i === index ? 'current' : '',
       }, icon(phase, 14), phaseLabel(phase)))));

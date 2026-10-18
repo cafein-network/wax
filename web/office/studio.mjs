@@ -65,7 +65,7 @@ export function renderStudioCollab(panel, { data, features = [], api, token, ref
         el('button', { type: 'button', disabled: busy(key) || demo, onclick: () => run(key, () => post(`/api/design/targets/${target.id}/check`, { agent: agent.id })) }, busy(key) ? '검사 중…' : '연결 검사'));
     }));
     return el('section', { class: 'card studio-target' },
-      el('h4', { text: `${TOOL_LABELS[target.tool]} · ${target.label}` }),
+      el('h4', { translate: 'no', text: `${TOOL_LABELS[target.tool]} · ${target.label}` }),
       el('p', { class: 'kind' }, targetSummary(target), target.tool === 'figma' ? el('a', { href: target.figma.url, target: '_blank', rel: 'noopener', text: ' 원본 열기 ↗' }) : null),
       checks);
   }
@@ -121,7 +121,7 @@ export function renderStudioCollab(panel, { data, features = [], api, token, ref
     return el('li', { class: current ? 'studio-version current' : 'studio-version' },
       el('strong', { text: `v${v.n}${job.approved?.version === v.n ? ' · 확정' : ''}` }),
       url ? el('img', { src: url, alt: `${job.title} v${v.n} 미리보기`, class: current ? 'studio-preview-image' : 'studio-thumb', loading: 'lazy' }) : null,
-      v.changes ? el('p', { text: `바뀐 점: ${v.changes}` }) : null,
+      v.changes ? el('p', {}, '바뀐 점: ', el('span', { translate: 'no', text: v.changes })) : null,
       el('p', { class: 'kind' }, job.tool === 'figma' ? `결과 프레임 ${v.source.nodeId}` : `오브젝트 ${v.source.objects.join(', ') || '-'}${v.source.exported ? ` · 내보낸 파일 ${v.source.exported}` : ''}`,
         link ? el('a', { href: link, target: '_blank', rel: 'noopener', text: ' Figma에서 열기 ↗' }) : null));
   }
@@ -144,11 +144,11 @@ export function renderStudioCollab(panel, { data, features = [], api, token, ref
     if (job.status === 'approved') actions.append(act('handoff', `확정 v${job.approved.version} 개발에 인계`, { version: job.approved.version }), act('reopen', '확정 취소', { version: job.approved.version }));
     const versions = el('ol', { class: 'studio-versions', reversed: '' }, ...[...job.versions].reverse().map((v) => version(job, v, v.n === n)));
     return el('section', { class: 'card studio-job', 'data-status': job.status },
-      el('h4', { text: job.title }),
+      el('h4', { translate: 'no', text: job.title }),
       el('p', { class: 'kind', text: `${TOOL_LABELS[job.tool]} · ${AGENTS.find((a) => a.id === job.agent)?.label ?? job.agent} · ${JOB_LABELS[job.status] ?? job.status}${job.feature ? ` · 인계 대상 ${job.feature}` : ''}` }),
       el('p', { text: job.detail }), el('p', { class: 'studio-next', text: `다음 행동: ${jobNext(job)}` }),
       job.versions.length ? versions : el('p', { class: 'empty', text: '아직 받은 버전이 없습니다. 디자인 도구에서 결과를 받아 와야 버전이 생깁니다.' }),
-      job.feedback.length ? el('details', {}, el('summary', { text: `대표 의견 ${job.feedback.length}건` }), el('ul', {}, ...job.feedback.map((f) => el('li', { text: `v${f.version}: ${f.text}` })))) : null,
+      job.feedback.length ? el('details', {}, el('summary', { text: `대표 의견 ${job.feedback.length}건` }), el('ul', {}, ...job.feedback.map((f) => el('li', { translate: 'no', text: `v${f.version}: ${f.text}` })))) : null,
       job.handoff ? el('p', { class: 'studio-handoff', text: `개발 인계: v${job.handoff.version} · ${job.handoff.doc} · 미리보기 ${job.handoff.preview}` }) : null,
       actions);
   }

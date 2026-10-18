@@ -71,8 +71,8 @@ function renderResults(result, append) {
     const title = item.title || (item.channel ? `#${item.channel}` : item.feature) || item.ref;
     list.append(el('li', { class: 'search-item' },
       el('p', { class: 'search-meta' }, el('span', { class: 'search-kind', text: item.kindLabel }), [item.feature, item.author, PHASES[item.phase] ?? item.phase, item.status, when].filter(Boolean).join(' · ')),
-      el('h3', {}, item.link ? el('a', { href: item.link }, marked(title, item.titleMarks)) : marked(title, item.titleMarks)),
-      item.snippet.text ? el('p', { class: 'search-snippet' }, marked(item.snippet.text, item.snippet.marks)) : null,
+      el('h3', { translate: 'no' }, item.link ? el('a', { href: item.link }, marked(title, item.titleMarks)) : marked(title, item.titleMarks)),
+      item.snippet.text ? el('p', { class: 'search-snippet', translate: 'no' }, marked(item.snippet.text, item.snippet.marks)) : null,
       el('p', { class: 'search-source' }, '원문 ', el('code', { text: item.source ?? item.ref }), item.link ? el('a', { href: item.link, text: ' 화면에서 열기 →' }) : null)));
   }
   const how = result.methods?.length ? ` · ${result.methods.map((m) => `${m.term}: ${({ trigram: '부분 일치', bigram: '두 글자 조각', scan: '전체 훑기' })[m.via]}`).join(', ')}` : '';

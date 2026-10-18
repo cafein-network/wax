@@ -331,7 +331,7 @@ export function npcGuide(npcId, context = {}) {
           return { heading: `${tool.label} 소식${news.latest ? ` · 확인된 릴리스 ${news.latest}` : ''}`, items: [...news.items.map((item) => `${item.version ? `${item.version} · ` : ''}${item.original ? '공식 원문 · ' : ''}${item.text}`), ...(news.source ? [`출처: ${news.source}`] : [])] };
         }),
         { heading: '소식 확인', items: [
-          ...TOOLS.map(tool => { const news = newsOf(tool.kind, context); return `${tool.label} · ${news?.verifiedAt ? `공식 확인 ${new Date(news.verifiedAt).toLocaleString('ko-KR')}` : `기본 자료 ${CLI_NEWS.asOf}`}${news?.checkStatus === 'unavailable' ? ' · 공식 조회 실패, 마지막 자료 유지' : ''}`; }),
+          ...TOOLS.map(tool => { const news = newsOf(tool.kind, context); return `${tool.label} · ${news?.verifiedAt ? `공식 확인 ${new Date(news.verifiedAt).toLocaleString(globalThis.document?.documentElement.lang === 'en' ? 'en-US' : 'ko-KR')}` : `기본 자료 ${CLI_NEWS.asOf}`}${news?.checkStatus === 'unavailable' ? ' · 공식 조회 실패, 마지막 자료 유지' : ''}`; }),
           (context.toolNews?.mode === 'bundled' ? '이 화면은 기본 자료를 사용해요. 공개 데모는 외부에 접속하지 않아요.' : '공식 릴리스는 화면을 사용하는 동안 1시간 간격으로 확인해요. 조회에 실패하면 마지막 자료를 유지하고 5분 후 다시 시도해요.'),
         ] },
         { heading: '알아 두기', items: ['새 릴리스는 공식 변경 이력에서 확인해요. 검토된 한국어 요약이 아직 없는 새 소식은 공식 원문으로 표시해요. 설치 버전과 소식 기준은 별도로 보여 드려요.', '설치 버전은 이 PC의 --version을 10분마다 읽어요. 아래 버튼으로 설치 버전과 공식 소식을 각각 즉시 다시 확인할 수 있어요.', '공식 소식 조회에는 프로젝트·설치 버전·세션 정보를 보내지 않아요. 오프라인으로 쓰려면 서버 실행 시 WAX_TOOL_NEWS=off를 설정하세요.'] },

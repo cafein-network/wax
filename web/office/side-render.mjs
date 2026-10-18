@@ -110,7 +110,7 @@ function drawLabel(ctx, building, id) {
   ctx.fillRect(1090, 20, 170, 34);
   ctx.fillStyle = '#fdfcf6';
   ctx.font = 'bold 18px sans-serif';
-  ctx.fillText(`${floorName(building, id)} ${building.rooms[id].label}`, 1104, 44);
+  ctx.fillText(`${floorName(building, id)} ${globalThis.waxLocale?.translate(building.rooms[id].label) ?? building.rooms[id].label}`, 1104, 44);
 }
 
 function foldedChair(ctx, x, bottom, h = 62) {

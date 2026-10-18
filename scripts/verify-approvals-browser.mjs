@@ -20,6 +20,7 @@ try {
   browser = await puppeteer.launch({ headless: true, pipe: true, dumpio: process.env.WAX_BROWSER_DEBUG === '1', executablePath: process.env.WAX_CHROMIUM_EXECUTABLE || process.argv[3] });
   console.log('Opening approvals page…');
   const page = await browser.newPage();
+  await page.evaluateOnNewDocument(() => localStorage.setItem('wax.language', 'ko'));
   await page.setViewport({ width: 1200, height: 950 });
   const errors = []; page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(`${base}/chat`);

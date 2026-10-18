@@ -52,7 +52,7 @@ try {
   } });
   await server.startWatching(); server.listen(0, '127.0.0.1'); await once(server, 'listening');
   browser = await chromium.launch({ headless: true, executablePath: process.env.WAX_CHROMIUM_EXECUTABLE || process.argv[3] });
-  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
+  const page = await browser.newPage({ locale: 'ko-KR', viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
   const errors = []; page.on('pageerror', (error) => errors.push(error.message));
   const base = `http://127.0.0.1:${server.address().port}`;
   await page.goto(base);
@@ -126,7 +126,7 @@ try {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `${width}px: no horizontal overflow`);
   }
   if (screenshots) {
-    const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
+    const mobile = await browser.newPage({ locale: 'ko-KR', viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
     await mobile.goto(base + '/?mode=sm');
     await mobile.locator('#team-status').filter({ hasText: '2개 세션' }).waitFor();
     assert.equal(await mobile.locator('input[name="mode"][value="sm"]').isChecked(), true);

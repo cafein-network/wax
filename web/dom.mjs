@@ -16,10 +16,13 @@ export function el(tag, props = {}, ...children) {
   return node;
 }
 
+export const tr = (text) => globalThis.waxLocale?.translate(text) ?? text;
+export const dateLocale = () => (globalThis.document?.documentElement.lang === 'en' ? 'en-US' : 'ko-KR');
+
 export const clear = (node) => { node.replaceChildren(); return node; };
 
 export function richText(text) {
-  const frag = document.createDocumentFragment();
+  const frag = el('span', { translate: 'no' });
   for (const part of String(text).split(/(@[\p{L}\p{N}_.-]+)/u)) {
     if (!part) continue;
     frag.append(part.startsWith('@') ? el('mark', { class: 'mention', text: part }) : document.createTextNode(part));
@@ -29,7 +32,7 @@ export function richText(text) {
 
 export function timeLabel(iso) {
   const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
 export async function api(path, { method = 'GET', body, token } = {}) {
@@ -57,5 +60,5 @@ export function commandLine(label, text, reason) {
     try { await navigator.clipboard.writeText(text); button.textContent = '복사됨'; setTimeout(() => { button.textContent = '복사'; }, 1500); }
     catch { button.textContent = '복사 실패'; }
   });
-  return el('div', { class: 'next-cmd' }, el('span', { class: 'kind', text: `${label} ` }), el('code', { text }), ' ', button, reason ? el('span', { class: 'kind', text: ` · ${reason}` }) : null);
+  return el('div', { class: 'next-cmd' }, el('span', { class: 'kind', text: `${label} ` }), el('code', { translate: 'no', text }), ' ', button, reason ? el('span', { class: 'kind', text: ` · ${reason}` }) : null);
 }
