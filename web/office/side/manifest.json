@@ -1,0 +1,3826 @@
+{
+  "schema": 3,
+  "view": "side",
+  "standHeight": 180,
+  "variants": {
+    "claude": null,
+    "codex": {
+      "hue": 220,
+      "saturation": 0.12,
+      "lightness": -0.22
+    },
+    "gemini": {
+      "hue": 220,
+      "saturation": 0.6,
+      "lightness": -0.12
+    },
+    "copilot": {
+      "hue": 270,
+      "saturation": 0.45,
+      "lightness": -0.05
+    },
+    "antigravity": {
+      "hue": 350,
+      "saturation": 0.65,
+      "lightness": -0.15
+    },
+    "human": {
+      "hue": 215,
+      "saturation": 0.12,
+      "lightness": 0.02
+    },
+    "other": {
+      "hue": 80,
+      "saturation": 0.3,
+      "lightness": -0.2
+    }
+  },
+  "source": {
+    "wax-brian.png": "58b4f448bc4730ffb855c6ac4eabf71dde6e3397a1ce6187682b35b2e16537b1",
+    "poses/brian-coffee.png": "e53f1738a2d19884fe6afe36e61d4814428cb5539efe131855472b63ba0dd7ad",
+    "poses/brian-doze.png": "dec6c7f24eb3959e3c9856133e97cb048a339cc1215cad1c8e62abdd53fb0b4a",
+    "poses/brian-type.png": "abdba88c15f9e18289652ca9b7b3b5cc8788ec05d664cd22f34a6f569f78b87e",
+    "wax-emily.png": "2dc8a1c222450e1155a37e63a0dc262ad78890fc31e6fe70244bc7354e719297",
+    "poses/emily-coffee.png": "3f573d8e2852c82b6bafafb896aca4b91089952ffe4816a46565b201531873e0",
+    "poses/emily-doze.png": "efd3f0d8689467e392ee386ab69214dc2c0d37ac10b69606eb07f5f258450eea",
+    "poses/emily-type.png": "835ec5fa475cdb4333e2ebe1d3bed7e93cc1ba409fb54cb6909778f09bbf0224",
+    "wax-f01.png": "248e27760310998156dd2f236f1a9cc0246a753dae3d96522b41cf95065fc66a",
+    "poses/f01-coffee.png": "ac996ca5f4dc0647eeb84b71e1bb786298454c0be7187a8e87ac9f660018f7ef",
+    "poses/f01-doze.png": "be8ae0381e29b71f670a18973f4671c5fff404385753cb223f3ca50a10e39817",
+    "poses/f01-type.png": "401d664b415f7ea4c62dc88810bd330b728adc67aa2cb08c493e9213026f033e",
+    "wax-f02.png": "51081a4a28e447f2374791bd08c0142324159fa2180d35a4fcf13daa794c8cfe",
+    "poses/f02-coffee.png": "a80f98aa325ccafa1f9672d0c55a3b292d61a722a1b82e2f5f5d8df96bb3cff2",
+    "poses/f02-doze.png": "169053fda90d90aaf10f9bdc48ac1ae3227613bab382f34599aea82255543ba7",
+    "poses/f02-type.png": "d161e48ce15519daf691406713267d111d6662f4851a6013dcc2e0ce27f0b78d",
+    "wax-f03.png": "76d7ef01816136e1fc14d4aa6220d68d3cff6f69f60fcdff7bb8cfcb3b1d2bfe",
+    "poses/f03-coffee.png": "01deff842a73a9e92a764501a5c07a2844829a3a5399454e7254dc9721b580e2",
+    "poses/f03-doze.png": "4f62b22cfbc0e8b202ff7beb3e25d6d4394567a99414097e3d0305a7f1aa7dce",
+    "poses/f03-type.png": "22f36ba901c222100120759a7a677beeacf808f1afdad29a868a93d59a496321",
+    "wax-f04.png": "536b6f05e41ab8428d106c6bda6cd7bec45ee923e5b09866ed730489727386b8",
+    "poses/f04-coffee.png": "36e679e4dfce3e269ffa13fe3818a261a4b4ef41a4a5568aaa50339d09eecddc",
+    "poses/f04-doze.png": "c9b99f985146dd8d16141b5b657dd01f1b1884e0483ac6d4645e4dcd23d2ee29",
+    "poses/f04-type.png": "2c35572e625163b3e70aaa41ced2f7ed25d6a607fd162d4be37945b2c02ea1b9",
+    "wax-f05.png": "e690906ab1611b37a9ed19b30a0175663a2cb1cea324015c2fa834e3ccd6581c",
+    "poses/f05-coffee.png": "605a493d3a11c57b126d965980d6e02fe4c3131f17662645805524cbc429b253",
+    "poses/f05-doze.png": "19dad33eeae6c496e58bedba6d44089f37d259ae25f1afd202ff8542e8a311a7",
+    "poses/f05-type.png": "65e36ea7c12913434dcb6487f49dc37e397ba7a7422c85fc68fa180fc8dcbcde",
+    "wax-f06.png": "60c1beb279c02957eb4d11552e92d1ea32c5781ce24c2ab9044d0038b0d249e5",
+    "poses/f06-coffee.png": "31c4c14b03447b12c631c522fda8579f687bb888d239cef9d8acc5fbcfb99dcb",
+    "poses/f06-doze.png": "0e42cc554737f971b71a95a8589b141274d6a879761f1def3e28bcbfbdded8f1",
+    "poses/f06-type.png": "ddd2f06b73790a944d46b6ec72a857f73a79e0731a0fe1f86930d3a1d79c5306",
+    "wax-f07.png": "d3ca413ced2176526bccfd05463cd626673fa3e07bff2ee48308cb230475ee84",
+    "poses/f07-coffee.png": "072c5f5c613399ab7b9e8c22a1b83a218f4991ad01d8141155bbe427a01ec399",
+    "poses/f07-doze.png": "168dfc48dcc03f1138fadb10c63596e30efabb8a84051b0c277227f040c3ae9b",
+    "poses/f07-type.png": "984fe1dedd7c61fd70c5b4f78dc4ae15b2666e19e2cc8a2217db31a4ab0bbbda",
+    "wax-f08.png": "616cdbb0978acf9d95859433ff774cbff803bd4542f66f3bd43b4180d7070bee",
+    "poses/f08-coffee.png": "e17f86c2810a18f07b927891c034b33e4d696618386d02ca9c5ad458876b852d",
+    "poses/f08-doze.png": "f58704728ca09a8b6516897d7e7481c566377a7bfb533e31124de4ac5c6f2f32",
+    "poses/f08-type.png": "b042a317a017d62fb841ab97cfe5da9ad8df0e2d383008fd5988ec24c1f3b840",
+    "wax-f09.png": "abfaf380c0eb5722f50deb552b50266bf243d4c2b4fdfcfd70ec883f231a95d2",
+    "poses/f09-coffee.png": "cc3b70042b14dd5036b743989be0d114822c8cd4ee32bba5f27af24314df0318",
+    "poses/f09-doze.png": "af8e9163c9328ee290ede074525913c07ee1109271b795e7a94ea6a99a731a96",
+    "poses/f09-type.png": "8286ad8897746c5d74d4a03653c1f122ceb7db153234888ac2e768b74654193d",
+    "wax-f10.png": "ee653335c267e26ac596910262d91f7e6a20435d3d740c36ae751d189f8984a8",
+    "poses/f10-coffee.png": "e590d0f2b17c515516da1e5be608a953448c33a423b356139f8c22afa6c9c804",
+    "poses/f10-doze.png": "7df8981540aaea68dd27ae3be00313a0e5da497c77132a2b708ac3994a8eb6b3",
+    "poses/f10-type.png": "37d53e8c58851a1a918ffbb8a359f83a25fa2ba8d8de0f7290b84326f5f98f90",
+    "wax-jake.png": "c81d866622d1815bcf42fd79b97e61c0d82198449f79d78b799b84afe3118aac",
+    "poses/jake-coffee.png": "dc4f0d92e715690586f95a466ef57aa515fa275038b766dc20f0c2febe613b25",
+    "poses/jake-doze.png": "7032b9c9cc10d5b2a48bdac744756c96a88db16b1ae9de03e0cfa7f189ff0774",
+    "poses/jake-type.png": "342e22ae779b11c576a3ff5729ac07fcaf226142682c3727a1322968dc7122c7",
+    "wax-m01.png": "5deb838713009a4df4958c33adef2108a110b1fe1b242e0696bb03eb45e11e7e",
+    "poses/m01-coffee.png": "37f27a7dd0bd6a645edabd3604ae214619e472b6b9ecf2b04f357bf568110c33",
+    "poses/m01-doze.png": "a6c8f0f66645da44f4a1fa7a222bbd9e699dd8013a0e9ee81285ac66026547b7",
+    "poses/m01-type.png": "55221b4909e096ad3d8115149b0c7fbd821a8afeeae91ebdbfd9864f14013bb9",
+    "wax-m02.png": "033629227ff71529aed0ea535fcee12d2972b29417d02718dc73ff08735f91db",
+    "poses/m02-coffee.png": "c4e13f48d7bb7eea1543b1ac6eac0e0a89af52cd72b80e3e57154b257b21f109",
+    "poses/m02-doze.png": "8a09526b43efb898df94ac61037c57873e9cd69f428b423dfd9514c98af4ee6a",
+    "poses/m02-type.png": "2c6192401d07de760727f8f4db32080b7493b9d7c8a2ecade22fac15a776eea8",
+    "wax-m03.png": "16feabd78885af5ad54d66763f003d2367e953ec5f72d169ad68e467c78ead35",
+    "poses/m03-coffee.png": "5976e18278012115a21b2f0a648082340575f4b391c1bcd25f2c5392f4edae2b",
+    "poses/m03-doze.png": "fb21d0dd34a91a42e7e91536b2f8b81309d267a9ad3262f45658ec473d06c285",
+    "poses/m03-type.png": "24254e51433c8c8ab8f34108427cb0b6a14b6246b6e9c8daef8f2b3ad8802320",
+    "wax-m04.png": "804bd0a7ff7288ae50016c2f5fe624c130c4de7a0c5838c5ef27bbc4e0b10ef9",
+    "poses/m04-coffee.png": "86053fb2b4de5ad7153244ea3aafed0ce807e6ab87c2a07aec1a1d9bda7ce671",
+    "poses/m04-doze.png": "764fe7aaff5494a3104f9a803fc6a87213c9e966da1a2a2d679abe42e41e57c5",
+    "poses/m04-type.png": "3f0ab546655efb61c07414d5ccdae59649aac0451b08479361d1eb4b99b2c3b7",
+    "wax-m05.png": "8764fa9699178b28b2de63538ae35478c7297f52beb634264e758b361594bd27",
+    "poses/m05-coffee.png": "a521dc7f8a9d0b647e5e26c75b32bd27ce2c1ee69279f04f655a8f8d984c9bd9",
+    "poses/m05-doze.png": "b9e6275ed9ff03251d9cd61858b32975c27300173139a337937de25888073f15",
+    "poses/m05-type.png": "ccd08b619eb3b51993fbdab19f48401b1b1f8d715101ec22d1dd5b109491f44f",
+    "wax-m06.png": "268dc401094d30bad917a1abdbb50502224e5f2d8c6bc03e9565b51f5ed75e8c",
+    "poses/m06-coffee.png": "e8d2823b18a9d513050006466a2f0dc3f9ecb905187764ab4392a9ee496aa9fb",
+    "poses/m06-doze.png": "94c963132cadca7da775768e3229b2cd75cbdd9ad2887b5c83484e1a2c76dd16",
+    "poses/m06-type.png": "9f80ef7e4c1deef42b722a0ca2dac5305a0ada6c586e78b28262dcbfbad7cc6f",
+    "wax-m07.png": "e6717122a9360abcd2b806dfa33ec42e51680252e5b6f147bde8ca7167898521",
+    "poses/m07-coffee.png": "67dec6cff2416d26f48ce67ef00b196974e0bbf249990007ce03a816fc558a3f",
+    "poses/m07-doze.png": "b7d0dd9dd7e2e1786a86862c9dcad455844d42624a9fb2ded2fd015aa0825049",
+    "poses/m07-type.png": "f49d09c5dd0b891cb08d812cf83f919ddf472485fdc2dfd61242de74c4bfb297",
+    "wax-m08.png": "620b90230fbf3d7e24a532f1b963567b37d7853732dab4f6f0fcfc5ba4182b49",
+    "poses/m08-coffee.png": "8681e6add60761e8a6c5e0a2b5136dd14cf7ad51c75cb067fcbfbbf5d78ddbea",
+    "poses/m08-doze.png": "ce1181fb0270f3064a4a59f9480e4057b76c4400d42fbf277b78c505ffedaed6",
+    "poses/m08-type.png": "9d63144148e72099fe3be0da6dc69097c5bb504d8fbeb776116e66f6bfd9e462",
+    "wax-m09.png": "411cc279098f4745f0787c569d2fd244dd82d25c4e47ab695e0e48d54490140a",
+    "poses/m09-coffee.png": "bcb58b0f75a69403481429b9abce83591687498398b6531357011e75d06a8bdf",
+    "poses/m09-doze.png": "76ade5c46d1dc1699c1a13daf97ae6eb9444dc490a9891cf710da3443ea1f631",
+    "poses/m09-type.png": "074116c74d34c84717e2aae0bc05f0b8411c465457eaa2b8680b7c46eda1366c",
+    "wax-m10.png": "e7a0b1eebc0e76261cde2ada4ed3d4b22aa13282f1197007709845ae3c2f9266",
+    "poses/m10-coffee.png": "4812d8cc91b1b680dd1a42fb97e568690fda62ffed0ea2b660e4302a37df0efd",
+    "poses/m10-doze.png": "c7ac2a41792d2b7bb237da3da128fc6a5da2f4b0d21caec49ce11dc58d5d6116",
+    "poses/m10-type.png": "bdc5d2be6aaab3d927b61e661fa7f786f1d9fad1fface21a60e3316551613790",
+    "wax-sunny.png": "e782b3c7764fca479f5ccba961f997835fca6906a45bf2c5feaa97435fcfe6b5",
+    "poses/sunny-coffee.png": "48f0a63daf6e87538f8b3f9c1909157fa87cff0b33f96327c55204aa90937293",
+    "poses/sunny-doze.png": "9c8eac7e4cffbd018e527d239101c9d1938ccdeeb96dbf690c59dfb9955cf0bf",
+    "poses/sunny-type.png": "41965d0482069345d91edfb9b26eefb2ca754abe4341c633d1706e131079e10a",
+    "env/prop-booth.png": "d6c68a27f646584fa0fa7f4c9d4484922a0a2f69c40a3aa92126e07ae2d8cf90",
+    "env/prop-bugboard.png": "9e9acd38f786a7804fea48e8b554e76269190c8291022ddc91c1890489f0c4a7",
+    "env/prop-chair.png": "d85f018bed79861eb2d5a155efa2207681eec924ab0d0b053cb7fc1e25b24006",
+    "env/prop-coffee.png": "fdd3f2791b19f42fc29b650a1d5d6718b8bade4f4d230862367f8dd551abee82",
+    "env/prop-dashboard.png": "3d2a228659ea6f4df6baab1eeaee956778656282c2f288add68c424b5d7cd7d4",
+    "env/prop-desk.png": "27ce9d05dec9c33465b43b649e20df2c5cf181b060b866dfcfbd8e47ab288656",
+    "env/prop-devicefarm.png": "a076ed5ed4d51912d5fe5a77f34b9c840a4d594b6e275c21ca4f58893ab7d0a5",
+    "env/prop-hotdesk.png": "9c5b8321c53de58596f00fedc0c0ad3c26ab693d85c9ec87370ee2a82190bff1",
+    "env/prop-meetingtable.png": "63ab641857d55b80e906019ecdfaf3ba13c34440bc2c59e56181dfa803f54e6e",
+    "env/prop-monitorwall.png": "264eaa8136842b9028c0e5179e5ce96dfa61a3a0c05b526a3f369b6aebd391d8",
+    "env/prop-plant.png": "c1b1050254582de23ab2e15c4698e54b68351581bbffbf1ea9a316eedbe19039",
+    "env/prop-printer3d.png": "cd2dce015ce29646f55093edc72ddb7251ebbe018b18dd505707c4e3f19cf85d",
+    "env/prop-server.png": "0d858b03ed0f602d876f690247b9ab90420e10c4a8913630682a81742f50f0fe",
+    "env/prop-sofa.png": "abd8104c04085f317c6d7f4dffd5ce35f9f98239d46403029f4d3e46cae38c48",
+    "env/prop-standdesk.png": "a38783841a58b37faa1c304c6f005cbe4b33c11294bf7e7f1e4852eb042659dd",
+    "env/prop-testbench.png": "21bbdb3b768254d291a941fa772c861b24e83fc8051da86a5979a4af629f483e",
+    "env/prop-water.png": "4806b4a93627b868e8fdfb601fde3de5c657539c539a6951ad44a0cad2561bd9",
+    "env/prop-whiteboard.png": "b4e6f252419f6f27ad52b644dd9ac4c802c7625a426e5870318001d036317da1",
+    "env/room-boss.png": "5f13b0502f2fa52b32fd36f0cd2d94adf9da6448f1f8f0bae8de1341102a11f2",
+    "env/room-dev.png": "d1b3bc351ae5cec6b4fc44e1376ff6cd8514b2091de786e9ac8207e4c3072700",
+    "env/room-lab.png": "839306c3a3959979925921f65f6bc9ec2b1d618622e0c42449cc8de9270292de",
+    "env/room-meeting.png": "eb20d78893a3dcfa10c2ce99fad1a47fb2ca4706377407296519ad6bf0e2bd97",
+    "wax-f11.png": "3a1492f552676970e979004b3603e49755f621b4e885310c4c732bfa576bc407",
+    "poses/f11-coffee.png": "4a8fde94deb6a61903035028fbde6c51d4d138cf23be402775541262a77713cf",
+    "poses/f11-doze.png": "9be0b6ba104427b23fcc143ebe8dfddc85be107f20922d8f116c0b2d6a260ff2",
+    "poses/f11-sip.png": "278a2e556be7ec2df134510d09ba8a6344cff52679e6065b6f7f89e346084b84",
+    "poses/f11-type.png": "1cc68a99e6fcd2fd97726cc4ea6d668adab18a643700030ba74ee0834a5a17bd",
+    "wax-f12.png": "ea4b541b6d3d772fee1bf03029992b302b868dde74b0e384d8dc7f56bbefca33",
+    "poses/f12-coffee.png": "9bc858e1629600d089860574c7aeed5b19e4e7faa77b842bf6d2f186a583f4b8",
+    "poses/f12-doze.png": "a63a9747c692a90b729fdaf03feb3822f3c33c899c6e675d1e9315f1894fd83e",
+    "poses/f12-sip.png": "7f93389dd24496568419deee1e55fe0ef2320a5a90ee220c872aaaae9c83451d",
+    "poses/f12-type.png": "3f68663320775e3896301b14991a498ed45d0724cdc7fc9d136630125a2a1474",
+    "wax-f13.png": "2583feed34cfdfc64d027a344e3faf79696d9cc5506d049ed05817834248e3d8",
+    "poses/f13-coffee.png": "4185078e0f7fc1885c8f80f7d2712060f7646b1759a231a6732626e7817f44fb",
+    "poses/f13-doze.png": "473649650c68886822f0dd772bcf8538cc13d54736316eed464cd39a171172d7",
+    "poses/f13-sip.png": "940364170bb647f4302131a26ab9c536df2bc95b06fd15c6518274ddfbf61b26",
+    "poses/f13-type.png": "39505c730a7a747f6b37e382903701399af363e8323397cedd013b4882b9c459",
+    "wax-f14.png": "334ac511ebc334f921be58d4f355343bb03ca6c878074cd648469957bcb02be6",
+    "poses/f14-coffee.png": "8268cf50a58c6af74ddcba0fdfb02a502a93e884250107958c66104a5414c089",
+    "poses/f14-doze.png": "e40e3f21f96ccf1b1158282de9f226dcb2ce2274f7addcb04a30fa184dccd4b6",
+    "poses/f14-sip.png": "c27d51db1782ba93a3f1077c945694e99228b943e2a1bc0927eecb047f485f36",
+    "poses/f14-type.png": "c2e7857d34a149fa56b7966ca3a39abd4197bcde991170bcd478f7e31f8c9827",
+    "wax-f15.png": "da7da342462e932dd012f603ad2ebd524f7ec06ab038c42b26c4fc71a38f31ee",
+    "poses/f15-coffee.png": "fc5108f5c9f343c2fc035f258494b2d423e6d07a4ce348a18aed47b2f2adf4b5",
+    "poses/f15-doze.png": "a2aeda5b665d0aa52eccc3fad48f4acb763566d31073ce1a033c42f5c594ccc3",
+    "poses/f15-sip.png": "d0944126b62f035a3b360f97993c53a0958133075760ba48d9e52eaef86e9dcc",
+    "poses/f15-type.png": "347457e164dc4aef684fb19c0741a3ba58385f0bceea48a1950739862d4ff712",
+    "wax-f16.png": "bd8e3d4bcd377a027b9c9f7bf40ec5607d6187069175f37e279263fd62b3beab",
+    "poses/f16-coffee.png": "d1fa2dc1a3d4e219ee06a28c3df9a1c38eb6722bde923ba6e72c331c397022a0",
+    "poses/f16-doze.png": "efa2e8850cf947a4221c74708f89a795480833730f4a8f8f34c05fdc22bc964b",
+    "poses/f16-sip.png": "6ac593d3edb102ea3280bfa63d6e11170ed23ae2ae77c2a0bb9e049c66bfbdfe",
+    "poses/f16-type.png": "b0f9401b6ac834d7b27167dacdfda491a64396132ee982ff88ca76278338d384",
+    "wax-f17.png": "15486a5fc956b898a2b07cf82a1ffd7f8325d4b58c8c67208aadea70700a8b0c",
+    "poses/f17-coffee.png": "769896ad163965e97802f91677508d7df2328807f4435740cede2fd74d1349b2",
+    "poses/f17-doze.png": "c126f4201a56d8cde8db596fd1abec8976032063c2ddfb9d6bcf5dc7ea75475c",
+    "poses/f17-sip.png": "5f292033a4ad5de247d48fc07499aef50a9778f8fb5375cf06a39d47111d035c",
+    "poses/f17-type.png": "ff89236dd1ae984b5f5a8dd46d4b7eee1ed1885cc2c1b4a202da44aa794abfef",
+    "wax-f18.png": "da3ad1433231a7c96e67848babeed7b51b3c74113796837d31eb11aff8104cad",
+    "poses/f18-coffee.png": "a786f673aacd242aef84ef299ecce53e47b85c8cfe367091afdbd9124800495d",
+    "poses/f18-doze.png": "7422e4fbc5ddb16f490990bb9402a0d95f2d618cfac439faa8878e0ff50dcdc9",
+    "poses/f18-sip.png": "1eb5b0c07b1746c801cbfad14f13e604e598e21b2fa7a82a72d11c1ed5a0256c",
+    "poses/f18-type.png": "c3180c7fa949c95ed305dae898c746a390ffb4a3ac2d20892fae06e2e54a7077",
+    "wax-f19.png": "1608b68a751a637c289cb2a0f8b157ab5c6bc6118210d882628529f2a9835796",
+    "poses/f19-coffee.png": "325412e0a80927efb0472368e82db0779d6a3c0951db29d2d427fa720517e4c2",
+    "poses/f19-doze.png": "29a7ce40197e0d6f04e99317866fab7cca347388709939363ca2b205dc93d3bc",
+    "poses/f19-sip.png": "9c9f562ce024717af8abfcd946245f5bbf8a7f8787c8f50ad89831321b39fc9e",
+    "poses/f19-type.png": "7e0cb277716133a4c27ffba5c85b611cefeb6c512af9bb75c4a707d2aefc0167",
+    "wax-f20.png": "ddd19f54c5ddf168b6b9ed50ba2fe93f38b31071c65702c0ff23eb80692dbc1d",
+    "poses/f20-coffee.png": "dc6db627af9fc8ee4df3d335bae902c9a8d7ca697fc16b5c27cb473b11aded34",
+    "poses/f20-doze.png": "f728ce8e60be6672293cd6c33f76b19e22fe315b9a574234ff371714f022ceb8",
+    "poses/f20-sip.png": "26b093f39a9682e5542dddc57a3f3738590198ff83b3472e14dd1a982b61d32e",
+    "poses/f20-type.png": "0c103f084dee57e217c86ea027faa89d58020dadc5c8d7538951299f570e6955",
+    "wax-m11.png": "da87d99bda9f54ffeb80f92897138212fdca5b35a75c0d1b727671463a582bb3",
+    "poses/m11-coffee.png": "945602b48a89ba093dd7f45e72dee7b0a46d68bb7f7580d1bc869cbf1b62fc5c",
+    "poses/m11-doze.png": "c5d8f70259384f39e4c4c22aa288e3f8081578fbc1a4459b4ff85f1c828da034",
+    "poses/m11-sip.png": "0c4559bef3f4c2c96295b3c7b979ad0e5227a3dfd2b72fd65beefc4f6db2bc7f",
+    "poses/m11-type.png": "6050c41d00421cfd111b93cf64f30b63def8779c4134a7884b4b24bf7cb3a81e",
+    "wax-m12.png": "4c10b87c674f3cd8b0b5d512b8b07a7b3e3d1afcd141d8648b69fd82dd5a7f8e",
+    "poses/m12-coffee.png": "053b2468cc2a73accb973d3ccb86d5275ed2b978377af3cf50b8613aa8738f7c",
+    "poses/m12-doze.png": "ca1848d65438bc3741e68f2a20da984466127210fe5909e63d370e1c2df0f141",
+    "poses/m12-sip.png": "b583ee49801ab2040b2ff50bf45ba45c317bb01bdbe8e0f2683574704cf2ce26",
+    "poses/m12-type.png": "676dffc1f021fcf74f920c7367177ae4b53e92d96fbf1efa612eeb4e22172634",
+    "wax-m14.png": "52ea9066aaaceab0bf032bd26746d82454b6a2de854d763eeb62814e8e7ee974",
+    "poses/m14-coffee.png": "ee6d3c60a332406716b9e6221a8c3de4963873695b07a93e2c29879cd200931a",
+    "poses/m14-doze.png": "05838cd58f1405b41cdc8d7355bc3bd624ef255a41a21fc7ae79d0a55aa70380",
+    "poses/m14-sip.png": "6911f2234c8b0e6f472b08e7547235da85cbf0b73e428df1bc547ec026c2163d",
+    "poses/m14-type.png": "e02b72de8e0fa3b86ef8a4ab04fdad25969c6bff5e3f6e00839c2b3618fd773a",
+    "wax-m15.png": "cf96d9d6de9206df0ed0227b8eb88e5f851826e43bb7b52d857f7c38f3207dc0",
+    "poses/m15-coffee.png": "829b0da7d2b83b486398eb42e2584416e31f27b5fde8e653d0ec8070293ab291",
+    "poses/m15-doze.png": "5e255cf378c6b96bd268e838ac63dae02d7e25307a9274189fcd1da8a37af762",
+    "poses/m15-sip.png": "8532be3ca09aef2a14e4a9c09095cc91975ff87b08b5016f8caf5b2202500a39",
+    "poses/m15-type.png": "645608c1099136cfbb7e2eec15644b6fff9e210416392044a45e46304b1fd376",
+    "wax-m16.png": "5d523faccd358961eda3619710d15bbd10f19225b8634d56dae3c352859aabe8",
+    "poses/m16-coffee.png": "29a491bc2b44e497a873b8a65e4fad64ff1a990d7875dd22b709d9f86be27f57",
+    "poses/m16-doze.png": "3dfc2d56d8a579e40b171c9ab15ba4e259be5c6ee9fb321572ecaa38264b01c3",
+    "poses/m16-sip.png": "e5301bcc3b17f8a37367567327a428b85433e7e553804b96bf259cca118ab08b",
+    "poses/m16-type.png": "1f9b225f5f48e0d8327ac99435f269823113bd7323b0d56b6760cf9d16efcf16",
+    "wax-m18.png": "108719b4322e6584c0d25ad8f9e751510995c9a1da3f57082421cc9b2cbfa67c",
+    "poses/m18-coffee.png": "3723ee09a86a8d115e2d67a836773665a6e0baf8b5a698ee78527888d5d2f869",
+    "poses/m18-doze.png": "c6f249080e0d9b52bf5d086cd2217cb046e3a87d7364edea0c63f87365b1df26",
+    "poses/m18-sip.png": "2950697bc0dc59be15539f84d053b4c8e8d9be135fe6b8f95916dd4484239a9f",
+    "poses/m18-type.png": "a222922da22bdcba1c8bf626f33779bd9083257994ca915a2386c2deb3782737",
+    "wax-m20.png": "222f4fec51206698332eae87fa74aa4de6f48f020b2b1d69c60ede0c1847060b",
+    "poses/m20-coffee.png": "e48499f80201c4ffa3c25a52629747f4a03934b37ae02124faafc5e14a499518",
+    "poses/m20-doze.png": "f83e365ac37aa9dc809865f5733be687a1d5360e99838baf74054e3d74ef6143",
+    "poses/m20-sip.png": "507489e6ac7e1bd9c9e9d8c07173b94ebc65ee756d6ef80070821139dfc8655f",
+    "poses/m20-type.png": "3ef185d8082da549c9e55ee5bc349e308650e3caf077f42e658f565a6ef14784",
+    "poses/f01-sip.png": "867ae76b6ce9b56072151a8a59bd2cf2c8bc0f3b609c2ca632cf7198cccda499",
+    "poses/f02-sip.png": "2e6ee383a66bd91d17048280fe516ec68d99590a856047bd65156188fedbcb19",
+    "poses/f03-sip.png": "6b87d61d511cfcf83031d3da88f9a7b9bcb6a3a0b2e1356cabe85de4d50ec30d",
+    "poses/f04-sip.png": "0c535f37ac5024f598d78594214b472c4563b2e8275c209219e5d5797e53b7e0",
+    "poses/f05-sip.png": "469eab1fa4cfdd0345331fdfe8ef95d0dbfefac2f157dd1654db78a2ed156293",
+    "poses/f06-sip.png": "a56ced920cb1f918586c1d897af5ad12b372177d2aa5cafe79639a17f6033639",
+    "poses/f07-sip.png": "9ca089cdc5b3f33b1b1d276cb8378d0995324f53be37d45488edd11c4b91394f",
+    "poses/f08-sip.png": "b4b698757bcd0e5c80e6e64a1c26d652c8cdc8f78b5bb23f463c4cb58b878f64",
+    "wax-m13.png": "d22cc46771efcf635272ba9a507759bd688fee56f32b7e1a7925db4c1a98949f",
+    "poses/m13-coffee.png": "a2046e2cf09b6b2c9c31696bd1465a3b3e0c80312c71b525e9d9c5758ef6256c",
+    "poses/m13-doze.png": "c1aca7db743c71664c7c484bd084e7a56d682374b2542fe90c841fa1a3217741",
+    "poses/m13-sip.png": "adca77aaeffda81a27c108ddd63cfcaf337b66ff7d8ce87eb563344248b82d81",
+    "poses/m13-type.png": "cad3a954a1c4cbf1c0e25f42d62c1727d345b2cc374d4fb36b118c923eba12c5",
+    "wax-m17.png": "e9a9f0dc4c72e10c19c39c2a31a6238f6ac243f36889cd3d5a2d44ca01b78b0c",
+    "poses/m17-coffee.png": "484cc8227341b77c9c703dec879c90eefbf9662b1f391cd6806aeefc2a98ab5e",
+    "poses/m17-doze.png": "ff29275d24b2e753b2e5f928a9ce4a3b8b62c46d73b46e122b48aa81d9d20df5",
+    "poses/m17-sip.png": "1b6b6a8008550792fa7fbe7d5a953bea8414753c44b036b242bad769bcccf707",
+    "poses/m17-type.png": "5af6ac981b5ea111f02d1f70f4df00e1c89313d80509c2905a1e76a6a7185cc8",
+    "wax-m19.png": "2faa918dc9dad3c9188b7e39b3880b7f0a42ade08ff4cfc2dce779baf4f3fd44",
+    "poses/m19-coffee.png": "f6ade4047d209b2fcd9dc3d89adc107e808fce409d94381a0ee7e22e60b7cdc0",
+    "poses/m19-doze.png": "79590a1fecdf1c9d585916b5c1918f024614f5cdda0ffb8cfe7429385aa58a4d",
+    "poses/m19-sip.png": "517bbe73b38708db79190f562aba98fea560984450e7c56280231c8ca54ce58a",
+    "poses/m19-type.png": "1dd0912a889c7b2bb6b1b2362345d9083bf3ac5615ec81fcda06caa127abf409",
+    "poses/f09-sip.png": "e300de172a9e5abd66e88892fcaaf3ecc34b9947761317ffc5b1de44e66d96f8",
+    "poses/f10-sip.png": "f32e0d245d8ad3ce5cd9be082662209adada6a53d3563b6fef355165313cc97e",
+    "poses/m01-sip.png": "5a5c4599834087c61f7989cc40deddacab2a4f543c4fbe5800b81eed325c59a3",
+    "poses/m02-sip.png": "9a5714c41f7b42ee57d03c26e861145f647a8bd1532d415e6ebdb8f8ee2192b8",
+    "poses/m03-sip.png": "373d52c3f778557e351ed7fd3766cc7c7698f9cb31f03a01a5770f7767b5901e",
+    "poses/m04-sip.png": "190db423d6270ec78fb7ca0db2690a07ef805c14fd34aaa9ef211061a6e7cd26",
+    "poses/m05-sip.png": "e76457f11b122d617731fb59673eca984376ee58d60b1c0aea64acf452fcdecc",
+    "poses/m06-sip.png": "cdc8f0de6a3e85341cf12392a9185f79f9b21104bf5021d5f3af80c7b44eba53",
+    "poses/m07-sip.png": "8d65a39a0f48ad33b67cfbd5be0ea428d6d54cbbc671740c17c44d5377c7d2ee",
+    "poses/m08-sip.png": "ac1b8d28d63535fef81e3a15d8a391f860de97de2072c38521ed4af9933f5c1c",
+    "poses/m09-sip.png": "36d77165bfbf3855d848ac045d72ee8b43fe6712d2ffd2e9e2a6b0ade48f96c2",
+    "poses/m10-sip.png": "3e1fbe36b6d79e00364b777d2961b6a70768c1befb83bb26fceb2854c811b8ac"
+  },
+  "characters": {
+    "brian": {
+      "npc": true,
+      "views": {
+        "front": {
+          "file": "side-brian-front.png",
+          "width": 64,
+          "height": 180,
+          "anchor": {
+            "x": 32,
+            "y": 179
+          }
+        },
+        "side": {
+          "file": "side-brian-side.png",
+          "width": 74,
+          "height": 180,
+          "anchor": {
+            "x": 40,
+            "y": 179
+          },
+          "faces": "left"
+        },
+        "back": {
+          "file": "side-brian-back.png",
+          "width": 66,
+          "height": 180,
+          "anchor": {
+            "x": 33,
+            "y": 179
+          }
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-brian-coffee.png",
+          "width": 103,
+          "height": 168,
+          "anchor": {
+            "x": 52,
+            "y": 167
+          },
+          "faces": "right"
+        },
+        "doze": {
+          "file": "side-brian-doze.png",
+          "width": 87,
+          "height": 165,
+          "anchor": {
+            "x": 38,
+            "y": 164
+          },
+          "faces": "left",
+          "scale": 1.15
+        },
+        "type": {
+          "file": "side-brian-type.png",
+          "width": 102,
+          "height": 145,
+          "anchor": {
+            "x": 47,
+            "y": 144
+          },
+          "faces": "left",
+          "scale": 1.2
+        }
+      }
+    },
+    "emily": {
+      "npc": true,
+      "views": {
+        "front": {
+          "file": "side-emily-front.png",
+          "width": 85,
+          "height": 180,
+          "anchor": {
+            "x": 41,
+            "y": 179
+          }
+        },
+        "side": {
+          "file": "side-emily-side.png",
+          "width": 85,
+          "height": 180,
+          "anchor": {
+            "x": 44,
+            "y": 179
+          },
+          "faces": "left"
+        },
+        "back": {
+          "file": "side-emily-back.png",
+          "width": 81,
+          "height": 180,
+          "anchor": {
+            "x": 43,
+            "y": 179
+          }
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-emily-coffee.png",
+          "width": 115,
+          "height": 172,
+          "anchor": {
+            "x": 52,
+            "y": 171
+          },
+          "faces": "left",
+          "scale": 1.25
+        },
+        "doze": {
+          "file": "side-emily-doze.png",
+          "width": 116,
+          "height": 194,
+          "anchor": {
+            "x": 58,
+            "y": 193
+          },
+          "faces": "left"
+        },
+        "type": {
+          "file": "side-emily-type.png",
+          "width": 127,
+          "height": 198,
+          "anchor": {
+            "x": 76,
+            "y": 197
+          },
+          "faces": "right"
+        }
+      }
+    },
+    "f01": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-f01-front.png",
+          "width": 88,
+          "height": 180,
+          "anchor": {
+            "x": 44,
+            "y": 179
+          },
+          "mask": "side-f01-front-mask.png"
+        },
+        "side": {
+          "file": "side-f01-side.png",
+          "width": 86,
+          "height": 180,
+          "anchor": {
+            "x": 49,
+            "y": 179
+          },
+          "mask": "side-f01-side-mask.png"
+        },
+        "back": {
+          "file": "side-f01-back.png",
+          "width": 88,
+          "height": 180,
+          "anchor": {
+            "x": 44,
+            "y": 179
+          },
+          "mask": "side-f01-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-f01-coffee.png",
+          "width": 138,
+          "height": 198,
+          "anchor": {
+            "x": 78,
+            "y": 197
+          },
+          "mask": "side-f01-coffee-mask.png",
+          "faces": "right"
+        },
+        "doze": {
+          "file": "side-f01-doze.png",
+          "width": 121,
+          "height": 188,
+          "anchor": {
+            "x": 66,
+            "y": 187
+          },
+          "mask": "side-f01-doze-mask.png",
+          "faces": "right"
+        },
+        "type": {
+          "file": "side-f01-type.png",
+          "width": 142,
+          "height": 181,
+          "anchor": {
+            "x": 56,
+            "y": 180
+          },
+          "mask": "side-f01-type-mask.png",
+          "faces": "right"
+        }
+      }
+    },
+    "f02": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-f02-front.png",
+          "width": 79,
+          "height": 180,
+          "anchor": {
+            "x": 40,
+            "y": 179
+          },
+          "mask": "side-f02-front-mask.png"
+        },
+        "side": {
+          "file": "side-f02-side.png",
+          "width": 79,
+          "height": 180,
+          "anchor": {
+            "x": 39,
+            "y": 179
+          },
+          "mask": "side-f02-side-mask.png"
+        },
+        "back": {
+          "file": "side-f02-back.png",
+          "width": 78,
+          "height": 178,
+          "anchor": {
+            "x": 39,
+            "y": 177
+          },
+          "mask": "side-f02-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-f02-coffee.png",
+          "width": 108,
+          "height": 167,
+          "anchor": {
+            "x": 51,
+            "y": 166
+          },
+          "mask": "side-f02-coffee-mask.png",
+          "faces": "left",
+          "scale": 1.1
+        },
+        "doze": {
+          "file": "side-f02-doze.png",
+          "width": 140,
+          "height": 190,
+          "anchor": {
+            "x": 70,
+            "y": 189
+          },
+          "mask": "side-f02-doze-mask.png",
+          "faces": "left"
+        },
+        "type": {
+          "file": "side-f02-type.png",
+          "width": 130,
+          "height": 161,
+          "anchor": {
+            "x": 73,
+            "y": 160
+          },
+          "mask": "side-f02-type-mask.png",
+          "faces": "right"
+        },
+        "sip": {
+          "file": "side-f02-sip.png",
+          "width": 73,
+          "height": 180,
+          "anchor": {
+            "x": 42,
+            "y": 179
+          },
+          "mask": "side-f02-sip-mask.png",
+          "faces": "right"
+        }
+      }
+    },
+    "f03": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-f03-front.png",
+          "width": 79,
+          "height": 180,
+          "anchor": {
+            "x": 40,
+            "y": 179
+          },
+          "mask": "side-f03-front-mask.png"
+        },
+        "side": {
+          "file": "side-f03-side.png",
+          "width": 74,
+          "height": 180,
+          "anchor": {
+            "x": 36,
+            "y": 179
+          },
+          "mask": "side-f03-side-mask.png"
+        },
+        "back": {
+          "file": "side-f03-back.png",
+          "width": 80,
+          "height": 178,
+          "anchor": {
+            "x": 40,
+            "y": 177
+          },
+          "mask": "side-f03-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-f03-coffee.png",
+          "width": 119,
+          "height": 198,
+          "anchor": {
+            "x": 66,
+            "y": 197
+          },
+          "mask": "side-f03-coffee-mask.png",
+          "faces": "left"
+        },
+        "doze": {
+          "file": "side-f03-doze.png",
+          "width": 132,
+          "height": 191,
+          "anchor": {
+            "x": 68,
+            "y": 190
+          },
+          "mask": "side-f03-doze-mask.png",
+          "faces": "right"
+        },
+        "type": {
+          "file": "side-f03-type.png",
+          "width": 123,
+          "height": 198,
+          "anchor": {
+            "x": 63,
+            "y": 197
+          },
+          "mask": "side-f03-type-mask.png",
+          "faces": "left"
+        }
+      }
+    },
+    "f04": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-f04-front.png",
+          "width": 82,
+          "height": 180,
+          "anchor": {
+            "x": 51,
+            "y": 179
+          },
+          "mask": "side-f04-front-mask.png"
+        },
+        "side": {
+          "file": "side-f04-side.png",
+          "width": 80,
+          "height": 179,
+          "anchor": {
+            "x": 51,
+            "y": 178
+          },
+          "mask": "side-f04-side-mask.png"
+        },
+        "back": {
+          "file": "side-f04-back.png",
+          "width": 82,
+          "height": 172,
+          "anchor": {
+            "x": 31,
+            "y": 171
+          },
+          "mask": "side-f04-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-f04-coffee.png",
+          "width": 127,
+          "height": 180,
+          "anchor": {
+            "x": 59,
+            "y": 179
+          },
+          "mask": "side-f04-coffee-mask.png",
+          "faces": "left"
+        },
+        "doze": {
+          "file": "side-f04-doze.png",
+          "width": 144,
+          "height": 182,
+          "anchor": {
+            "x": 83,
+            "y": 181
+          },
+          "mask": "side-f04-doze-mask.png",
+          "faces": "right"
+        },
+        "type": {
+          "file": "side-f04-type.png",
+          "width": 123,
+          "height": 182,
+          "anchor": {
+            "x": 68,
+            "y": 181
+          },
+          "mask": "side-f04-type-mask.png",
+          "faces": "left"
+        },
+        "sip": {
+          "file": "side-f04-sip.png",
+          "width": 88,
+          "height": 180,
+          "anchor": {
+            "x": 39,
+            "y": 179
+          },
+          "mask": "side-f04-sip-mask.png",
+          "faces": "right"
+        }
+      }
+    },
+    "f05": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-f05-front.png",
+          "width": 77,
+          "height": 178,
+          "anchor": {
+            "x": 38,
+            "y": 177
+          },
+          "mask": "side-f05-front-mask.png"
+        },
+        "side": {
+          "file": "side-f05-side.png",
+          "width": 77,
+          "height": 180,
+          "anchor": {
+            "x": 32,
+            "y": 179
+          },
+          "mask": "side-f05-side-mask.png",
+          "faces": "left"
+        },
+        "back": {
+          "file": "side-f05-back.png",
+          "width": 78,
+          "height": 178,
+          "anchor": {
+            "x": 38,
+            "y": 177
+          },
+          "mask": "side-f05-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-f05-coffee.png",
+          "width": 92,
+          "height": 164,
+          "anchor": {
+            "x": 40,
+            "y": 163
+          },
+          "mask": "side-f05-coffee-mask.png",
+          "faces": "left",
+          "scale": 1.3
+        },
+        "doze": {
+          "file": "side-f05-doze.png",
+          "width": 120,
+          "height": 198,
+          "anchor": {
+            "x": 51,
+            "y": 197
+          },
+          "mask": "side-f05-doze-mask.png",
+          "faces": "right"
+        },
+        "type": {
+          "file": "side-f05-type.png",
+          "width": 153,
+          "height": 191,
+          "anchor": {
+            "x": 76,
+            "y": 190
+          },
+          "mask": "side-f05-type-mask.png",
+          "faces": "left"
+        }
+      }
+    },
+    "f06": {
+      "recolor": true,
+      "npc": true,
+      "views": {
+        "front": {
+          "file": "side-f06-front.png",
+          "width": 93,
+          "height": 180,
+          "anchor": {
+            "x": 45,
+            "y": 179
+          },
+          "mask": "side-f06-front-mask.png"
+        },
+        "side": {
+          "file": "side-f06-side.png",
+          "width": 83,
+          "height": 174,
+          "anchor": {
+            "x": 45,
+            "y": 173
+          },
+          "mask": "side-f06-side-mask.png"
+        },
+        "back": {
+          "file": "side-f06-back.png",
+          "width": 91,
+          "height": 176,
+          "anchor": {
+            "x": 46,
+            "y": 175
+          },
+          "mask": "side-f06-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-f06-coffee.png",
+          "width": 117,
+          "height": 165,
+          "anchor": {
+            "x": 51,
+            "y": 164
+          },
+          "mask": "side-f06-coffee-mask.png",
+          "faces": "left"
+        },
+        "doze": {
+          "file": "side-f06-doze.png",
+          "width": 108,
+          "height": 175,
+          "anchor": {
+            "x": 62,
+            "y": 174
+          },
+          "mask": "side-f06-doze-mask.png",
+          "faces": "right"
+        },
+        "type": {
+          "file": "side-f06-type.png",
+          "width": 130,
+          "height": 177,
+          "anchor": {
+            "x": 69,
+            "y": 176
+          },
+          "mask": "side-f06-type-mask.png",
+          "faces": "right"
+        },
+        "sip": {
+          "file": "side-f06-sip.png",
+          "width": 74,
+          "height": 180,
+          "anchor": {
+            "x": 38,
+            "y": 179
+          },
+          "mask": "side-f06-sip-mask.png",
+          "faces": "right"
+        }
+      }
+    },
+    "f07": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-f07-front.png",
+          "width": 90,
+          "height": 180,
+          "anchor": {
+            "x": 45,
+            "y": 179
+          },
+          "mask": "side-f07-front-mask.png"
+        },
+        "side": {
+          "file": "side-f07-side.png",
+          "width": 79,
+          "height": 178,
+          "anchor": {
+            "x": 38,
+            "y": 177
+          },
+          "mask": "side-f07-side-mask.png"
+        },
+        "back": {
+          "file": "side-f07-back.png",
+          "width": 86,
+          "height": 176,
+          "anchor": {
+            "x": 38,
+            "y": 175
+          },
+          "mask": "side-f07-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-f07-coffee.png",
+          "width": 99,
+          "height": 197,
+          "anchor": {
+            "x": 52,
+            "y": 196
+          },
+          "mask": "side-f07-coffee-mask.png",
+          "faces": "right"
+        },
+        "doze": {
+          "file": "side-f07-doze.png",
+          "width": 103,
+          "height": 151,
+          "anchor": {
+            "x": 41,
+            "y": 150
+          },
+          "mask": "side-f07-doze-mask.png",
+          "faces": "left",
+          "scale": 1.25
+        },
+        "type": {
+          "file": "side-f07-type.png",
+          "width": 105,
+          "height": 140,
+          "anchor": {
+            "x": 45,
+            "y": 139
+          },
+          "mask": "side-f07-type-mask.png",
+          "faces": "left",
+          "scale": 1.25
+        },
+        "sip": {
+          "file": "side-f07-sip.png",
+          "width": 80,
+          "height": 180,
+          "anchor": {
+            "x": 41,
+            "y": 179
+          },
+          "mask": "side-f07-sip-mask.png",
+          "faces": "right"
+        }
+      }
+    },
+    "f08": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-f08-front.png",
+          "width": 87,
+          "height": 180,
+          "anchor": {
+            "x": 40,
+            "y": 179
+          },
+          "mask": "side-f08-front-mask.png"
+        },
+        "side": {
+          "file": "side-f08-side.png",
+          "width": 93,
+          "height": 180,
+          "anchor": {
+            "x": 45,
+            "y": 179
+          },
+          "mask": "side-f08-side-mask.png"
+        },
+        "back": {
+          "file": "side-f08-back.png",
+          "width": 87,
+          "height": 177,
+          "anchor": {
+            "x": 47,
+            "y": 176
+          },
+          "mask": "side-f08-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-f08-coffee.png",
+          "width": 98,
+          "height": 198,
+          "anchor": {
+            "x": 48,
+            "y": 197
+          },
+          "mask": "side-f08-coffee-mask.png",
+          "faces": "left"
+        },
+        "doze": {
+          "file": "side-f08-doze.png",
+          "width": 116,
+          "height": 198,
+          "anchor": {
+            "x": 58,
+            "y": 197
+          },
+          "mask": "side-f08-doze-mask.png",
+          "faces": "right"
+        },
+        "type": {
+          "file": "side-f08-type.png",
+          "width": 118,
+          "height": 198,
+          "anchor": {
+            "x": 57,
+            "y": 197
+          },
+          "mask": "side-f08-type-mask.png",
+          "faces": "right"
+        }
+      }
+    },
+    "f09": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-f09-front.png",
+          "width": 83,
+          "height": 180,
+          "anchor": {
+            "x": 41,
+            "y": 179
+          },
+          "mask": "side-f09-front-mask.png"
+        },
+        "side": {
+          "file": "side-f09-side.png",
+          "width": 80,
+          "height": 178,
+          "anchor": {
+            "x": 43,
+            "y": 177
+          },
+          "mask": "side-f09-side-mask.png"
+        },
+        "back": {
+          "file": "side-f09-back.png",
+          "width": 82,
+          "height": 178,
+          "anchor": {
+            "x": 41,
+            "y": 177
+          },
+          "mask": "side-f09-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-f09-coffee.png",
+          "width": 125,
+          "height": 196,
+          "anchor": {
+            "x": 62,
+            "y": 195
+          },
+          "mask": "side-f09-coffee-mask.png",
+          "faces": "right"
+        },
+        "doze": {
+          "file": "side-f09-doze.png",
+          "width": 104,
+          "height": 162,
+          "anchor": {
+            "x": 52,
+            "y": 161
+          },
+          "mask": "side-f09-doze-mask.png",
+          "faces": "left"
+        },
+        "type": {
+          "file": "side-f09-type.png",
+          "width": 125,
+          "height": 188,
+          "anchor": {
+            "x": 54,
+            "y": 187
+          },
+          "mask": "side-f09-type-mask.png",
+          "faces": "right"
+        },
+        "sip": {
+          "file": "side-f09-sip.png",
+          "width": 69,
+          "height": 180,
+          "anchor": {
+            "x": 36,
+            "y": 179
+          },
+          "mask": "side-f09-sip-mask.png",
+          "faces": "right"
+        }
+      }
+    },
+    "f10": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-f10-front.png",
+          "width": 86,
+          "height": 180,
+          "anchor": {
+            "x": 39,
+            "y": 179
+          },
+          "mask": "side-f10-front-mask.png"
+        },
+        "side": {
+          "file": "side-f10-side.png",
+          "width": 81,
+          "height": 175,
+          "anchor": {
+            "x": 43,
+            "y": 174
+          },
+          "mask": "side-f10-side-mask.png"
+        },
+        "back": {
+          "file": "side-f10-back.png",
+          "width": 86,
+          "height": 175,
+          "anchor": {
+            "x": 44,
+            "y": 174
+          },
+          "mask": "side-f10-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-f10-coffee.png",
+          "width": 97,
+          "height": 198,
+          "anchor": {
+            "x": 48,
+            "y": 197
+          },
+          "mask": "side-f10-coffee-mask.png",
+          "faces": "right"
+        },
+        "doze": {
+          "file": "side-f10-doze.png",
+          "width": 109,
+          "height": 196,
+          "anchor": {
+            "x": 54,
+            "y": 195
+          },
+          "mask": "side-f10-doze-mask.png",
+          "faces": "left"
+        },
+        "type": {
+          "file": "side-f10-type.png",
+          "width": 136,
+          "height": 197,
+          "anchor": {
+            "x": 68,
+            "y": 196
+          },
+          "mask": "side-f10-type-mask.png",
+          "faces": "right"
+        },
+        "sip": {
+          "file": "side-f10-sip.png",
+          "width": 70,
+          "height": 178,
+          "anchor": {
+            "x": 34,
+            "y": 177
+          },
+          "mask": "side-f10-sip-mask.png",
+          "faces": "right"
+        }
+      }
+    },
+    "jake": {
+      "npc": true,
+      "views": {
+        "front": {
+          "file": "side-jake-front.png",
+          "width": 78,
+          "height": 180,
+          "anchor": {
+            "x": 40,
+            "y": 179
+          }
+        },
+        "side": {
+          "file": "side-jake-side.png",
+          "width": 76,
+          "height": 178,
+          "anchor": {
+            "x": 40,
+            "y": 177
+          },
+          "faces": "left"
+        },
+        "back": {
+          "file": "side-jake-back.png",
+          "width": 78,
+          "height": 180,
+          "anchor": {
+            "x": 38,
+            "y": 179
+          }
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-jake-coffee.png",
+          "width": 107,
+          "height": 170,
+          "anchor": {
+            "x": 59,
+            "y": 169
+          },
+          "faces": "right"
+        },
+        "doze": {
+          "file": "side-jake-doze.png",
+          "width": 115,
+          "height": 189,
+          "anchor": {
+            "x": 48,
+            "y": 188
+          },
+          "faces": "left"
+        },
+        "type": {
+          "file": "side-jake-type.png",
+          "width": 121,
+          "height": 151,
+          "anchor": {
+            "x": 55,
+            "y": 150
+          },
+          "faces": "right"
+        }
+      }
+    },
+    "m01": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-m01-front.png",
+          "width": 85,
+          "height": 180,
+          "anchor": {
+            "x": 42,
+            "y": 179
+          },
+          "mask": "side-m01-front-mask.png"
+        },
+        "side": {
+          "file": "side-m01-side.png",
+          "width": 83,
+          "height": 180,
+          "anchor": {
+            "x": 41,
+            "y": 179
+          },
+          "mask": "side-m01-side-mask.png"
+        },
+        "back": {
+          "file": "side-m01-back.png",
+          "width": 84,
+          "height": 180,
+          "anchor": {
+            "x": 42,
+            "y": 179
+          },
+          "mask": "side-m01-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-m01-coffee.png",
+          "width": 113,
+          "height": 195,
+          "anchor": {
+            "x": 51,
+            "y": 194
+          },
+          "mask": "side-m01-coffee-mask.png",
+          "faces": "left"
+        },
+        "doze": {
+          "file": "side-m01-doze.png",
+          "width": 146,
+          "height": 185,
+          "anchor": {
+            "x": 73,
+            "y": 184
+          },
+          "mask": "side-m01-doze-mask.png",
+          "faces": "right"
+        },
+        "type": {
+          "file": "side-m01-type.png",
+          "width": 119,
+          "height": 165,
+          "anchor": {
+            "x": 55,
+            "y": 164
+          },
+          "mask": "side-m01-type-mask.png",
+          "faces": "right",
+          "scale": 1.1
+        },
+        "sip": {
+          "file": "side-m01-sip.png",
+          "width": 82,
+          "height": 180,
+          "anchor": {
+            "x": 37,
+            "y": 179
+          },
+          "mask": "side-m01-sip-mask.png",
+          "faces": "right"
+        }
+      }
+    },
+    "m02": {
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-m02-front.png",
+          "width": 89,
+          "height": 180,
+          "anchor": {
+            "x": 47,
+            "y": 179
+          },
+          "mask": "side-m02-front-mask.png"
+        },
+        "side": {
+          "file": "side-m02-side.png",
+          "width": 77,
+          "height": 180,
+          "anchor": {
+            "x": 46,
+            "y": 179
+          },
+          "mask": "side-m02-side-mask.png"
+        },
+        "back": {
+          "file": "side-m02-back.png",
+          "width": 91,
+          "height": 180,
+          "anchor": {
+            "x": 45,
+            "y": 179
+          },
+          "mask": "side-m02-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-m02-coffee.png",
+          "width": 99,
+          "height": 160,
+          "anchor": {
+            "x": 47,
+            "y": 159
+          },
+          "mask": "side-m02-coffee-mask.png",
+          "faces": "left",
+          "scale": 1.35
+        },
+        "doze": {
+          "file": "side-m02-doze.png",
+          "width": 115,
+          "height": 173,
+          "anchor": {
+            "x": 65,
+            "y": 172
+          },
+          "mask": "side-m02-doze-mask.png",
+          "faces": "right",
+          "scale": 1.25
+        },
+        "type": {
+          "file": "side-m02-type.png",
+          "width": 129,
+          "height": 156,
+          "anchor": {
+            "x": 68,
+            "y": 155
+          },
+          "mask": "side-m02-type-mask.png",
+          "faces": "right",
+          "scale": 1.35
+        }
+      }
+    },
+    "m03": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-m03-front.png",
+          "width": 88,
+          "height": 180,
+          "anchor": {
+            "x": 44,
+            "y": 179
+          },
+          "mask": "side-m03-front-mask.png"
+        },
+        "side": {
+          "file": "side-m03-side.png",
+          "width": 85,
+          "height": 179,
+          "anchor": {
+            "x": 38,
+            "y": 178
+          },
+          "mask": "side-m03-side-mask.png",
+          "faces": "left"
+        },
+        "back": {
+          "file": "side-m03-back.png",
+          "width": 88,
+          "height": 180,
+          "anchor": {
+            "x": 44,
+            "y": 179
+          },
+          "mask": "side-m03-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-m03-coffee.png",
+          "width": 151,
+          "height": 198,
+          "anchor": {
+            "x": 75,
+            "y": 197
+          },
+          "mask": "side-m03-coffee-mask.png",
+          "faces": "left"
+        },
+        "doze": {
+          "file": "side-m03-doze.png",
+          "width": 100,
+          "height": 198,
+          "anchor": {
+            "x": 55,
+            "y": 197
+          },
+          "mask": "side-m03-doze-mask.png",
+          "faces": "right"
+        },
+        "type": {
+          "file": "side-m03-type.png",
+          "width": 153,
+          "height": 198,
+          "anchor": {
+            "x": 69,
+            "y": 197
+          },
+          "mask": "side-m03-type-mask.png",
+          "faces": "right"
+        }
+      }
+    },
+    "m04": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-m04-front.png",
+          "width": 77,
+          "height": 178,
+          "anchor": {
+            "x": 38,
+            "y": 177
+          },
+          "mask": "side-m04-front-mask.png"
+        },
+        "side": {
+          "file": "side-m04-side.png",
+          "width": 74,
+          "height": 180,
+          "anchor": {
+            "x": 40,
+            "y": 179
+          },
+          "mask": "side-m04-side-mask.png"
+        },
+        "back": {
+          "file": "side-m04-back.png",
+          "width": 77,
+          "height": 178,
+          "anchor": {
+            "x": 37,
+            "y": 177
+          },
+          "mask": "side-m04-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-m04-coffee.png",
+          "width": 111,
+          "height": 198,
+          "anchor": {
+            "x": 54,
+            "y": 197
+          },
+          "mask": "side-m04-coffee-mask.png",
+          "faces": "left"
+        },
+        "doze": {
+          "file": "side-m04-doze.png",
+          "width": 119,
+          "height": 175,
+          "anchor": {
+            "x": 48,
+            "y": 174
+          },
+          "mask": "side-m04-doze-mask.png",
+          "faces": "left"
+        },
+        "type": {
+          "file": "side-m04-type.png",
+          "width": 140,
+          "height": 198,
+          "anchor": {
+            "x": 74,
+            "y": 197
+          },
+          "mask": "side-m04-type-mask.png",
+          "faces": "right"
+        }
+      }
+    },
+    "m05": {
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-m05-front.png",
+          "width": 77,
+          "height": 180,
+          "anchor": {
+            "x": 37,
+            "y": 179
+          },
+          "mask": "side-m05-front-mask.png"
+        },
+        "side": {
+          "file": "side-m05-side.png",
+          "width": 63,
+          "height": 180,
+          "anchor": {
+            "x": 31,
+            "y": 179
+          },
+          "mask": "side-m05-side-mask.png"
+        },
+        "back": {
+          "file": "side-m05-back.png",
+          "width": 77,
+          "height": 179,
+          "anchor": {
+            "x": 39,
+            "y": 178
+          },
+          "mask": "side-m05-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-m05-coffee.png",
+          "width": 110,
+          "height": 198,
+          "anchor": {
+            "x": 56,
+            "y": 197
+          },
+          "mask": "side-m05-coffee-mask.png",
+          "faces": "left"
+        },
+        "doze": {
+          "file": "side-m05-doze.png",
+          "width": 77,
+          "height": 114,
+          "anchor": {
+            "x": 46,
+            "y": 113
+          },
+          "mask": "side-m05-doze-mask.png",
+          "faces": "right",
+          "scale": 1.65
+        },
+        "type": {
+          "file": "side-m05-type.png",
+          "width": 132,
+          "height": 191,
+          "anchor": {
+            "x": 69,
+            "y": 190
+          },
+          "mask": "side-m05-type-mask.png",
+          "faces": "right"
+        },
+        "sip": {
+          "file": "side-m05-sip.png",
+          "width": 82,
+          "height": 180,
+          "anchor": {
+            "x": 41,
+            "y": 179
+          },
+          "mask": "side-m05-sip-mask.png",
+          "faces": "right"
+        }
+      }
+    },
+    "m06": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-m06-front.png",
+          "width": 73,
+          "height": 180,
+          "anchor": {
+            "x": 35,
+            "y": 179
+          },
+          "mask": "side-m06-front-mask.png"
+        },
+        "side": {
+          "file": "side-m06-side.png",
+          "width": 70,
+          "height": 180,
+          "anchor": {
+            "x": 40,
+            "y": 179
+          },
+          "mask": "side-m06-side-mask.png"
+        },
+        "back": {
+          "file": "side-m06-back.png",
+          "width": 73,
+          "height": 180,
+          "anchor": {
+            "x": 36,
+            "y": 179
+          },
+          "mask": "side-m06-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-m06-coffee.png",
+          "width": 114,
+          "height": 173,
+          "anchor": {
+            "x": 57,
+            "y": 172
+          },
+          "mask": "side-m06-coffee-mask.png",
+          "faces": "left"
+        },
+        "doze": {
+          "file": "side-m06-doze.png",
+          "width": 62,
+          "height": 92,
+          "anchor": {
+            "x": 27,
+            "y": 91
+          },
+          "mask": "side-m06-doze-mask.png",
+          "faces": "right",
+          "scale": 1.75
+        },
+        "type": {
+          "file": "side-m06-type.png",
+          "width": 83,
+          "height": 130,
+          "anchor": {
+            "x": 48,
+            "y": 129
+          },
+          "mask": "side-m06-type-mask.png",
+          "faces": "right",
+          "scale": 1.45
+        },
+        "sip": {
+          "file": "side-m06-sip.png",
+          "width": 86,
+          "height": 180,
+          "anchor": {
+            "x": 43,
+            "y": 179
+          },
+          "mask": "side-m06-sip-mask.png",
+          "faces": "right"
+        }
+      }
+    },
+    "m07": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-m07-front.png",
+          "width": 83,
+          "height": 180,
+          "anchor": {
+            "x": 41,
+            "y": 179
+          },
+          "mask": "side-m07-front-mask.png"
+        },
+        "side": {
+          "file": "side-m07-side.png",
+          "width": 84,
+          "height": 180,
+          "anchor": {
+            "x": 44,
+            "y": 179
+          },
+          "mask": "side-m07-side-mask.png",
+          "faces": "left"
+        },
+        "back": {
+          "file": "side-m07-back.png",
+          "width": 83,
+          "height": 180,
+          "anchor": {
+            "x": 41,
+            "y": 179
+          },
+          "mask": "side-m07-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-m07-coffee.png",
+          "width": 133,
+          "height": 198,
+          "anchor": {
+            "x": 58,
+            "y": 197
+          },
+          "mask": "side-m07-coffee-mask.png",
+          "faces": "left"
+        },
+        "doze": {
+          "file": "side-m07-doze.png",
+          "width": 106,
+          "height": 165,
+          "anchor": {
+            "x": 50,
+            "y": 164
+          },
+          "mask": "side-m07-doze-mask.png",
+          "faces": "right"
+        },
+        "type": {
+          "file": "side-m07-type.png",
+          "width": 119,
+          "height": 142,
+          "anchor": {
+            "x": 64,
+            "y": 141
+          },
+          "mask": "side-m07-type-mask.png",
+          "faces": "left",
+          "scale": 1.2
+        },
+        "sip": {
+          "file": "side-m07-sip.png",
+          "width": 80,
+          "height": 180,
+          "anchor": {
+            "x": 42,
+            "y": 179
+          },
+          "mask": "side-m07-sip-mask.png",
+          "faces": "right"
+        }
+      }
+    },
+    "m08": {
+      "npc": true,
+      "views": {
+        "front": {
+          "file": "side-m08-front.png",
+          "width": 94,
+          "height": 179,
+          "anchor": {
+            "x": 47,
+            "y": 178
+          },
+          "mask": "side-m08-front-mask.png"
+        },
+        "side": {
+          "file": "side-m08-side.png",
+          "width": 81,
+          "height": 180,
+          "anchor": {
+            "x": 42,
+            "y": 179
+          },
+          "mask": "side-m08-side-mask.png"
+        },
+        "back": {
+          "file": "side-m08-back.png",
+          "width": 94,
+          "height": 178,
+          "anchor": {
+            "x": 47,
+            "y": 177
+          },
+          "mask": "side-m08-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-m08-coffee.png",
+          "width": 138,
+          "height": 198,
+          "anchor": {
+            "x": 78,
+            "y": 197
+          },
+          "mask": "side-m08-coffee-mask.png",
+          "faces": "right"
+        },
+        "doze": {
+          "file": "side-m08-doze.png",
+          "width": 116,
+          "height": 198,
+          "anchor": {
+            "x": 60,
+            "y": 197
+          },
+          "mask": "side-m08-doze-mask.png",
+          "faces": "right"
+        },
+        "type": {
+          "file": "side-m08-type.png",
+          "width": 154,
+          "height": 194,
+          "anchor": {
+            "x": 80,
+            "y": 193
+          },
+          "mask": "side-m08-type-mask.png",
+          "faces": "right"
+        }
+      }
+    },
+    "m09": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-m09-front.png",
+          "width": 94,
+          "height": 180,
+          "anchor": {
+            "x": 45,
+            "y": 179
+          },
+          "mask": "side-m09-front-mask.png"
+        },
+        "side": {
+          "file": "side-m09-side.png",
+          "width": 88,
+          "height": 180,
+          "anchor": {
+            "x": 39,
+            "y": 179
+          },
+          "mask": "side-m09-side-mask.png",
+          "faces": "left"
+        },
+        "back": {
+          "file": "side-m09-back.png",
+          "width": 94,
+          "height": 180,
+          "anchor": {
+            "x": 49,
+            "y": 179
+          },
+          "mask": "side-m09-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-m09-coffee.png",
+          "width": 156,
+          "height": 198,
+          "anchor": {
+            "x": 65,
+            "y": 197
+          },
+          "mask": "side-m09-coffee-mask.png",
+          "faces": "right"
+        },
+        "doze": {
+          "file": "side-m09-doze.png",
+          "width": 142,
+          "height": 195,
+          "anchor": {
+            "x": 72,
+            "y": 194
+          },
+          "mask": "side-m09-doze-mask.png",
+          "faces": "right"
+        },
+        "type": {
+          "file": "side-m09-type.png",
+          "width": 135,
+          "height": 198,
+          "anchor": {
+            "x": 73,
+            "y": 197
+          },
+          "mask": "side-m09-type-mask.png",
+          "faces": "left"
+        }
+      }
+    },
+    "m10": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-m10-front.png",
+          "width": 90,
+          "height": 180,
+          "anchor": {
+            "x": 45,
+            "y": 179
+          },
+          "mask": "side-m10-front-mask.png"
+        },
+        "side": {
+          "file": "side-m10-side.png",
+          "width": 82,
+          "height": 180,
+          "anchor": {
+            "x": 47,
+            "y": 179
+          },
+          "mask": "side-m10-side-mask.png"
+        },
+        "back": {
+          "file": "side-m10-back.png",
+          "width": 90,
+          "height": 180,
+          "anchor": {
+            "x": 45,
+            "y": 179
+          },
+          "mask": "side-m10-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-m10-coffee.png",
+          "width": 115,
+          "height": 198,
+          "anchor": {
+            "x": 48,
+            "y": 197
+          },
+          "mask": "side-m10-coffee-mask.png",
+          "faces": "left"
+        },
+        "doze": {
+          "file": "side-m10-doze.png",
+          "width": 127,
+          "height": 198,
+          "anchor": {
+            "x": 63,
+            "y": 197
+          },
+          "mask": "side-m10-doze-mask.png",
+          "faces": "left"
+        },
+        "type": {
+          "file": "side-m10-type.png",
+          "width": 139,
+          "height": 188,
+          "anchor": {
+            "x": 69,
+            "y": 187
+          },
+          "mask": "side-m10-type-mask.png",
+          "faces": "right"
+        },
+        "sip": {
+          "file": "side-m10-sip.png",
+          "width": 81,
+          "height": 180,
+          "anchor": {
+            "x": 38,
+            "y": 179
+          },
+          "mask": "side-m10-sip-mask.png",
+          "faces": "right"
+        }
+      }
+    },
+    "sunny": {
+      "npc": true,
+      "views": {
+        "front": {
+          "file": "side-sunny-front.png",
+          "width": 82,
+          "height": 180,
+          "anchor": {
+            "x": 46,
+            "y": 179
+          }
+        },
+        "side": {
+          "file": "side-sunny-side.png",
+          "width": 95,
+          "height": 180,
+          "anchor": {
+            "x": 53,
+            "y": 179
+          }
+        },
+        "back": {
+          "file": "side-sunny-back.png",
+          "width": 82,
+          "height": 178,
+          "anchor": {
+            "x": 38,
+            "y": 177
+          }
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-sunny-coffee.png",
+          "width": 97,
+          "height": 152,
+          "anchor": {
+            "x": 48,
+            "y": 151
+          },
+          "faces": "right",
+          "scale": 1.15
+        },
+        "doze": {
+          "file": "side-sunny-doze.png",
+          "width": 95,
+          "height": 169,
+          "anchor": {
+            "x": 55,
+            "y": 168
+          },
+          "faces": "right"
+        },
+        "type": {
+          "file": "side-sunny-type.png",
+          "width": 108,
+          "height": 138,
+          "anchor": {
+            "x": 52,
+            "y": 137
+          },
+          "faces": "left",
+          "scale": 1.15
+        }
+      }
+    },
+    "f11": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-f11-front.png",
+          "width": 81,
+          "height": 180,
+          "anchor": {
+            "x": 41,
+            "y": 179
+          },
+          "mask": "side-f11-front-mask.png"
+        },
+        "side": {
+          "file": "side-f11-side.png",
+          "width": 72,
+          "height": 180,
+          "anchor": {
+            "x": 34,
+            "y": 179
+          },
+          "mask": "side-f11-side-mask.png",
+          "faces": "left"
+        },
+        "back": {
+          "file": "side-f11-back.png",
+          "width": 80,
+          "height": 180,
+          "anchor": {
+            "x": 40,
+            "y": 179
+          },
+          "mask": "side-f11-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-f11-coffee.png",
+          "width": 143,
+          "height": 198,
+          "anchor": {
+            "x": 75,
+            "y": 197
+          },
+          "mask": "side-f11-coffee-mask.png",
+          "faces": "right"
+        },
+        "doze": {
+          "file": "side-f11-doze.png",
+          "width": 147,
+          "height": 198,
+          "anchor": {
+            "x": 66,
+            "y": 197
+          },
+          "mask": "side-f11-doze-mask.png",
+          "faces": "left"
+        },
+        "type": {
+          "file": "side-f11-type.png",
+          "width": 136,
+          "height": 194,
+          "anchor": {
+            "x": 72,
+            "y": 193
+          },
+          "mask": "side-f11-type-mask.png",
+          "faces": "right"
+        }
+      }
+    },
+    "f12": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-f12-front.png",
+          "width": 81,
+          "height": 180,
+          "anchor": {
+            "x": 41,
+            "y": 179
+          },
+          "mask": "side-f12-front-mask.png"
+        },
+        "side": {
+          "file": "side-f12-side.png",
+          "width": 76,
+          "height": 178,
+          "anchor": {
+            "x": 33,
+            "y": 177
+          },
+          "mask": "side-f12-side-mask.png",
+          "faces": "left"
+        },
+        "back": {
+          "file": "side-f12-back.png",
+          "width": 80,
+          "height": 178,
+          "anchor": {
+            "x": 39,
+            "y": 177
+          },
+          "mask": "side-f12-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-f12-coffee.png",
+          "width": 120,
+          "height": 186,
+          "anchor": {
+            "x": 50,
+            "y": 185
+          },
+          "mask": "side-f12-coffee-mask.png",
+          "faces": "left"
+        },
+        "doze": {
+          "file": "side-f12-doze.png",
+          "width": 103,
+          "height": 195,
+          "anchor": {
+            "x": 55,
+            "y": 194
+          },
+          "mask": "side-f12-doze-mask.png",
+          "faces": "left"
+        },
+        "type": {
+          "file": "side-f12-type.png",
+          "width": 130,
+          "height": 162,
+          "anchor": {
+            "x": 70,
+            "y": 161
+          },
+          "mask": "side-f12-type-mask.png",
+          "faces": "right"
+        }
+      }
+    },
+    "f13": {
+      "npc": true,
+      "views": {
+        "front": {
+          "file": "side-f13-front.png",
+          "width": 88,
+          "height": 177,
+          "anchor": {
+            "x": 40,
+            "y": 176
+          },
+          "mask": "side-f13-front-mask.png"
+        },
+        "side": {
+          "file": "side-f13-side.png",
+          "width": 81,
+          "height": 175,
+          "anchor": {
+            "x": 46,
+            "y": 174
+          },
+          "mask": "side-f13-side-mask.png"
+        },
+        "back": {
+          "file": "side-f13-back.png",
+          "width": 88,
+          "height": 175,
+          "anchor": {
+            "x": 44,
+            "y": 174
+          },
+          "mask": "side-f13-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-f13-coffee.png",
+          "width": 107,
+          "height": 178,
+          "anchor": {
+            "x": 56,
+            "y": 177
+          },
+          "mask": "side-f13-coffee-mask.png",
+          "faces": "right"
+        },
+        "doze": {
+          "file": "side-f13-doze.png",
+          "width": 106,
+          "height": 177,
+          "anchor": {
+            "x": 53,
+            "y": 176
+          },
+          "mask": "side-f13-doze-mask.png",
+          "faces": "right",
+          "scale": 1.1
+        },
+        "type": {
+          "file": "side-f13-type.png",
+          "width": 160,
+          "height": 186,
+          "anchor": {
+            "x": 80,
+            "y": 185
+          },
+          "mask": "side-f13-type-mask.png",
+          "faces": "right"
+        }
+      }
+    },
+    "f14": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-f14-front.png",
+          "width": 77,
+          "height": 180,
+          "anchor": {
+            "x": 40,
+            "y": 179
+          },
+          "mask": "side-f14-front-mask.png"
+        },
+        "side": {
+          "file": "side-f14-side.png",
+          "width": 79,
+          "height": 178,
+          "anchor": {
+            "x": 42,
+            "y": 177
+          },
+          "mask": "side-f14-side-mask.png"
+        },
+        "back": {
+          "file": "side-f14-back.png",
+          "width": 77,
+          "height": 180,
+          "anchor": {
+            "x": 38,
+            "y": 179
+          },
+          "mask": "side-f14-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-f14-coffee.png",
+          "width": 101,
+          "height": 165,
+          "anchor": {
+            "x": 47,
+            "y": 164
+          },
+          "mask": "side-f14-coffee-mask.png",
+          "faces": "left"
+        },
+        "doze": {
+          "file": "side-f14-doze.png",
+          "width": 109,
+          "height": 180,
+          "anchor": {
+            "x": 52,
+            "y": 179
+          },
+          "mask": "side-f14-doze-mask.png",
+          "faces": "left"
+        },
+        "type": {
+          "file": "side-f14-type.png",
+          "width": 108,
+          "height": 170,
+          "anchor": {
+            "x": 61,
+            "y": 169
+          },
+          "mask": "side-f14-type-mask.png",
+          "faces": "right"
+        }
+      }
+    },
+    "f15": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-f15-front.png",
+          "width": 87,
+          "height": 180,
+          "anchor": {
+            "x": 38,
+            "y": 179
+          },
+          "mask": "side-f15-front-mask.png"
+        },
+        "side": {
+          "file": "side-f15-side.png",
+          "width": 81,
+          "height": 179,
+          "anchor": {
+            "x": 34,
+            "y": 178
+          },
+          "mask": "side-f15-side-mask.png",
+          "faces": "left"
+        },
+        "back": {
+          "file": "side-f15-back.png",
+          "width": 87,
+          "height": 178,
+          "anchor": {
+            "x": 43,
+            "y": 177
+          },
+          "mask": "side-f15-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-f15-coffee.png",
+          "width": 127,
+          "height": 198,
+          "anchor": {
+            "x": 57,
+            "y": 197
+          },
+          "mask": "side-f15-coffee-mask.png",
+          "faces": "left"
+        },
+        "doze": {
+          "file": "side-f15-doze.png",
+          "width": 129,
+          "height": 198,
+          "anchor": {
+            "x": 71,
+            "y": 197
+          },
+          "mask": "side-f15-doze-mask.png",
+          "faces": "right"
+        },
+        "type": {
+          "file": "side-f15-type.png",
+          "width": 152,
+          "height": 198,
+          "anchor": {
+            "x": 63,
+            "y": 197
+          },
+          "mask": "side-f15-type-mask.png",
+          "faces": "left"
+        }
+      }
+    },
+    "f16": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-f16-front.png",
+          "width": 75,
+          "height": 180,
+          "anchor": {
+            "x": 36,
+            "y": 179
+          },
+          "mask": "side-f16-front-mask.png"
+        },
+        "side": {
+          "file": "side-f16-side.png",
+          "width": 73,
+          "height": 180,
+          "anchor": {
+            "x": 32,
+            "y": 179
+          },
+          "mask": "side-f16-side-mask.png",
+          "faces": "left"
+        },
+        "back": {
+          "file": "side-f16-back.png",
+          "width": 78,
+          "height": 178,
+          "anchor": {
+            "x": 39,
+            "y": 177
+          },
+          "mask": "side-f16-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-f16-coffee.png",
+          "width": 126,
+          "height": 198,
+          "anchor": {
+            "x": 61,
+            "y": 197
+          },
+          "mask": "side-f16-coffee-mask.png",
+          "faces": "left"
+        },
+        "doze": {
+          "file": "side-f16-doze.png",
+          "width": 121,
+          "height": 197,
+          "anchor": {
+            "x": 54,
+            "y": 196
+          },
+          "mask": "side-f16-doze-mask.png",
+          "faces": "right"
+        },
+        "sip": {
+          "file": "side-f16-sip.png",
+          "width": 76,
+          "height": 180,
+          "anchor": {
+            "x": 35,
+            "y": 179
+          },
+          "mask": "side-f16-sip-mask.png",
+          "faces": "right"
+        },
+        "type": {
+          "file": "side-f16-type.png",
+          "width": 153,
+          "height": 182,
+          "anchor": {
+            "x": 90,
+            "y": 181
+          },
+          "mask": "side-f16-type-mask.png",
+          "faces": "right"
+        }
+      }
+    },
+    "f17": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-f17-front.png",
+          "width": 89,
+          "height": 180,
+          "anchor": {
+            "x": 45,
+            "y": 179
+          },
+          "mask": "side-f17-front-mask.png"
+        },
+        "side": {
+          "file": "side-f17-side.png",
+          "width": 90,
+          "height": 180,
+          "anchor": {
+            "x": 42,
+            "y": 179
+          },
+          "mask": "side-f17-side-mask.png",
+          "faces": "left"
+        },
+        "back": {
+          "file": "side-f17-back.png",
+          "width": 88,
+          "height": 180,
+          "anchor": {
+            "x": 44,
+            "y": 179
+          },
+          "mask": "side-f17-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-f17-coffee.png",
+          "width": 122,
+          "height": 198,
+          "anchor": {
+            "x": 61,
+            "y": 197
+          },
+          "mask": "side-f17-coffee-mask.png",
+          "faces": "left"
+        },
+        "doze": {
+          "file": "side-f17-doze.png",
+          "width": 119,
+          "height": 191,
+          "anchor": {
+            "x": 72,
+            "y": 190
+          },
+          "mask": "side-f17-doze-mask.png",
+          "faces": "right"
+        },
+        "type": {
+          "file": "side-f17-type.png",
+          "width": 133,
+          "height": 195,
+          "anchor": {
+            "x": 64,
+            "y": 194
+          },
+          "mask": "side-f17-type-mask.png",
+          "faces": "right"
+        }
+      }
+    },
+    "f18": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-f18-front.png",
+          "width": 84,
+          "height": 180,
+          "anchor": {
+            "x": 41,
+            "y": 179
+          },
+          "mask": "side-f18-front-mask.png"
+        },
+        "side": {
+          "file": "side-f18-side.png",
+          "width": 78,
+          "height": 177,
+          "anchor": {
+            "x": 30,
+            "y": 176
+          },
+          "mask": "side-f18-side-mask.png",
+          "faces": "left"
+        },
+        "back": {
+          "file": "side-f18-back.png",
+          "width": 80,
+          "height": 178,
+          "anchor": {
+            "x": 41,
+            "y": 177
+          },
+          "mask": "side-f18-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-f18-coffee.png",
+          "width": 111,
+          "height": 198,
+          "anchor": {
+            "x": 44,
+            "y": 197
+          },
+          "mask": "side-f18-coffee-mask.png",
+          "faces": "left"
+        },
+        "doze": {
+          "file": "side-f18-doze.png",
+          "width": 122,
+          "height": 198,
+          "anchor": {
+            "x": 54,
+            "y": 197
+          },
+          "mask": "side-f18-doze-mask.png",
+          "faces": "left"
+        },
+        "sip": {
+          "file": "side-f18-sip.png",
+          "width": 77,
+          "height": 180,
+          "anchor": {
+            "x": 36,
+            "y": 179
+          },
+          "mask": "side-f18-sip-mask.png",
+          "faces": "right"
+        },
+        "type": {
+          "file": "side-f18-type.png",
+          "width": 145,
+          "height": 178,
+          "anchor": {
+            "x": 64,
+            "y": 177
+          },
+          "mask": "side-f18-type-mask.png",
+          "faces": "right"
+        }
+      }
+    },
+    "f19": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-f19-front.png",
+          "width": 73,
+          "height": 180,
+          "anchor": {
+            "x": 35,
+            "y": 179
+          },
+          "mask": "side-f19-front-mask.png"
+        },
+        "side": {
+          "file": "side-f19-side.png",
+          "width": 84,
+          "height": 180,
+          "anchor": {
+            "x": 41,
+            "y": 179
+          },
+          "mask": "side-f19-side-mask.png"
+        },
+        "back": {
+          "file": "side-f19-back.png",
+          "width": 73,
+          "height": 180,
+          "anchor": {
+            "x": 37,
+            "y": 179
+          },
+          "mask": "side-f19-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-f19-coffee.png",
+          "width": 98,
+          "height": 179,
+          "anchor": {
+            "x": 42,
+            "y": 178
+          },
+          "mask": "side-f19-coffee-mask.png",
+          "faces": "left"
+        },
+        "doze": {
+          "file": "side-f19-doze.png",
+          "width": 93,
+          "height": 165,
+          "anchor": {
+            "x": 38,
+            "y": 164
+          },
+          "mask": "side-f19-doze-mask.png",
+          "faces": "left",
+          "scale": 1.1
+        },
+        "sip": {
+          "file": "side-f19-sip.png",
+          "width": 81,
+          "height": 180,
+          "anchor": {
+            "x": 41,
+            "y": 179
+          },
+          "mask": "side-f19-sip-mask.png",
+          "faces": "right"
+        },
+        "type": {
+          "file": "side-f19-type.png",
+          "width": 82,
+          "height": 121,
+          "anchor": {
+            "x": 37,
+            "y": 120
+          },
+          "mask": "side-f19-type-mask.png",
+          "faces": "right",
+          "scale": 1.35
+        }
+      }
+    },
+    "f20": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-f20-front.png",
+          "width": 86,
+          "height": 180,
+          "anchor": {
+            "x": 43,
+            "y": 179
+          },
+          "mask": "side-f20-front-mask.png"
+        },
+        "side": {
+          "file": "side-f20-side.png",
+          "width": 94,
+          "height": 180,
+          "anchor": {
+            "x": 46,
+            "y": 179
+          },
+          "mask": "side-f20-side-mask.png"
+        },
+        "back": {
+          "file": "side-f20-back.png",
+          "width": 86,
+          "height": 180,
+          "anchor": {
+            "x": 43,
+            "y": 179
+          },
+          "mask": "side-f20-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-f20-coffee.png",
+          "width": 100,
+          "height": 190,
+          "anchor": {
+            "x": 49,
+            "y": 189
+          },
+          "mask": "side-f20-coffee-mask.png",
+          "faces": "left"
+        },
+        "doze": {
+          "file": "side-f20-doze.png",
+          "width": 96,
+          "height": 180,
+          "anchor": {
+            "x": 42,
+            "y": 179
+          },
+          "mask": "side-f20-doze-mask.png",
+          "faces": "left"
+        },
+        "type": {
+          "file": "side-f20-type.png",
+          "width": 129,
+          "height": 186,
+          "anchor": {
+            "x": 63,
+            "y": 185
+          },
+          "mask": "side-f20-type-mask.png",
+          "faces": "left"
+        }
+      }
+    },
+    "m11": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-m11-front.png",
+          "width": 79,
+          "height": 180,
+          "anchor": {
+            "x": 39,
+            "y": 179
+          },
+          "mask": "side-m11-front-mask.png"
+        },
+        "side": {
+          "file": "side-m11-side.png",
+          "width": 75,
+          "height": 180,
+          "anchor": {
+            "x": 37,
+            "y": 179
+          },
+          "mask": "side-m11-side-mask.png"
+        },
+        "back": {
+          "file": "side-m11-back.png",
+          "width": 79,
+          "height": 179,
+          "anchor": {
+            "x": 41,
+            "y": 178
+          },
+          "mask": "side-m11-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-m11-coffee.png",
+          "width": 109,
+          "height": 198,
+          "anchor": {
+            "x": 54,
+            "y": 197
+          },
+          "mask": "side-m11-coffee-mask.png",
+          "faces": "left"
+        },
+        "doze": {
+          "file": "side-m11-doze.png",
+          "width": 115,
+          "height": 196,
+          "anchor": {
+            "x": 62,
+            "y": 195
+          },
+          "mask": "side-m11-doze-mask.png",
+          "faces": "right"
+        },
+        "sip": {
+          "file": "side-m11-sip.png",
+          "width": 76,
+          "height": 180,
+          "anchor": {
+            "x": 40,
+            "y": 179
+          },
+          "mask": "side-m11-sip-mask.png",
+          "faces": "right"
+        },
+        "type": {
+          "file": "side-m11-type.png",
+          "width": 145,
+          "height": 195,
+          "anchor": {
+            "x": 60,
+            "y": 194
+          },
+          "mask": "side-m11-type-mask.png",
+          "faces": "right"
+        }
+      }
+    },
+    "m12": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-m12-front.png",
+          "width": 86,
+          "height": 178,
+          "anchor": {
+            "x": 39,
+            "y": 177
+          },
+          "mask": "side-m12-front-mask.png"
+        },
+        "side": {
+          "file": "side-m12-side.png",
+          "width": 88,
+          "height": 180,
+          "anchor": {
+            "x": 47,
+            "y": 179
+          },
+          "mask": "side-m12-side-mask.png",
+          "faces": "left"
+        },
+        "back": {
+          "file": "side-m12-back.png",
+          "width": 85,
+          "height": 178,
+          "anchor": {
+            "x": 45,
+            "y": 177
+          },
+          "mask": "side-m12-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-m12-coffee.png",
+          "width": 110,
+          "height": 198,
+          "anchor": {
+            "x": 65,
+            "y": 197
+          },
+          "mask": "side-m12-coffee-mask.png",
+          "faces": "right"
+        },
+        "doze": {
+          "file": "side-m12-doze.png",
+          "width": 146,
+          "height": 198,
+          "anchor": {
+            "x": 72,
+            "y": 197
+          },
+          "mask": "side-m12-doze-mask.png",
+          "faces": "left"
+        },
+        "sip": {
+          "file": "side-m12-sip.png",
+          "width": 83,
+          "height": 180,
+          "anchor": {
+            "x": 40,
+            "y": 179
+          },
+          "mask": "side-m12-sip-mask.png",
+          "faces": "right"
+        },
+        "type": {
+          "file": "side-m12-type.png",
+          "width": 146,
+          "height": 169,
+          "anchor": {
+            "x": 66,
+            "y": 168
+          },
+          "mask": "side-m12-type-mask.png",
+          "faces": "right"
+        }
+      }
+    },
+    "m14": {
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-m14-front.png",
+          "width": 103,
+          "height": 179,
+          "anchor": {
+            "x": 51,
+            "y": 178
+          },
+          "mask": "side-m14-front-mask.png"
+        },
+        "side": {
+          "file": "side-m14-side.png",
+          "width": 78,
+          "height": 180,
+          "anchor": {
+            "x": 42,
+            "y": 179
+          },
+          "mask": "side-m14-side-mask.png"
+        },
+        "back": {
+          "file": "side-m14-back.png",
+          "width": 100,
+          "height": 177,
+          "anchor": {
+            "x": 50,
+            "y": 176
+          },
+          "mask": "side-m14-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-m14-coffee.png",
+          "width": 102,
+          "height": 158,
+          "anchor": {
+            "x": 49,
+            "y": 157
+          },
+          "mask": "side-m14-coffee-mask.png",
+          "faces": "left",
+          "scale": 1.15
+        },
+        "doze": {
+          "file": "side-m14-doze.png",
+          "width": 110,
+          "height": 161,
+          "anchor": {
+            "x": 47,
+            "y": 160
+          },
+          "mask": "side-m14-doze-mask.png",
+          "faces": "left",
+          "scale": 1.15
+        },
+        "type": {
+          "file": "side-m14-type.png",
+          "width": 137,
+          "height": 177,
+          "anchor": {
+            "x": 67,
+            "y": 176
+          },
+          "mask": "side-m14-type-mask.png",
+          "faces": "left"
+        }
+      }
+    },
+    "m15": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-m15-front.png",
+          "width": 101,
+          "height": 180,
+          "anchor": {
+            "x": 50,
+            "y": 179
+          },
+          "mask": "side-m15-front-mask.png"
+        },
+        "side": {
+          "file": "side-m15-side.png",
+          "width": 95,
+          "height": 177,
+          "anchor": {
+            "x": 43,
+            "y": 176
+          },
+          "mask": "side-m15-side-mask.png",
+          "faces": "left"
+        },
+        "back": {
+          "file": "side-m15-back.png",
+          "width": 101,
+          "height": 177,
+          "anchor": {
+            "x": 50,
+            "y": 176
+          },
+          "mask": "side-m15-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-m15-coffee.png",
+          "width": 153,
+          "height": 194,
+          "anchor": {
+            "x": 76,
+            "y": 193
+          },
+          "mask": "side-m15-coffee-mask.png",
+          "faces": "right"
+        },
+        "doze": {
+          "file": "side-m15-doze.png",
+          "width": 161,
+          "height": 198,
+          "anchor": {
+            "x": 83,
+            "y": 197
+          },
+          "mask": "side-m15-doze-mask.png",
+          "faces": "left"
+        },
+        "type": {
+          "file": "side-m15-type.png",
+          "width": 113,
+          "height": 164,
+          "anchor": {
+            "x": 52,
+            "y": 163
+          },
+          "mask": "side-m15-type-mask.png",
+          "faces": "left",
+          "scale": 1.1
+        }
+      }
+    },
+    "m16": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-m16-front.png",
+          "width": 84,
+          "height": 180,
+          "anchor": {
+            "x": 42,
+            "y": 179
+          },
+          "mask": "side-m16-front-mask.png"
+        },
+        "side": {
+          "file": "side-m16-side.png",
+          "width": 86,
+          "height": 180,
+          "anchor": {
+            "x": 51,
+            "y": 179
+          },
+          "mask": "side-m16-side-mask.png"
+        },
+        "back": {
+          "file": "side-m16-back.png",
+          "width": 84,
+          "height": 180,
+          "anchor": {
+            "x": 42,
+            "y": 179
+          },
+          "mask": "side-m16-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-m16-coffee.png",
+          "width": 125,
+          "height": 197,
+          "anchor": {
+            "x": 51,
+            "y": 196
+          },
+          "mask": "side-m16-coffee-mask.png",
+          "faces": "left"
+        },
+        "doze": {
+          "file": "side-m16-doze.png",
+          "width": 91,
+          "height": 149,
+          "anchor": {
+            "x": 37,
+            "y": 148
+          },
+          "mask": "side-m16-doze-mask.png",
+          "faces": "left",
+          "scale": 1.3
+        },
+        "type": {
+          "file": "side-m16-type.png",
+          "width": 129,
+          "height": 187,
+          "anchor": {
+            "x": 57,
+            "y": 186
+          },
+          "mask": "side-m16-type-mask.png",
+          "faces": "right"
+        }
+      }
+    },
+    "m18": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-m18-front.png",
+          "width": 79,
+          "height": 178,
+          "anchor": {
+            "x": 38,
+            "y": 177
+          },
+          "mask": "side-m18-front-mask.png"
+        },
+        "side": {
+          "file": "side-m18-side.png",
+          "width": 79,
+          "height": 179,
+          "anchor": {
+            "x": 43,
+            "y": 178
+          },
+          "mask": "side-m18-side-mask.png"
+        },
+        "back": {
+          "file": "side-m18-back.png",
+          "width": 79,
+          "height": 178,
+          "anchor": {
+            "x": 40,
+            "y": 177
+          },
+          "mask": "side-m18-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-m18-coffee.png",
+          "width": 101,
+          "height": 155,
+          "anchor": {
+            "x": 50,
+            "y": 154
+          },
+          "mask": "side-m18-coffee-mask.png",
+          "faces": "left"
+        },
+        "doze": {
+          "file": "side-m18-doze.png",
+          "width": 106,
+          "height": 145,
+          "anchor": {
+            "x": 50,
+            "y": 144
+          },
+          "mask": "side-m18-doze-mask.png",
+          "faces": "left",
+          "scale": 1.15
+        },
+        "sip": {
+          "file": "side-m18-sip.png",
+          "width": 80,
+          "height": 180,
+          "anchor": {
+            "x": 39,
+            "y": 179
+          },
+          "mask": "side-m18-sip-mask.png",
+          "faces": "right"
+        },
+        "type": {
+          "file": "side-m18-type.png",
+          "width": 114,
+          "height": 158,
+          "anchor": {
+            "x": 51,
+            "y": 157
+          },
+          "mask": "side-m18-type-mask.png",
+          "faces": "left",
+          "scale": 1.1
+        }
+      }
+    },
+    "m20": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-m20-front.png",
+          "width": 82,
+          "height": 180,
+          "anchor": {
+            "x": 41,
+            "y": 179
+          },
+          "mask": "side-m20-front-mask.png"
+        },
+        "side": {
+          "file": "side-m20-side.png",
+          "width": 87,
+          "height": 179,
+          "anchor": {
+            "x": 49,
+            "y": 178
+          },
+          "mask": "side-m20-side-mask.png"
+        },
+        "back": {
+          "file": "side-m20-back.png",
+          "width": 81,
+          "height": 178,
+          "anchor": {
+            "x": 41,
+            "y": 177
+          },
+          "mask": "side-m20-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-m20-coffee.png",
+          "width": 123,
+          "height": 182,
+          "anchor": {
+            "x": 61,
+            "y": 181
+          },
+          "mask": "side-m20-coffee-mask.png",
+          "faces": "left",
+          "scale": 1.15
+        },
+        "doze": {
+          "file": "side-m20-doze.png",
+          "width": 127,
+          "height": 161,
+          "anchor": {
+            "x": 57,
+            "y": 160
+          },
+          "mask": "side-m20-doze-mask.png",
+          "faces": "left",
+          "scale": 1.1
+        },
+        "sip": {
+          "file": "side-m20-sip.png",
+          "width": 81,
+          "height": 180,
+          "anchor": {
+            "x": 42,
+            "y": 179
+          },
+          "mask": "side-m20-sip-mask.png",
+          "faces": "right"
+        },
+        "type": {
+          "file": "side-m20-type.png",
+          "width": 160,
+          "height": 198,
+          "anchor": {
+            "x": 80,
+            "y": 197
+          },
+          "mask": "side-m20-type-mask.png",
+          "faces": "right"
+        }
+      }
+    },
+    "m13": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-m13-front.png",
+          "width": 97,
+          "height": 180,
+          "anchor": {
+            "x": 46,
+            "y": 179
+          },
+          "mask": "side-m13-front-mask.png"
+        },
+        "side": {
+          "file": "side-m13-side.png",
+          "width": 95,
+          "height": 180,
+          "anchor": {
+            "x": 45,
+            "y": 179
+          },
+          "mask": "side-m13-side-mask.png",
+          "faces": "left"
+        },
+        "back": {
+          "file": "side-m13-back.png",
+          "width": 98,
+          "height": 180,
+          "anchor": {
+            "x": 50,
+            "y": 179
+          },
+          "mask": "side-m13-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-m13-coffee.png",
+          "width": 135,
+          "height": 197,
+          "anchor": {
+            "x": 57,
+            "y": 196
+          },
+          "mask": "side-m13-coffee-mask.png",
+          "faces": "left"
+        },
+        "doze": {
+          "file": "side-m13-doze.png",
+          "width": 113,
+          "height": 198,
+          "anchor": {
+            "x": 56,
+            "y": 197
+          },
+          "mask": "side-m13-doze-mask.png",
+          "faces": "left"
+        },
+        "type": {
+          "file": "side-m13-type.png",
+          "width": 144,
+          "height": 198,
+          "anchor": {
+            "x": 70,
+            "y": 197
+          },
+          "mask": "side-m13-type-mask.png",
+          "faces": "right"
+        }
+      }
+    },
+    "m17": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-m17-front.png",
+          "width": 80,
+          "height": 178,
+          "anchor": {
+            "x": 39,
+            "y": 177
+          },
+          "mask": "side-m17-front-mask.png"
+        },
+        "side": {
+          "file": "side-m17-side.png",
+          "width": 106,
+          "height": 180,
+          "anchor": {
+            "x": 51,
+            "y": 179
+          },
+          "mask": "side-m17-side-mask.png",
+          "faces": "left"
+        },
+        "back": {
+          "file": "side-m17-back.png",
+          "width": 80,
+          "height": 178,
+          "anchor": {
+            "x": 40,
+            "y": 177
+          },
+          "mask": "side-m17-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-m17-coffee.png",
+          "width": 100,
+          "height": 181,
+          "anchor": {
+            "x": 48,
+            "y": 180
+          },
+          "mask": "side-m17-coffee-mask.png",
+          "faces": "left"
+        },
+        "doze": {
+          "file": "side-m17-doze.png",
+          "width": 116,
+          "height": 157,
+          "anchor": {
+            "x": 58,
+            "y": 156
+          },
+          "mask": "side-m17-doze-mask.png",
+          "faces": "right",
+          "scale": 1.2
+        },
+        "sip": {
+          "file": "side-m17-sip.png",
+          "width": 89,
+          "height": 180,
+          "anchor": {
+            "x": 41,
+            "y": 179
+          },
+          "mask": "side-m17-sip-mask.png",
+          "faces": "right"
+        },
+        "type": {
+          "file": "side-m17-type.png",
+          "width": 110,
+          "height": 149,
+          "anchor": {
+            "x": 62,
+            "y": 148
+          },
+          "mask": "side-m17-type-mask.png",
+          "faces": "right",
+          "scale": 1.25
+        }
+      }
+    },
+    "m19": {
+      "recolor": true,
+      "npc": false,
+      "views": {
+        "front": {
+          "file": "side-m19-front.png",
+          "width": 83,
+          "height": 179,
+          "anchor": {
+            "x": 40,
+            "y": 178
+          },
+          "mask": "side-m19-front-mask.png"
+        },
+        "side": {
+          "file": "side-m19-side.png",
+          "width": 73,
+          "height": 180,
+          "anchor": {
+            "x": 36,
+            "y": 179
+          },
+          "mask": "side-m19-side-mask.png"
+        },
+        "back": {
+          "file": "side-m19-back.png",
+          "width": 88,
+          "height": 180,
+          "anchor": {
+            "x": 44,
+            "y": 179
+          },
+          "mask": "side-m19-back-mask.png"
+        }
+      },
+      "poses": {
+        "coffee": {
+          "file": "side-m19-coffee.png",
+          "width": 119,
+          "height": 176,
+          "anchor": {
+            "x": 59,
+            "y": 175
+          },
+          "mask": "side-m19-coffee-mask.png",
+          "faces": "right",
+          "scale": 1.2
+        },
+        "doze": {
+          "file": "side-m19-doze.png",
+          "width": 131,
+          "height": 198,
+          "anchor": {
+            "x": 65,
+            "y": 197
+          },
+          "mask": "side-m19-doze-mask.png",
+          "faces": "left"
+        },
+        "sip": {
+          "file": "side-m19-sip.png",
+          "width": 97,
+          "height": 180,
+          "anchor": {
+            "x": 48,
+            "y": 179
+          },
+          "mask": "side-m19-sip-mask.png",
+          "faces": "right"
+        },
+        "type": {
+          "file": "side-m19-type.png",
+          "width": 126,
+          "height": 161,
+          "anchor": {
+            "x": 61,
+            "y": 160
+          },
+          "mask": "side-m19-type-mask.png",
+          "faces": "left",
+          "scale": 1.1
+        }
+      }
+    }
+  },
+  "backgrounds": {
+    "boss": "bg-boss.png",
+    "dev": "bg-dev.png",
+    "lab": "bg-lab.png",
+    "meeting": "bg-meeting.png",
+    "roof": "bg-roof.png",
+    "studio": "bg-studio.png"
+  },
+  "props": {
+    "bartable": {
+      "file": "prop-bartable.png",
+      "width": 64,
+      "height": 84,
+      "native": true
+    },
+    "booth": {
+      "file": "prop-booth.png",
+      "width": 138,
+      "height": 240
+    },
+    "bugboard": {
+      "file": "prop-bugboard.png",
+      "width": 219,
+      "height": 240
+    },
+    "cabinet": {
+      "file": "prop-cabinet.png",
+      "width": 90,
+      "height": 45,
+      "native": true
+    },
+    "chair": {
+      "file": "prop-chair.png",
+      "width": 151,
+      "height": 240
+    },
+    "chairstack": {
+      "file": "prop-chairstack.png",
+      "width": 44,
+      "height": 60,
+      "native": true
+    },
+    "coffeecart": {
+      "file": "prop-coffeecart.png",
+      "width": 104,
+      "height": 94,
+      "native": true
+    },
+    "conftable": {
+      "file": "prop-conftable.png",
+      "width": 304,
+      "height": 52,
+      "native": true
+    },
+    "dashboard": {
+      "file": "prop-dashboard.png",
+      "width": 104,
+      "height": 240
+    },
+    "design-desk": {
+      "file": "prop-design-desk.png",
+      "width": 112,
+      "height": 78,
+      "native": true
+    },
+    "desk": {
+      "file": "prop-desk.png",
+      "width": 300,
+      "height": 234
+    },
+    "desk-bare": {
+      "file": "prop-desk-bare.png",
+      "width": 300,
+      "height": 137
+    },
+    "desklamp": {
+      "file": "prop-desklamp.png",
+      "width": 20,
+      "height": 32,
+      "native": true
+    },
+    "desklaptop": {
+      "file": "prop-desklaptop.png",
+      "width": 32,
+      "height": 24,
+      "native": true
+    },
+    "devicefarm": {
+      "file": "prop-devicefarm.png",
+      "width": 244,
+      "height": 240
+    },
+    "dispenser": {
+      "file": "prop-dispenser.png",
+      "width": 30,
+      "height": 66,
+      "native": true
+    },
+    "espresso": {
+      "file": "prop-espresso.png",
+      "width": 32,
+      "height": 40,
+      "native": true
+    },
+    "foldchair": {
+      "file": "prop-foldchair.png",
+      "width": 30,
+      "height": 58,
+      "native": true
+    },
+    "gardenbench": {
+      "file": "prop-gardenbench.png",
+      "width": 152,
+      "height": 66,
+      "native": true
+    },
+    "hotdesk": {
+      "file": "prop-hotdesk.png",
+      "width": 300,
+      "height": 184
+    },
+    "lantern": {
+      "file": "prop-lantern.png",
+      "width": 24,
+      "height": 120,
+      "native": true
+    },
+    "monitorwall": {
+      "file": "prop-monitorwall.png",
+      "width": 300,
+      "height": 240
+    },
+    "moodboard": {
+      "file": "prop-moodboard.png",
+      "width": 100,
+      "height": 96,
+      "native": true
+    },
+    "parasol": {
+      "file": "prop-parasol.png",
+      "width": 164,
+      "height": 180,
+      "native": true
+    },
+    "plant": {
+      "file": "prop-plant.png",
+      "width": 170,
+      "height": 240
+    },
+    "printer3d": {
+      "file": "prop-printer3d.png",
+      "width": 176,
+      "height": 240
+    },
+    "server": {
+      "file": "prop-server.png",
+      "width": 151,
+      "height": 240
+    },
+    "sofa": {
+      "file": "prop-sofa.png",
+      "width": 300,
+      "height": 172
+    },
+    "softbox": {
+      "file": "prop-softbox.png",
+      "width": 52,
+      "height": 107,
+      "native": true
+    },
+    "standdesk": {
+      "file": "prop-standdesk.png",
+      "width": 224,
+      "height": 240
+    },
+    "testbench": {
+      "file": "prop-testbench.png",
+      "width": 214,
+      "height": 240
+    },
+    "whiteboard": {
+      "file": "prop-whiteboard.png",
+      "width": 182,
+      "height": 240
+    }
+  }
+}

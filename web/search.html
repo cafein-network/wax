@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>wax 기록 검색</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>wax 기록 검색</h1>
+    <span class="status" id="status" data-state="down">연결 중…</span>
+    <span class="spacer"></span>
+    <nav><a href="/">요청과 보고</a><a href="/manage">상세 기록</a><a href="/chat">팀 채널</a><a href="/search" aria-current="page">검색</a><a href="/office">가상 사무실</a></nav>
+  </header>
+  <main class="search-page">
+    <form class="panel search-form" id="search-form" role="search">
+      <label for="search-q">기록 검색</label>
+      <div class="search-row">
+        <input id="search-q" name="q" type="search" autocomplete="off" maxlength="200" placeholder="예: 인계, 리뷰 오류, &quot;Claude Code&quot;, handoff-v2.md, 커밋 SHA" aria-describedby="search-help">
+        <button type="submit">검색</button>
+      </div>
+      <details class="search-filters" id="search-filters">
+        <summary>필터</summary>
+        <div class="search-filter-grid">
+          <label>종류 <select id="search-kind" name="kind"><option value="">전체</option></select></label>
+          <label>작업 <select id="search-feature" name="feature"><option value="">전체</option></select></label>
+          <label>작성자 <input id="search-author" name="author" list="search-authors" maxlength="40" placeholder="예: claude-app"></label>
+          <label>단계 <select id="search-phase" name="phase"><option value="">전체</option><option value="plan">기획</option><option value="design">설계</option><option value="implement">구현</option><option value="review">검토</option><option value="report">보고</option></select></label>
+          <label>시작일 <input id="search-from" name="from" type="date"></label>
+          <label>종료일 <input id="search-to" name="to" type="date"></label>
+        </div>
+        <datalist id="search-authors"></datalist>
+        <button type="button" id="search-clear" class="link">필터 지우기</button>
+      </details>
+      <p class="search-help" id="search-help">띄어 쓴 단어는 모두 포함한 기록만 찾습니다. 세 글자 이상은 부분 일치, 두 글자(예: 인계, UI)는 단어 조각 일치, 한 글자는 전체를 훑습니다. “따옴표”로 구절을 찾습니다. 결과는 최신순입니다. <a href="/help#search">검색 도움말</a></p>
+    </form>
+    <section class="panel search-index" id="search-index" aria-live="polite"></section>
+    <p class="search-alert" id="search-alert" role="alert" hidden></p>
+    <section class="search-results" aria-labelledby="search-results-title">
+      <h2 id="search-results-title" class="visually-hidden">검색 결과</h2>
+      <p class="search-summary" id="search-summary" aria-live="polite"></p>
+      <ol class="search-list" id="search-list"></ol>
+      <div class="search-pager"><button type="button" id="search-first" hidden>처음 결과로</button><button type="button" id="search-more" hidden>다음 결과</button></div>
+    </section>
+    <p class="search-scope" id="search-scope"></p>
+  </main>
+  <script type="module" src="/search.mjs"></script>
+</body>
+</html>

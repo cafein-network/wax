@@ -1,0 +1,231 @@
+{
+  "schema": 1,
+  "size": 64,
+  "kinds": [
+    "claude",
+    "codex",
+    "gemini",
+    "copilot",
+    "antigravity",
+    "human",
+    "other"
+  ],
+  "personas": [
+    {
+      "id": "f01",
+      "recolor": true
+    },
+    {
+      "id": "f02",
+      "recolor": true
+    },
+    {
+      "id": "f03",
+      "recolor": true
+    },
+    {
+      "id": "f04",
+      "recolor": true
+    },
+    {
+      "id": "f05",
+      "recolor": true
+    },
+    {
+      "id": "f07",
+      "recolor": true
+    },
+    {
+      "id": "f08",
+      "recolor": true
+    },
+    {
+      "id": "f09",
+      "recolor": true
+    },
+    {
+      "id": "f10",
+      "recolor": true
+    },
+    {
+      "id": "f11",
+      "recolor": true
+    },
+    {
+      "id": "f12",
+      "recolor": true
+    },
+    {
+      "id": "f14",
+      "recolor": true
+    },
+    {
+      "id": "f15",
+      "recolor": true
+    },
+    {
+      "id": "f16",
+      "recolor": true
+    },
+    {
+      "id": "f17",
+      "recolor": true
+    },
+    {
+      "id": "f18",
+      "recolor": true
+    },
+    {
+      "id": "f19",
+      "recolor": true
+    },
+    {
+      "id": "f20",
+      "recolor": true
+    },
+    {
+      "id": "m01",
+      "recolor": true
+    },
+    {
+      "id": "m02",
+      "recolor": false
+    },
+    {
+      "id": "m03",
+      "recolor": true
+    },
+    {
+      "id": "m04",
+      "recolor": true
+    },
+    {
+      "id": "m05",
+      "recolor": false
+    },
+    {
+      "id": "m06",
+      "recolor": true
+    },
+    {
+      "id": "m07",
+      "recolor": true
+    },
+    {
+      "id": "m09",
+      "recolor": true
+    },
+    {
+      "id": "m10",
+      "recolor": true
+    },
+    {
+      "id": "m11",
+      "recolor": true
+    },
+    {
+      "id": "m12",
+      "recolor": true
+    },
+    {
+      "id": "m13",
+      "recolor": true
+    },
+    {
+      "id": "m14",
+      "recolor": false
+    },
+    {
+      "id": "m15",
+      "recolor": true
+    },
+    {
+      "id": "m16",
+      "recolor": true
+    },
+    {
+      "id": "m17",
+      "recolor": true
+    },
+    {
+      "id": "m18",
+      "recolor": true
+    },
+    {
+      "id": "m19",
+      "recolor": true
+    },
+    {
+      "id": "m20",
+      "recolor": true
+    },
+    {
+      "id": "jake",
+      "recolor": false,
+      "npc": true
+    },
+    {
+      "id": "f13",
+      "recolor": false,
+      "npc": true
+    },
+    {
+      "id": "emily",
+      "recolor": false,
+      "npc": true
+    },
+    {
+      "id": "sunny",
+      "recolor": false,
+      "npc": true
+    },
+    {
+      "id": "m08",
+      "recolor": false,
+      "npc": true
+    },
+    {
+      "id": "brian",
+      "recolor": false,
+      "npc": true
+    },
+    {
+      "id": "f06",
+      "recolor": true,
+      "npc": true
+    }
+  ],
+  "variants": {
+    "claude": null,
+    "codex": {
+      "hue": 220,
+      "saturation": 0.12,
+      "lightness": -0.22
+    },
+    "gemini": {
+      "hue": 220,
+      "saturation": 0.6,
+      "lightness": -0.12
+    },
+    "copilot": {
+      "hue": 270,
+      "saturation": 0.45,
+      "lightness": -0.05
+    },
+    "antigravity": {
+      "hue": 350,
+      "saturation": 0.65,
+      "lightness": -0.15
+    },
+    "human": {
+      "hue": 215,
+      "saturation": 0.12,
+      "lightness": 0.02
+    },
+    "other": {
+      "hue": 80,
+      "saturation": 0.3,
+      "lightness": -0.2
+    }
+  }
+}
