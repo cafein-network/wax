@@ -122,7 +122,7 @@ try {
   config = await api('/api/config');
   $('status').dataset.state = 'up'; $('status').textContent = '연결됨';
   const [features, presence] = await Promise.all([api('/api/features').catch(() => []), api('/api/presence').catch(() => [])]);
-  for (const f of features) $('search-feature').append(el('option', { value: f.id, text: `${f.title} (${f.id})` }));
+  for (const f of features) $('search-feature').append(el('option', { value: f.id, translate: 'no', text: `${f.title} (${f.id})` }));
   if (initial.get('feature')) $('search-feature').value = initial.get('feature');
   for (const a of presence) $('search-authors').append(el('option', { value: a.author }));
 } catch { online = false; $('status').textContent = '연결 끊김'; }

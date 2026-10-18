@@ -60,7 +60,7 @@ function renderChannels() {
     type: 'button', 'aria-current': String(channel.id === current),
     onclick: () => selectChannel(channel.id),
   }, el('span', {}, el('strong', { text: `# ${channel.name ?? channel.id}` }), channel.phase ? ' ' : '', channel.phase ? el('span', { class: 'badge', text: channel.phase }) : null),
-  el('span', { class: 'meta', text: `${channel.title ?? ''} · ${channel.count}개` })))));
+  el('span', { class: 'meta' }, el('span', { translate: 'no', text: channel.title ?? '' }), ` · ${channel.count}개`)))));
 }
 
 let faceAssets = null, faces = new Map();

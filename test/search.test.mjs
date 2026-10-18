@@ -192,9 +192,12 @@ test('several processes writing while others search and rebuild end with every r
   const writer = (name, n) => run(['--input-type=module', '-e', `
     import { appendRecord, makeId } from ${JSON.stringify(STORE)};
     for (let i = 0; i < ${n}; i++) await appendRecord(${JSON.stringify(channelFile(root, 'general'))}, (seq) => ({ schema: 1, id: makeId('m', seq), seq, channel: 'general', author: '${name}', kind: 'codex', type: 'message', body: '동시 인계 ${name} ' + i, at: new Date().toISOString() }));`]);
-  const searcher = async () => { for (let i = 0; i < 15; i++) await search(root, { query: '인계' }); };
+  const busy = /다시 시도하세요/;
+  const again = async (work) => { for (let i = 0; ; i++) { try { return await work(); } catch (error) { if (error?.status !== 409 || !busy.test(error.message) || i >= 30) throw error; } } };
+  const cli = async (args) => { for (let i = 0; ; i++) { const r = await run(args); if (r.code === 0 || !busy.test(r.stderr) || i >= 30) return r; } };
+  const searcher = async () => { for (let i = 0; i < 15; i++) await again(() => search(root, { query: '인계' })); };
   const results = await Promise.all([writer('writer-a', 60), writer('writer-b', 60), writer('writer-c', 60), searcher(), searcher(),
-    run([BIN, '--project', root, 'search', 'index', '--rebuild']), run([BIN, '--project', root, 'search', '인계', '--json'])]);
+    cli([BIN, '--project', root, 'search', 'index', '--rebuild']), cli([BIN, '--project', root, 'search', '인계', '--json'])]);
   for (const r of results.filter((r) => r && r.code !== undefined)) assert.equal(r.code, 0, r.stderr);
   const final = await search(root, { query: '인계', limit: 50 });
   assert.equal(final.total, 180);

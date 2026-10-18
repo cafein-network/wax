@@ -1625,6 +1625,7 @@ export const phrases = {
 };
 
 export const patterns = [
+  ["· {0}개", "· {0}"],
   ["wax {command} 스킬로{args} 진행해줘", "Use the wax {command} skill{args}"],
   ["PM이 배정한 {task} 업무", "PM assignment: {task}"],
   ["{task}의 현재 단계", "Current stage of {task}"],

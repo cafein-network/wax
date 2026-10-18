@@ -17,6 +17,7 @@ export function el(tag, props = {}, ...children) {
 }
 
 export const tr = (text) => globalThis.waxLocale?.translate(text) ?? text;
+export const trFill = (template, ...values) => tr(template).replace(/\{(\d+)\}/g, (hole, index) => values[index] ?? hole);
 export const dateLocale = () => (globalThis.document?.documentElement.lang === 'en' ? 'en-US' : 'ko-KR');
 
 export const clear = (node) => { node.replaceChildren(); return node; };

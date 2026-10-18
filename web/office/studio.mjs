@@ -1,4 +1,4 @@
-import { clear, el } from '/dom.mjs';
+import { clear, el, tr, trFill } from '/dom.mjs';
 
 export const CHECK_LABELS = { unchecked: '검사 전', unsupported: '지원 안 함', 'not-configured': '미연결', 'auth-required': '인증 필요', error: '연결 오류',
   'target-mismatch': '대상 불일치', 'read-only': '읽기 전용', 'read-write': '읽기·쓰기 가능', connected: '연결됨 · 대상은 제작 때 확인' };
@@ -93,7 +93,7 @@ export function renderStudioCollab(panel, { data, features = [], api, token, ref
     const ready = targets.filter((t) => usableAgents(t).length);
     if (!ready.length) return el('p', { class: 'empty', text: '연결 검사를 통과한 대상이 없어 제작을 요청할 수 없습니다. 위에서 대상을 추가하고 연결 검사의 다음 행동을 따라 주세요.' });
     const targetSelect = field('studio-job-target', 'select', { 'aria-label': '디자인 대상' });
-    for (const t of ready) targetSelect.append(el('option', { value: t.id, text: `${TOOL_LABELS[t.tool]} · ${t.label}` }));
+    for (const t of ready) targetSelect.append(el('option', { value: t.id, translate: 'no', text: `${TOOL_LABELS[t.tool]} · ${t.label}` }));
     restore(targetSelect);
     if (!ready.some((t) => t.id === targetSelect.value)) targetSelect.value = ready[0].id;
     targetSelect.addEventListener('change', render);
@@ -103,7 +103,7 @@ export function renderStudioCollab(panel, { data, features = [], api, token, ref
     restore(agentSelect);
     if (!usableAgents(target).some((a) => a.id === agentSelect.value)) agentSelect.value = usableAgents(target)[0].id;
     const featureSelect = field('studio-job-feature', 'select', { 'aria-label': '연결할 작업' });
-    featureSelect.append(el('option', { value: '', text: '연결할 작업 없음' }), ...features.map((f) => el('option', { value: f.id, text: `인계 받을 작업: ${f.title}` })));
+    featureSelect.append(el('option', { value: '', text: '연결할 작업 없음' }), ...features.map((f) => el('option', { value: f.id, translate: 'no', text: trFill('인계 받을 작업: {0}', f.title) })));
     restore(featureSelect);
     const key = 'job:new';
     return el('form', { class: 'studio-form', onsubmit: (event) => { event.preventDefault(); run(key, () => post('/api/design/jobs', {
@@ -120,7 +120,7 @@ export function renderStudioCollab(panel, { data, features = [], api, token, ref
     const link = job.tool === 'figma' ? `https://www.figma.com/design/${v.source.fileKey}/?node-id=${v.source.nodeId.replace(':', '-')}` : null;
     return el('li', { class: current ? 'studio-version current' : 'studio-version' },
       el('strong', { text: `v${v.n}${job.approved?.version === v.n ? ' · 확정' : ''}` }),
-      url ? el('img', { src: url, alt: `${job.title} v${v.n} 미리보기`, class: current ? 'studio-preview-image' : 'studio-thumb', loading: 'lazy' }) : null,
+      url ? el('img', { src: url, alt: trFill('{0} v{1} 미리보기', job.title, v.n), translate: 'no', class: current ? 'studio-preview-image' : 'studio-thumb', loading: 'lazy' }) : null,
       v.changes ? el('p', {}, '바뀐 점: ', el('span', { translate: 'no', text: v.changes })) : null,
       el('p', { class: 'kind' }, job.tool === 'figma' ? `결과 프레임 ${v.source.nodeId}` : `오브젝트 ${v.source.objects.join(', ') || '-'}${v.source.exported ? ` · 내보낸 파일 ${v.source.exported}` : ''}`,
         link ? el('a', { href: link, target: '_blank', rel: 'noopener', text: ' Figma에서 열기 ↗' }) : null));
@@ -136,7 +136,7 @@ export function renderStudioCollab(panel, { data, features = [], api, token, ref
     if (['queued', 'producing'].includes(job.status)) actions.append(act('stop', '중지'));
     if (['review', 'blocked', 'failed', 'stopped'].includes(job.status)) {
       const id = `studio-feedback-${job.id}`, key = `feedback:${job.id}`;
-      actions.append(field(id, 'textarea', { rows: '2', maxlength: '4000', 'aria-label': `${job.title} 수정 의견`, placeholder: job.status === 'review' ? `v${n}에서 바꿀 점을 적어 주세요` : '담당 AI에게 답하거나 바꿀 점을 적어 주세요' }),
+      actions.append(field(id, 'textarea', { rows: '2', maxlength: '4000', 'aria-label': trFill('{0} 수정 의견', job.title), translate: 'no', placeholder: tr(job.status === 'review' ? `v${n}에서 바꿀 점을 적어 주세요` : '담당 AI에게 답하거나 바꿀 점을 적어 주세요') }),
         el('button', { type: 'button', disabled: busy(key) || demo, onclick: () => run(key, () => post(`/api/design/jobs/${job.id}/feedback`, { version: n, revision: job.revision, text: drafts.get(id), clientId: keyFor(key) }), () => { keys.delete(key); clearDrafts(id); }) }, n ? `수정 요청 → v${n + 1}` : '의견 보내고 다시 제작'));
     }
     if (job.status === 'review') actions.append(act('approve', `v${n} 확정`));

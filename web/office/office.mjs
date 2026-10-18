@@ -1,4 +1,4 @@
-import { api as liveApi, clear, commandLine, dateLocale, el, richText, storage as liveStorage, store as liveStore, timeLabel, tr } from '/dom.mjs';
+import { api as liveApi, clear, commandLine, dateLocale, el, richText, storage as liveStorage, store as liveStore, timeLabel, tr, trFill } from '/dom.mjs';
 import { COMMANDS, TOOLS, commandFor, nextCommand } from '/commands.mjs';
 import { createDialogSurface } from '/dialog-surface.mjs';
 import { createOfficeDemo } from './demo.mjs';
@@ -792,7 +792,7 @@ function renderList() {
       el('td', { text: item.spot ? roomOf(item.room).label : '-' }),
       el('td', { text: item.feature ?? '-' }),
       el('td', { text: agent ? timeLabel(agent.lastActive) : '-' }),
-      el('td', {}, last ? `[${last.channel}] ${last.text.slice(0, 80)}` : '-'),
+      el('td', { translate: 'no' }, last ? `[${last.channel}] ${last.text.slice(0, 80)}` : '-'),
     );
   });
   clear($('agent-rows')).append(...(rows.length ? rows : [el('tr', {}, el('td', { colspan: 7, class: 'empty', text: '참여한 AI 세션이 없습니다. 쓰는 도구에서 /wax:init(처음) 또는 /wax:join(다른 세션)을 실행하면 들어옵니다. Codex는 $wax:join, Antigravity CLI는 /join입니다.' }))]));
@@ -928,11 +928,11 @@ function openStudio({ fetch = true } = {}) {
   if (!features.length) panel.append(el('p', { class: 'empty', text: '현재 설계 중이거나 시안이 등록된 작업이 없습니다. 대시보드에서 만들고 싶은 결과를 요청하세요.' }));
   for (const feature of features) {
     const preview = feature.designPreview;
-    const card = el('section', { class: 'card' }, el('h3', { text: feature.title }), el('p', { class: 'kind', text: `${PROJECT_TYPES[feature.projectType]?.label || '프로젝트'} · ${state.config.labels?.[feature.phase] || feature.phase}` }));
+    const card = el('section', { class: 'card' }, el('h3', { translate: 'no', text: feature.title }), el('p', { class: 'kind', text: `${PROJECT_TYPES[feature.projectType]?.label || '프로젝트'} · ${state.config.labels?.[feature.phase] || feature.phase}` }));
     if (preview) {
       card.append(el('p', { text: `개발 인계 시안: ${preview.file}` }));
-      if (/\.(png|jpe?g|webp|gif)$/i.test(preview.file)) card.append(el('img', { src: preview.url, alt: `${feature.title} 설계 시안`, class: 'studio-preview-image' }));
-      else if (/\.html$/i.test(preview.file)) card.append(el('iframe', { src: preview.url, sandbox: '', title: `${feature.title} 시안`, class: 'studio-preview-frame' }));
+      if (/\.(png|jpe?g|webp|gif)$/i.test(preview.file)) card.append(el('img', { src: preview.url, alt: trFill('{0} 설계 시안', feature.title), translate: 'no', class: 'studio-preview-image' }));
+      else if (/\.html$/i.test(preview.file)) card.append(el('iframe', { src: preview.url, sandbox: '', title: trFill('{0} 시안', feature.title), translate: 'no', class: 'studio-preview-frame' }));
       card.append(el('a', { href: preview.url, target: '_blank', rel: 'noopener', text: '등록 시안 열기 ↗' }));
     } else card.append(el('p', { text: '시안을 제작하고 있습니다. 설명 문서만으로 시안을 완료 처리하지 않습니다.' }));
     card.append(el('p', {}, el('a', { href: feature.id.startsWith('request-') ? `/?request=${encodeURIComponent(feature.id)}` : `/manage?feature=${encodeURIComponent(feature.id)}`, text: '현재 미션과 검증 기록 보기 ↗' })));
@@ -976,7 +976,7 @@ function renderBoard() {
   } else if (boardTab === 'phases') {
     panel.append(el('div', { class: 'kanban' }, PHASE_COLUMNS.map((phase) => el('section', {},
       el('h3', {}, icon(phase === 'done' ? 'passed' : phase), ' ', state.config.labels?.[phase] ?? phase),
-      state.features.filter((f) => f.phase === phase).map((f) => el('div', { class: 'card' }, el('strong', { text: f.id }), el('div', { class: 'kind', text: f.title }))),
+      state.features.filter((f) => f.phase === phase).map((f) => el('div', { class: 'card' }, el('strong', { text: f.id }), el('div', { class: 'kind', translate: 'no', text: f.title }))),
     ))));
   } else {
     const viewer = el('div');

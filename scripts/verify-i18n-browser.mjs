@@ -15,11 +15,14 @@ const { chromium } = await import(pathToFileURL(resolve(modulePath)).href);
 const screenshots = process.env.WAX_SCREENSHOT_DIR || process.argv[4];
 const root = await mkdtemp(join(tmpdir(), 'wax i18n browser-'));
 const WRITTEN = '사람이 쓴 메모 그대로';
+const SENTENCE = DEMO_DESIGN.jobs[0].feedback[0].text, SENTENCE_EN = 'Make the upload button bigger';
 const PAGES = ['/', '/manage', '/manage?feature=lookbook-upload', '/chat', '/search', '/search?q=%EB%A9%94%EB%AA%A8', '/office', '/office?studio=1', '/help', '/demo'];
 let server, browser;
 try {
   await createFeature(root, { id: 'lookbook-upload', title: '룩북 업로드 화면', description: '디자인 인계 후 구현합니다.' });
   await createFeature(root, { id: 'original-title', title: '결정', description: 'Original title preservation' });
+  await createFeature(root, { id: 'original-sentence', title: SENTENCE, description: SENTENCE });
+  await postMessage(root, 'original-sentence', { author: 'codex-app', kind: 'codex', body: SENTENCE });
   await postMessage(root, 'general', { author: '대표', kind: 'human', body: `${WRITTEN} 1` });
   await postMessage(root, 'lookbook-upload', { author: 'claude-app', kind: 'claude', body: `${WRITTEN} 2` });
   await postNote(root, 'lookbook-upload', { author: 'codex-app', kind: 'codex', type: 'decision', body: `${WRITTEN} 3` });
@@ -77,6 +80,24 @@ try {
   await feedback.locator('summary').click();
   assert.equal(await feedback.locator('li').first().textContent(), `v1: ${DEMO_DESIGN.jobs[0].feedback[0].text}`);
   if (screenshots) await page.locator('#studio-dialog').screenshot({ path: join(screenshots, 'original-design-feedback.png') });
+  const translated = () => page.evaluate((english) => {
+    const hits = [];
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) if (node.data.includes(english)) hits.push(`${node.parentElement.tagName}.${node.parentElement.className}: ${node.data.slice(0, 80)}`);
+    for (const el of document.querySelectorAll('[alt], [aria-label], [title], [placeholder]')) for (const attr of ['alt', 'aria-label', 'title', 'placeholder']) if (el.getAttribute(attr)?.includes(english)) hits.push(`@${attr} ${el.tagName}`);
+    return hits;
+  }, SENTENCE_EN);
+  const written = JSON.parse(JSON.stringify({ ...DEMO_DESIGN, demo: false }));
+  for (const target of written.targets) target.label = SENTENCE;
+  for (const job of written.jobs) { job.title = SENTENCE; job.brief = SENTENCE; for (const v of job.versions) v.changes = SENTENCE; }
+  await page.unroute('**/api/design');
+  await page.route('**/api/design', route => route.fulfill({ json: written }));
+  for (const path of ['/manage', '/manage?feature=original-sentence', '/chat?channel=original-sentence', '/search', '/office', '/office?studio=1']) {
+    await page.goto(`${base}${path}${path.includes('?') ? '&' : '?'}lang=en`);
+    await page.waitForTimeout(1200);
+    if (path === '/office?studio=1') { await page.locator('#studio-dialog[open]').waitFor(); await page.locator('#studio-dialog details summary').evaluateAll((all) => all.forEach((s) => s.click())); }
+    assert.deepEqual(await translated(), [], `${path}: people's writing was translated`);
+  }
   await page.close();
   const blocked = await browser.newContext({ locale: 'en-US' });
   await blocked.addInitScript(() => {
@@ -90,7 +111,7 @@ try {
     assert.equal(new URL(blockedPage.url()).searchParams.get('lang'), code);
   }
   await blocked.close();
-  console.log('PASS original feature titles and design feedback, and language switching with storage blocked.');
+  console.log('PASS original feature titles, channel and search titles, office list, design titles, labels, feedback and previews, and language switching with storage blocked.');
   console.log(JSON.stringify(report, null, 1));
   const failures = Object.entries(report).filter(([, r]) => r.lang !== 'en' || r.left.length);
   console.log(failures.length ? `Korean left on ${failures.length} page views` : 'All pages fully in English outside people’s writing.');
