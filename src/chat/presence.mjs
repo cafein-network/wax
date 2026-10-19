@@ -141,6 +141,26 @@ export async function joinPresence(root, input = {}, { now = new Date() } = {}) 
   });
 }
 
+export async function resetPresence(root, input = {}, { now = new Date() } = {}) {
+  const only = input.author === undefined ? null : v.author(input.author);
+  const file = await presenceFile(root, false);
+  if (!file) return { removed: [], kept: [] };
+  return withLock(`${file}.lock`, async () => {
+    const data = await load(file);
+    const listeners = await listListeners(root, { now });
+    const removed = [], kept = [];
+    for (const [name, entry] of Object.entries(data.agents)) {
+      if (only !== null && name !== only) continue;
+      if (name === data.dashboardAuthor || entry.kind === 'human') continue;
+      if (only === null && (listeners.has(name) || !['idle', 'away'].includes(effectiveState(entry, now)))) { kept.push(name); continue; }
+      delete data.agents[name]; removed.push(name);
+    }
+    if (only !== null && !removed.length) throw new WaxError(`${only} 이름으로 참여한 세션이 없습니다.`, 404);
+    if (removed.length) await writeJsonAtomic(file, data);
+    return { removed: removed.sort(), kept: kept.sort() };
+  });
+}
+
 export async function withPresenceActivity(root, input, action, { now = new Date() } = {}) {
   const author = v.author(input.author), at = now.toISOString();
   const file = await presenceFile(root, true);

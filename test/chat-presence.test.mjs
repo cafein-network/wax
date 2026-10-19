@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { joinPresence, listPresence, setPresence } from '../src/chat/presence.mjs';
+import { joinPresence, listPresence, reserveDashboardUser, resetPresence, setPresence } from '../src/chat/presence.mjs';
+import { getTeam, setPm } from '../src/chat/team.mjs';
+import { startBeat } from '../src/chat/listeners.mjs';
 import { postMessage } from '../src/chat/channels.mjs';
 import { at, project } from './chat-helpers.mjs';
 
@@ -58,4 +60,34 @@ test('첫 참여(join): 번호를 붙여도 이름은 40자를 넘지 않고, �
   const next = await joinPresence(root, { author: long, kind: 'codex' }, at('2026-10-15T06:00:01Z'));
   assert.equal(next.author, `${'c'.repeat(38)}-2`);
   await assert.rejects(joinPresence(root, { author: '-bad' }), /작성자/);
+});
+
+test('세션 초기화(reset): 지난 init이 남긴 세션을 지워 같은 이름과 PM을 새 세션이 이어받고, 듣는 중·작업 중 세션은 남긴다', async (t) => {
+  const root = await project(t, ['chatbot']);
+  const joins = [];
+  for (let i = 0; i < 3; i++) joins.push(await joinPresence(root, { author: 'claude-app', kind: 'claude', state: 'idle' }));
+  assert.deepEqual(joins.map((j) => j.author), ['claude-app', 'claude-app-2', 'claude-app-3']);
+  await setPm(root, { author: 'claude-app', kind: 'claude' });
+  const busy = await joinPresence(root, { author: 'codex-app', kind: 'codex', state: 'working', feature: 'chatbot' });
+  const listening = await joinPresence(root, { author: 'gemini-app', kind: 'gemini' });
+  const stop = await startBeat(root, 'gemini-app', null, 60_000, () => {});
+  t.after(stop);
+  await reserveDashboardUser(root, '대표');
+  await setPresence(root, { author: '대표', kind: 'human', state: 'idle' });
+
+  const fresh = await joinPresence(root, { author: 'claude-app', kind: 'claude' });
+  assert.equal(fresh.author, 'claude-app-4');
+
+  const result = await resetPresence(root);
+  assert.deepEqual(result, { removed: ['claude-app', 'claude-app-2', 'claude-app-3', 'claude-app-4'], kept: ['codex-app', 'gemini-app'] });
+  const again = await joinPresence(root, { author: 'claude-app', kind: 'claude', session: fresh.session });
+  assert.equal(again.author, 'claude-app', '세션 ID를 지켜 다시 참여하면 기본 이름을 되찾는다');
+  await postMessage(root, 'chatbot', { author: 'claude-app', session: fresh.session, kind: 'claude', body: 'PM으로 이어서 진행' });
+  assert.equal((await getTeam(root)).pm.author, 'claude-app', 'PM 역할은 이름에 남는다');
+  await assert.rejects(postMessage(root, 'chatbot', { author: 'claude-app', session: joins[0].session, body: '지난 세션' }), { status: 409 });
+
+  assert.deepEqual(await resetPresence(root, { author: 'gemini-app' }), { removed: ['gemini-app'], kept: [] });
+  await assert.rejects(resetPresence(root, { author: 'gemini-app' }), { status: 404 });
+  assert.deepEqual((await listPresence(root)).map((e) => e.author), ['claude-app', 'codex-app', '대표']);
+  assert.equal(busy.author, 'codex-app'); assert.equal(listening.author, 'gemini-app');
 });

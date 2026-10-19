@@ -65,6 +65,10 @@ test('expiry, disconnect, session ending and replay never yield permission', asy
   assert.equal(await waitForApproval(root, expired, { pollMs: 20 }), null);
   await assert.rejects(approve(root, expired.request), { status: 409 });
   assert.equal((await listApprovals(root)).requests[0].status, 'expired');
+  const long = await createApproval(root, input(), { timeoutMs: 30 * 60_000 });
+  assert.equal(long.request.expiresAt - long.request.createdAt, 30 * 60_000);
+  await cancelApproval(root, long.request.id, long.secret);
+  await assert.rejects(createApproval(root, input(), { timeoutMs: 3_600_001 }), /1시간/);
   const pending = await createApproval(root, input());
   await approve(root, pending.request);
   await cancelSessionApprovals(root, 'claude', 'session-1');

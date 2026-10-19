@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 import { WaxError } from '../workflow.mjs';
 import { resolveProject } from './paths.mjs';
 import { listChannels, postMessage, readMessages, resolveTarget } from './channels.mjs';
-import { joinPresence, listPresence, setPresence } from './presence.mjs';
+import { joinPresence, listPresence, resetPresence, setPresence } from './presence.mjs';
 import { listBoard, postNote, saveReport } from './board.mjs';
 import { buildDigest } from './digest.mjs';
 import { buildDailyDraft, collectDay, listDailyReports, saveDailyReport } from './daily.mjs';
@@ -26,6 +26,8 @@ export const USAGE = `사용법: wax chat [--project <dir>] <명령> [옵션]
   join --author <기본 이름> [--kind <종류>] [--model <모델>] [--peer <세션 간 통신 이름>] [--feature <작업ID>] [--state <상태>] [--note <메모>] [--json]
        세션의 첫 참여. 같은 이름이 활동 중이면 <이름>-2, -3 …으로 들어오고 그 이름을 알려 줌
   who [--json]
+  reset [--author <이름>] [--json]                         지난 세션 정리. 듣는 중·작업 중이 아닌 세션 기록을 지워 이름을 비움
+       (--author: 그 세션만 지움). PM·업무는 이름에 남아 같은 이름으로 다시 참여한 세션이 이어받음
   board post <작업ID> --author <이름> [--session <ID>] --type opinion|question|answer|decision
        (--message <텍스트> | --file <경로>) [--kind <종류>] [--reply-to <노트ID>] [--stance agree|disagree] [--json]
   board list <작업ID> [--since <ID>] [--json]
@@ -120,6 +122,13 @@ export async function run(argv, { cwd = process.cwd(), env = process.env, stdout
       const entry = await joinPresence(root, { session: values.session, rename: values.rename, author: values.author, kind: values.kind, model: values.model, peer: values.peer, state: values.state, feature: values.feature, note: values.note }, clock);
       print(entry, (e) => `${e.author}: ${e.state}${e.feature ? ` (${e.feature})` : ''}${e.renamed ? `
 ${e.requested} 이름은 다른 세션이 쓰고 있어 ${e.author}(으)로 참여했습니다.` : ''}\n세션 ID: ${e.session} (재참여와 모든 쓰기 명령에 --session으로 사용)`);
+      return 0;
+    }
+    case 'reset': {
+      print(await resetPresence(root, { author: values.author }, clock), (r) => [
+        r.removed.length ? `정리한 세션: ${r.removed.join(', ')}` : '정리할 지난 세션이 없습니다.',
+        ...(r.kept.length ? [`활동 중이라 남긴 세션: ${r.kept.join(', ')} (지우려면 --author <이름>)`] : []),
+      ].join('\n'));
       return 0;
     }
     case 'who': {

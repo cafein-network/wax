@@ -52,6 +52,7 @@ test('one sentence runs five phases in order, reports each and records real chec
   assert.equal(calls[0].thread, undefined);
   assert.equal(calls[1].thread, 'test-thread');
   assert.equal(calls[0].outputSchema.properties.outcome.type, 'string');
+  assert.equal(calls[0].approvalTimeoutMs, 30 * 60_000);
   assert.equal(saved.messages.filter((m) => m.role === 'assistant').length, 5);
   assert.equal(saved.owner, undefined); assert.equal(saved.thread, undefined);
   const feature = await getFeature(root, r.id);

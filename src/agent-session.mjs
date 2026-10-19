@@ -117,7 +117,7 @@ export async function runAgentSession(root, options = {}) {
       if (m.type === 'control_request') {
         if (m.request?.subtype !== 'can_use_tool') return send({ type: 'control_response', response: { subtype: 'error', request_id: m.request_id, error: 'Unsupported control request' } });
         return approve(m.request_id, m.request, (decision) => send({ type: 'control_response', response: {
-          subtype: 'success', request_id: m.request_id, response: decision === 'allow' ? { behavior: 'allow', updatedInput: m.request.input } : { behavior: 'deny', message: 'wax에서 승인하지 않은 실행입니다.' },
+          subtype: 'success', request_id: m.request_id, response: decision === 'allow' ? { behavior: 'allow', updatedInput: m.request.input } : { behavior: 'deny', message: decision === 'deny' ? 'wax에서 승인하지 않은 실행입니다.' : 'wax 승인 대기 시간이 지나 실행하지 않았습니다.' },
         } }));
       }
       if (m.type === 'result') {
@@ -155,7 +155,7 @@ export async function runAgentSession(root, options = {}) {
   if (signal?.aborted) abort();
   try {
     if (acp) {
-      const init = await rpc('initialize', { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: 'wax', version: '0.13.1' } });
+      const init = await rpc('initialize', { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: 'wax', version: '0.13.2' } });
       if (init.protocolVersion !== 1) throw new WaxError('지원하지 않는 ACP 버전입니다.');
       if (thread && init.agentCapabilities?.loadSession) {
         sessionId = thread;

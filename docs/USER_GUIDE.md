@@ -215,7 +215,7 @@ node "/path/to/wax/bin/wax.mjs" --project "/path/to/my-app" dashboard
 
 ### 세션끼리 대화하기
 
-처음 한 세션은 `/wax:init`으로 시작하고, 다른 AI 세션은 `/wax:join`(Codex `$wax:join`, Antigravity `/join`, GitHub Copilot CLI "wax join 스킬로 참여해줘")으로 참여합니다. init이나 join을 건너뛰어도 세션에서 처음 실행한 wax 명령이 자동으로 참여시킵니다. 같은 이름이 이미 활동 중이면(같은 폴더에서 같은 도구 세션을 둘 이상 띄운 경우) `claude-my-app-2`처럼 번호를 붙여 참여하고 그 이름을 알려 줍니다. 참여한 세션은 wax 단계 명령을 실행할 때 단계를 시작하면 상태를 "작업 중"으로 바꾸고 그 작업 채널의 최근 메시지를 읽습니다. 단계를 마치면 맡은 업무의 상태(완료·막힘)에 결과를 기록합니다. 참여자 이름은 기본적으로 `도구-폴더이름`(예: `my-app` 폴더의 Claude 세션은 `claude-my-app`)입니다. 폴더 이름에서 영문·한글 등 글자·숫자·공백·`_`·`.`·`-`가 아닌 문자는 `-`로 바꾸고 40자 안으로 줄입니다. 같은 도구의 세션을 여러 개 쓰거나 이름을 바꾸려면 아무 wax 명령에나 `--name <이름>`을 붙입니다(예: `/wax:join --name claude-front`). 그 세션은 이후 명령에서도 그 이름을 쓰고, 바로 채널에 참여합니다. 이전 이름으로 참여한 적이 있으면 그 이름은 "자리 비움"으로 바뀝니다. 이름은 세션 대화 안에서만 기억하므로 새 세션에서는 다시 지정합니다.
+처음 한 세션은 `/wax:init`으로 시작하고, 다른 AI 세션은 `/wax:join`(Codex `$wax:join`, Antigravity `/join`, GitHub Copilot CLI "wax join 스킬로 참여해줘")으로 참여합니다. init이나 join을 건너뛰어도 세션에서 처음 실행한 wax 명령이 자동으로 참여시킵니다. 같은 이름이 이미 활동 중이면(같은 폴더에서 같은 도구 세션을 둘 이상 띄운 경우) `claude-my-app-2`처럼 번호를 붙여 참여하고 그 이름을 알려 줍니다. init을 여러 번 해서 지난 세션이 이름을 잡고 있으면 `/wax:init --reset`(join도 같음)으로 지난 세션을 정리한 뒤 기본 이름으로 참여합니다. 듣는 중이거나 작업 중인 세션은 남기며, PM·업무는 이름에 남아 그 이름으로 참여한 새 세션이 이어받습니다. 참여한 세션은 wax 단계 명령을 실행할 때 단계를 시작하면 상태를 "작업 중"으로 바꾸고 그 작업 채널의 최근 메시지를 읽습니다. 단계를 마치면 맡은 업무의 상태(완료·막힘)에 결과를 기록합니다. 참여자 이름은 기본적으로 `도구-폴더이름`(예: `my-app` 폴더의 Claude 세션은 `claude-my-app`)입니다. 폴더 이름에서 영문·한글 등 글자·숫자·공백·`_`·`.`·`-`가 아닌 문자는 `-`로 바꾸고 40자 안으로 줄입니다. 같은 도구의 세션을 여러 개 쓰거나 이름을 바꾸려면 아무 wax 명령에나 `--name <이름>`을 붙입니다(예: `/wax:join --name claude-front`). 그 세션은 이후 명령에서도 그 이름을 쓰고, 바로 채널에 참여합니다. 이전 이름으로 참여한 적이 있으면 그 이름은 "자리 비움"으로 바뀝니다. 이름은 세션 대화 안에서만 기억하므로 새 세션에서는 다시 지정합니다.
 
 맡을 작업도 함께 정할 수 있습니다. `/wax:join --name claude-front --feature chatbot`(`--project=chatbot`도 같음)처럼 실행하면 그 세션이 `chatbot` 작업을 선택한 대기 상태로 참여하고, 이후 wax 명령에서 작업 ID를 생략하면 그 작업을 씁니다. init은 작업 선택 여부와 관계없이 `http://127.0.0.1:4330/`의 시작 가이드를 엽니다. 해당 작업 기록은 `/manage?feature=chatbot`에서 확인합니다. 첫 화면의 **기존 AI 세션으로 팀 작업하기**는 PM 유무, 배정과 막힌 이유, 각 세션에 붙여 넣을 명령을 보여 줍니다.
 
@@ -268,6 +268,7 @@ wax chat read <채널> [--since <메시지ID>] [--json]
 wax chat join --author <이름> --session <ID> --kind <종류> [--model <모델>] [--feature <작업ID>]   # 첫 참여(같은 이름이 활동 중이면 -2, -3을 붙여 참여)
 wax chat presence --author <이름> --session <ID> --state working|discussing|reviewing|idle|away [--note <하는 일>]
 wax chat who
+wax chat reset [--author <이름>]   # 지난 세션 정리(듣는 중·작업 중 세션은 남김, --author는 그 세션만)
 wax chat watch --author <이름> [--feature <작업ID>] [--wake] [--json]   # 나를 부른 메시지·새 배정을 한 줄씩(멈출 때까지). --wake는 AI 세션을 깨우는 감시
 wax chat read <채널> --id <메시지ID> [--json]                            # 메시지 하나를 그대로 읽기
 wax chat team pm <이름> --kind <종류>        # PM 지정(대표가 정함)

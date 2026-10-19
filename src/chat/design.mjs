@@ -434,7 +434,7 @@ export function createDesignRunner({ root, execute = runAgentSession, mcp = {}, 
     let result;
     try {
       result = await execute(root, { tool: job.agent, prompt: designPrompt(job, target, { version, render, exported, previous, feedback: feedbackEntry }),
-        thread: job.thread, outputSchema: SCHEMA, signal: controller.signal, output() {}, log() {} });
+        thread: job.thread, outputSchema: SCHEMA, signal: controller.signal, approvalTimeoutMs: timeoutMs, output() {}, log() {} });
     } finally { clearTimeout(timer); }
     if (controller.signal.aborted) return;
     let reply;

@@ -79,7 +79,7 @@ function authorize(record, secret) {
 }
 
 export async function createApproval(root, input, { timeoutMs = 120_000 } = {}) {
-  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 300_000) throw new WaxError('승인 대기 시간은 100~300000ms이어야 합니다.');
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 3_600_000) throw new WaxError('승인 대기 시간은 100ms~1시간이어야 합니다.');
   const secret = randomBytes(32).toString('hex');
   const createdAt = Date.now();
   const record = { schema: 1, id: randomUUID(), project: await realpath(root), tool: input.tool,

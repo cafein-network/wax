@@ -213,7 +213,7 @@ export function createRequestRunner({ root, execute = runAgentSession, notify = 
           timeout = setTimeout(() => controller.abort(), phaseTimeoutMs);
           const handoffs = await designHandoffs(root, id).catch(() => []);
           const result = await execute(root, { tool: r.tool, prompt: requestPrompt({ ...r, root, handoffs }, feature), thread: r.thread,
-            outputSchema: RESULT_SCHEMA, signal: controller.signal, output() {}, log() {} });
+            outputSchema: RESULT_SCHEMA, signal: controller.signal, approvalTimeoutMs: phaseTimeoutMs, output() {}, log() {} });
           clearTimeout(timeout);
           if (controller.signal.aborted) break;
           let reply;
