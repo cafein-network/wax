@@ -88,6 +88,6 @@ test('세션 초기화(reset): 지난 init이 남긴 세션을 지워 같은 이
 
   assert.deepEqual(await resetPresence(root, { author: 'gemini-app' }), { removed: ['gemini-app'], kept: [] });
   await assert.rejects(resetPresence(root, { author: 'gemini-app' }), { status: 404 });
-  assert.deepEqual((await listPresence(root)).map((e) => e.author), ['claude-app', 'codex-app', '대표']);
+  assert.deepEqual((await listPresence(root)).map((e) => e.author).sort(), ['claude-app', 'codex-app', '대표'].sort());
   assert.equal(busy.author, 'codex-app'); assert.equal(listening.author, 'gemini-app');
 });

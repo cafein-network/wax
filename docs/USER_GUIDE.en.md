@@ -121,6 +121,8 @@ A feature ID starts with a lowercase letter or digit and contains only lowercase
 
 ## 5. Using Gemini CLI
 
+**Authentication notice (checked 2026-10-20):** Gemini CLI access through personal Google sign-in ended on 2026-06-18, including free access and Google AI Pro and Ultra. Continued use requires supported API authentication or an existing Gemini Code Assist Standard or Enterprise license. Google's transition announcement specifies paid API key access and directs individuals to Antigravity CLI. New Standard and Enterprise subscriptions also stopped on 2026-10-09; existing subscriptions follow their contracts and a separate retirement schedule. Installing wax does not grant AI access. [Consumer retirement](https://developers.google.com/gemini-code-assist/docs/deprecations/code-assist-individuals) · [API access and Antigravity transition](https://developers.googleblog.com/an-important-update-transitioning-gemini-cli-to-antigravity-cli/) · [Business subscription schedule](https://docs.cloud.google.com/gemini/docs/codeassist/sunset)
+
 Link the extension once.
 
 ```sh
@@ -135,7 +137,24 @@ Check the installed version with `node bin/wax.mjs --version` in the plugin fold
 
 ## 5-1. Using Codex
 
-Connect the extracted plugin to your project. Keep the plugin in the same place afterwards.
+Register the public marketplace and install once in your terminal. The Codex catalog is `.agents/plugins/marketplace.json`, also included in the ZIP.
+
+```sh
+codex plugin marketplace add cafein-network/wax
+codex plugin add wax@wax
+```
+
+If you see `already added from a different source`, inspect the old ZIP path or Git URL with `codex plugin marketplace list`. To switch to the public repository, run the following commands one at a time and only continue after each succeeds. Removing the marketplace registration does not delete your project's source files or `.wax` records.
+
+```sh
+codex plugin marketplace remove wax
+codex plugin marketplace add cafein-network/wax
+codex plugin add wax@wax
+```
+
+If the source already points to the public GitHub repository but you see `plugin wax was not found in marketplace wax`, refresh with `codex plugin marketplace upgrade wax`, check for `wax@wax` with `codex plugin list --marketplace wax --available --json`, then install again. For a ZIP source, extract the new ZIP to the same path. If the plugin is still absent, collect `codex --version`, the marketplace list and the plugin list for diagnosis. Start a new Codex session after installation.
+
+To connect only a specific project, use the installer below. Keep the extracted plugin in the same place afterwards.
 
 ```sh
 node "/path/to/wax/scripts/install-codex.mjs" --project "/path/to/my-app"

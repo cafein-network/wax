@@ -74,7 +74,7 @@ async function walk(dir) {
 export async function dashboardStrings() {
   const found = new Map();
   for (const file of await walk(join(root, 'web'))) {
-    const source = await readFile(file, 'utf8');
+    const source = (await readFile(file, 'utf8')).replaceAll('\r\n', '\n');
     for (const text of file.endsWith('.html') ? htmlStrings(source) : jsStrings(source)) {
       const key = text.trim();
       if (!key || !HANGUL.test(key)) continue;

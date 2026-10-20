@@ -121,6 +121,8 @@ wax가 기존 코드를 확인하고 요구사항·범위·수용 기준을 정�
 
 ## 5. Gemini CLI에서 사용
 
+**인증 안내(2026-10-20 확인):** 2026-06-18부터 개인 Google 로그인에 포함되던 Gemini CLI 이용이 종료됐으며 무료·Google AI Pro·Ultra 모두 해당합니다. 계속 이용하려면 지원되는 API 인증 또는 기존 Gemini Code Assist Standard·Enterprise 라이선스가 필요합니다. Google 전환 공지는 유료 API 키 이용을 명시하고 개인 사용자에게 Antigravity CLI 이전을 안내합니다. Standard·Enterprise 신규 구독 판매도 2026-10-09 중단됐고 기존 구독은 계약과 별도 종료 일정에 따릅니다. wax 설치는 AI 이용 권한을 제공하지 않습니다. [개인 계정 종료 안내](https://developers.google.com/gemini-code-assist/docs/deprecations/code-assist-individuals) · [API·Antigravity 전환 안내](https://developers.googleblog.com/an-important-update-transitioning-gemini-cli-to-antigravity-cli/) · [기업 구독 일정](https://docs.cloud.google.com/gemini/docs/codeassist/sunset)
+
 처음 한 번 확장을 연결합니다.
 
 ```sh
@@ -135,7 +137,24 @@ gemini
 
 ## 5-1. Codex에서 사용
 
-압축을 푼 원본 플러그인과 대상 프로젝트를 연결합니다. 원본은 계속 같은 위치에 두세요.
+터미널에서 공개 마켓플레이스를 한 번 등록하고 설치합니다. Codex용 목록은 `.agents/plugins/marketplace.json`에 있으며 ZIP에도 포함됩니다.
+
+```sh
+codex plugin marketplace add cafein-network/wax
+codex plugin add wax@wax
+```
+
+`already added from a different source`가 나오면 먼저 `codex plugin marketplace list`로 이전 ZIP 경로나 Git 주소를 확인합니다. 공개 저장소로 전환하려면 아래 명령을 한 줄씩 실행하고, 앞 명령이 성공했을 때만 다음으로 넘어갑니다. 마켓플레이스 등록 제거는 작업 프로젝트의 소스나 `.wax` 기록을 삭제하지 않습니다.
+
+```sh
+codex plugin marketplace remove wax
+codex plugin marketplace add cafein-network/wax
+codex plugin add wax@wax
+```
+
+등록 출처가 이미 공개 GitHub 저장소인데 `plugin wax was not found in marketplace wax`가 나오면 `codex plugin marketplace upgrade wax`로 갱신한 뒤 `codex plugin list --marketplace wax --available --json`에서 `wax@wax`를 확인하고 다시 설치합니다. ZIP 출처라면 새 ZIP을 같은 경로에 풉니다. 여전히 목록에 없으면 `codex --version`, 마켓플레이스 목록과 플러그인 목록 결과를 함께 확인하세요. 설치 뒤에는 새 Codex 세션을 시작합니다. 자세한 내용은 [설치 안내](../INSTALL.md)의 오류 해결 절을 참고하세요.
+
+특정 프로젝트에만 연결하려면 다음 설치기를 사용합니다. 압축을 푼 원본은 계속 같은 위치에 두세요.
 
 ```sh
 node "/path/to/wax/scripts/install-codex.mjs" --project "/path/to/my-app"

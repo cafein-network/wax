@@ -4,7 +4,7 @@ import { appendFile, mkdir, readFile, readdir, rename, rm, symlink, writeFile } 
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
-import { project, BIN } from './chat-helpers.mjs';
+import { project, BIN, createTestSymlink } from './chat-helpers.mjs';
 import { createFeature, updateFeature } from '../src/workflow.mjs';
 import { postMessage } from '../src/chat/channels.mjs';
 import { postNote } from '../src/chat/board.mjs';
@@ -212,7 +212,7 @@ test('projects keep separate indexes, symlinked records are skipped, and Korean 
   const first = await project(t), second = await project(t);
   await postMessage(first, 'general', { author: 'codex-app', kind: 'codex', body: '첫 프로젝트 인계' });
   await postMessage(second, 'general', { author: 'codex-app', kind: 'codex', body: '둘째 프로젝트 인계' });
-  await symlink(channelFile(first, 'general'), channelFile(second, 'linked'));
+  if (!await createTestSymlink(t, channelFile(first, 'general'), channelFile(second, 'linked'))) return;
   await buildIndex(first); await buildIndex(second);
   assert.deepEqual((await search(first, { query: '인계' })).results.map((r) => r.snippet.text), ['첫 프로젝트 인계']);
   assert.deepEqual((await search(second, { query: '인계' })).results.map((r) => r.snippet.text), ['둘째 프로젝트 인계'], 'a symlink to another project is not followed');
@@ -271,8 +271,8 @@ test('R1: a symlink anywhere on a report path never brings in a file from outsid
   const root = await reportProject(t), outside = await project(t);
   await writeFile(join(outside, 'private.md'), 'EXTERNAL_PRIVATE_REVIEW_FIXTURE');
   const before = await readFile(join(outside, 'private.md'), 'utf8');
-  await symlink(outside, join(root, 'docs', 'wax', 'outside'), 'dir');
-  await symlink(join(outside, 'private.md'), join(root, 'docs', 'wax', 'example', 'linked.md'));
+  if (!await createTestSymlink(t, outside, join(root, 'docs', 'wax', 'outside'), process.platform === 'win32' ? 'junction' : 'dir')) return;
+  if (!await createTestSymlink(t, join(outside, 'private.md'), join(root, 'docs', 'wax', 'example', 'linked.md'))) return;
   await writeFile(join(root, '.wax', 'chat', 'board', 'example.jsonl'), reportRecord('docs/wax/example/report.md')
     + reportRecord('docs/wax/outside/private.md', { id: 'r-000002-abc123', seq: 2, number: 2 })
     + reportRecord('docs/wax/example/linked.md', { id: 'r-000003-abc123', seq: 3, number: 3 }));

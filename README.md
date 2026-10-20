@@ -130,6 +130,8 @@ npm run check   # 명령·스킬 파일이 최신인지 확인
 npm test        # node --test
 ```
 
+공개 배포는 버전 태그(`vX.Y.Z`)로 실행합니다. 태그를 직접 만들 수 없는 배포 환경에서는 검토한 릴리스 변경을 `main`에 합칠 때 커밋 메시지에 `[publish-release]`를 명시할 수 있습니다. CI는 모든 운영체제 검사와 실제 Codex 설치 검사가 통과한 뒤 현재 버전의 태그를 만들고 ZIP·체크섬·출처 증명을 게시합니다. 일반 커밋은 검사만 실행하며, 이미 다른 커밋을 가리키는 같은 버전의 태그는 덮어쓰지 않습니다.
+
 ## 참고 규격
 
 - [Claude Code 플러그인](https://code.claude.com/docs/en/plugins-reference)

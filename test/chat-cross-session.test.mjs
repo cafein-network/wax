@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, readFile, readdir, rename, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { joinPresence, listPresence, setPresence } from '../src/chat/presence.mjs';
 import { postMessage, readMessages } from '../src/chat/channels.mjs';
 import { listListeners } from '../src/chat/listeners.mjs';
 import { watchChat } from '../src/chat/watch.mjs';
 import { addressed, deliveryHint, recipientOptions } from '../web/recipients-model.mjs';
-import { at, project } from './chat-helpers.mjs';
+import { at, project, createTestSymlink } from './chat-helpers.mjs';
 
 const until = async (check, ms = 3000) => {
   const end = Date.now() + ms;
@@ -131,7 +131,7 @@ test('2차 리뷰: 긴 한글 이름도 표시를 남기고, 링크·큰 파일�
   await mkdir(dir, { recursive: true });
   const outside = join(root, 'outside.json');
   await writeFile(outside, JSON.stringify({ author: 'x', at: new Date().toISOString() }));
-  await symlink(outside, join(dir, `${'a'.repeat(32)}.link.json`));
+  if (!await createTestSymlink(t, outside, join(dir, `${'a'.repeat(32)}.link.json`))) return;
   await writeFile(join(dir, `${'b'.repeat(32)}.big.json`), JSON.stringify({ author: 'y', at: new Date().toISOString(), pad: 'z'.repeat(5000) }));
   const listeners = await listListeners(root);
   assert.equal(listeners.has('x') || listeners.has('y'), false);

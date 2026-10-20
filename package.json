@@ -1,6 +1,6 @@
 {
   "name": "@cafein-network/wax",
-  "version": "0.13.2",
+  "version": "0.13.3",
   "description": "A portable, evidence-based AI coding workflow and team dashboard for Claude Code, Codex, GitHub Copilot CLI, Gemini CLI and Antigravity CLI",
   "type": "module",
   "license": "AGPL-3.0-only",
@@ -27,6 +27,7 @@
     "scripts/install-codex.mjs",
     "scripts/verify-windows.mjs",
     "docs",
+    ".agents/plugins/marketplace.json",
     ".codex-plugin",
     ".claude-plugin",
     "gemini-extension.json",
