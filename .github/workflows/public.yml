@@ -62,8 +62,8 @@ jobs:
           node scripts/verify-codex-marketplace.mjs "$(command -v codex)" "$RUNNER_TEMP/wax-unpacked/wax"
 
   release:
-    # Publish verified tag builds with a stable latest ZIP alias.
-    if: github.repository == 'cafein-network/wax' && startsWith(github.ref, 'refs/tags/v')
+    # A main-branch release needs an explicit marker; ordinary pushes only run checks.
+    if: github.repository == 'cafein-network/wax' && (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[publish-release]')))
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -76,8 +76,23 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Tag matches the plugin version
-        run: test "v$(python3 -c "import json; print(json.load(open('package.json'))['version'])")" = "$GITHUB_REF_NAME"
+      - name: Verify or create the requested release tag
+        id: release-tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v$(python3 -c "import json; print(json.load(open('package.json'))['version'])")"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            test "$tag" = "$GITHUB_REF_NAME"
+          else
+            existing="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha' 2>/dev/null || true)"
+            if [[ -n "$existing" ]]; then
+              test "$existing" = "$GITHUB_SHA"
+            else
+              gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$tag" -f "sha=$GITHUB_SHA" --silent
+            fi
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
       - name: Build release archive
         run: python3 scripts/package-release.py --out-dir dist
       - uses: actions/attest-build-provenance@v2
@@ -86,14 +101,15 @@ jobs:
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release-tag.outputs.tag }}
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="${RELEASE_TAG#v}"
           files=("dist/wax-$version.zip" dist/wax-latest.zip dist/SHA256SUMS.txt dist/latest.json)
           printf '<!-- wax:changes:start -->\n' > dist/github-release-notes.md
           cat dist/RELEASE_NOTES.md >> dist/github-release-notes.md
           printf '<!-- wax:changes:end -->\n\nChanges: https://wax.me2shop.com/#changelog · Installation: INSTALL.md\nVerify provenance: gh attestation verify wax-%s.zip --repo %s\n' "$version" "$GITHUB_REPOSITORY" >> dist/github-release-notes.md
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${files[@]}" --clobber
           else
-            gh release create "$GITHUB_REF_NAME" "${files[@]}" --verify-tag --title "wax $version" --notes-file dist/github-release-notes.md
+            gh release create "$RELEASE_TAG" "${files[@]}" --verify-tag --title "wax $version" --notes-file dist/github-release-notes.md
           fi
