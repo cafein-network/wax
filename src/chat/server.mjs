@@ -23,6 +23,7 @@ import { search as searchRecords, indexStatus } from '../search.mjs';
 import { spawn } from 'node:child_process';
 import { createDesignRunner, versionPreview } from './design.mjs';
 import { artifactFile } from '../quality.mjs';
+import { detectProjectType } from '../project-detect.mjs';
 
 const publicDir = fileURLToPath(new URL('../../web/', import.meta.url));
 const { version } = JSON.parse(await readFile(new URL('../../package.json', import.meta.url), 'utf8'));
@@ -139,7 +140,7 @@ export function createChatServer({ root, env = process.env, intervalMs = 1000, e
       }
 
       if (req.method === 'GET' && pathname === '/api/config') {
-        json(res, 200, { name: 'wax', version, runtime: { node: process.versions.node, platform: process.platform }, project: basename(root), description: await projectDescription(root), root, token, phases: PHASES, labels: LABELS, user, awayAfterMs: AWAY_AFTER_MS, now: new Date().toISOString() });
+        json(res, 200, { name: 'wax', version, runtime: { node: process.versions.node, platform: process.platform }, project: basename(root), description: await projectDescription(root), repoType: await detectProjectType(root), root, token, phases: PHASES, labels: LABELS, user, awayAfterMs: AWAY_AFTER_MS, now: new Date().toISOString() });
         return;
       }
       if (req.method === 'GET' && pathname === '/api/events') {

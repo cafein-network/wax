@@ -72,6 +72,17 @@ test('duplicate submission is idempotent and queued requests never execute in pa
   await assert.rejects(runner.submit({ ...input, body: '다른 내용' }), { status: 409 });
 });
 
+test('a resent request keeps the project type detected when it was first submitted', async (t) => {
+  const { root, runner } = await runnerFor(t);
+  const input = { id: `request-${randomUUID()}`, author: '사장', body: '오류 수정' };
+  assert.equal((await runner.submit(input)).projectType, 'general');
+  await writeFile(join(root, 'package.json'), JSON.stringify({ devDependencies: { '@playwright/test': '^1.56.0' } }));
+  assert.equal((await runner.submit(input)).projectType, 'general');
+  await assert.rejects(runner.submit({ ...input, projectType: 'web' }), { status: 409 });
+  assert.equal((await runner.submit({ author: '사장', body: '다음 오류 수정' })).projectType, 'web');
+  await runner.settled();
+});
+
 test('project creates a workflow first and runs later phases only after that revision is confirmed', async (t) => {
   const { root, calls, runner } = await runnerFor(t);
   const r = await runner.submit({ author: '사장', body: '예약 서비스 프로젝트', mode: 'project' });

@@ -1,6 +1,8 @@
-# wax 0.13.3 — 2026-10-20
+# wax 0.13.4 — 2026-10-20
 
-- Codex 표준 경로인 `.agents/plugins/marketplace.json`에 wax 목록과 설치 정책을 추가하고, ZIP과 npm 배포 대상에 포함했습니다. 홈페이지·설치 안내·한영 매뉴얼·대시보드 도움말에 기존 출처 충돌과 플러그인 검색 실패의 복구 절차를 구분해 추가했습니다.
-- Gemini CLI 개인 로그인 이용 종료, 기존 기업 라이선스 조건과 API·Antigravity 이전 안내를 공식 출처와 함께 추가했습니다.
-- Codex 실제 설치·재설치를 릴리스 CI에서 검사합니다. Windows 검사에서 줄바꿈·정렬 순서·npm 경로 차이를 처리하고 심볼릭 링크 권한이 없는 환경은 해당 검사를 명시적으로 건너뜁니다.
-- 태그를 직접 만들 수 없는 배포 환경을 위해 main 커밋의 명시적인 `[publish-release]` 요청으로도 검증 후 태그·ZIP을 게시할 수 있습니다. 기존 태그 배포와 일반 커밋의 검사 전용 동작은 유지합니다.
+- **웹 서비스** 프로젝트 종류를 추가했습니다. 요청 문장이나 저장소 `package.json`의 웹 프레임워크·`@playwright/test`로 자동 선택되며, 설계 화면 캡처·구현 `e2e-smoke`·검토 `e2e-acceptance`와 `ui-review`를 단계 완료 조건으로 요구합니다. 기존 작업의 종류는 바뀌지 않습니다.
+- `wax capture`가 캡처 명령을 셸 없이 실행하고 결과 이미지를 `.wax/artifacts/<작업>/<단계>-<주기>/`에 보관해 검증 항목에 연결할 경로를 돌려줍니다. 캡처는 근거가 아닌 산출물입니다.
+- 웹 작업의 자동 진행 안내·CLI prompt·다섯 도구용 스킬에 `playwright-cli`(탐색·재현·캡처)와 `@playwright/test`(근거) 사용 순서를 넣었습니다.
+- `wax doctor`가 `playwright-cli`·`@playwright/test` 설치 여부와 설치 명령을 `browser` 항목에 보여 줍니다. 진단 결과에는 영향을 주지 않습니다.
+- wax는 명령을 셸 없이 실행하므로 근거 명령은 Windows에서도 동작하는 `node node_modules/@playwright/test/cli.js test`로 안내합니다. Windows에서 `playwright-cli`는 먼저 캡처한 뒤 `wax capture --file`로 등록합니다.
+- 웹 서비스 작업은 0.13.3 이하 버전이 읽지 못합니다. 같은 프로젝트를 여러 도구로 쓰면 모든 도구의 wax를 함께 업데이트하세요.

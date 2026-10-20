@@ -2,7 +2,7 @@ import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildPrompt, createFeature, getFeature, updateFeature, PHASES, LABELS, WaxError } from '../workflow.mjs';
+import { buildPrompt, createFeature, getFeature, updateFeature, PHASES, LABELS, WaxError, WEB_GUIDE } from '../workflow.mjs';
 import { runAgentSession } from '../agent-session.mjs';
 import { agentTool } from '../agent-tools.mjs';
 import { chatDir, checkFile, safeDir } from './paths.mjs';
@@ -11,6 +11,7 @@ import { writeJsonAtomic } from './store.mjs';
 import { joinPresence as joinSession, setPresence as updatePresence } from './presence.mjs';
 import * as v from './validate.mjs';
 import { projectType, PROJECT_TYPES, qualityRequirements } from '../../web/project-types.mjs';
+import { detectProjectType } from '../project-detect.mjs';
 import { assessQuality, qualityMessage } from '../quality.mjs';
 import { designHandoffs } from './design.mjs';
 
@@ -99,7 +100,7 @@ export function requestPrompt(request, feature) {
     '테스트 기록으로 revision이 바뀌면 최신 status를 읽으세요. 통과한 현재 단계·주기의 proof ID를 proofIds에 반환하세요.',
     '구현·검토는 통과한 테스트 근거 없이는 완료되지 않습니다. 검사 환경이 없으면 막힌 이유를 보고하세요. 실패를 통과로 꾸미지 마세요.',
     '처음에는 프로젝트 종류, 실제 제작·실행 환경, 사용 가능한 도구와 코드 반영 방법부터 조사하세요. 도구 설치·MCP 이름만으로 연결되었다고 판단하지 마세요. 필요한 연결이 없으면 연결 대상과 다음 행동을 구체적으로 알리세요.',
-    feature.projectType === 'roblox' ? 'Roblox: Studio에서 실행 가능한 작은 게임 루프 하나부터 완성하세요. Luau 문법·파일 존재 검사로 플레이를 대신하지 마세요. 서버/클라이언트, 조작·카메라·충돌·보상·재시작을 확인하고, 멀티플레이 기능이 있으면 여러 클라이언트로 검증하세요. Blender 아트 확장은 첫 플레이가 확인된 뒤 진행하세요.' : feature.projectType === 'lookbook' ? 'AI 룩북: 한 상품·한 장의 생성→저장→편집→상품 연결을 먼저 완성하세요. Figma는 화면 설계, FASHN 등은 콘텐츠 생성, Blender는 필요한 3D 연출에 사용합니다. 실제 연결을 확인하고 생성 대기·실패·작업 ID 보존·재접속·중복 요청 방지·상품 표현 검토를 포함하세요. 샘플 화면은 실제 API 검증으로 처리하지 마세요.' : '웹·게임·도구 등 저장소의 실제 실행 환경에 맞게 작업을 나누고, 작은 사용자 흐름 하나를 먼저 끝까지 검증하세요.',
+    feature.projectType === 'roblox' ? 'Roblox: Studio에서 실행 가능한 작은 게임 루프 하나부터 완성하세요. Luau 문법·파일 존재 검사로 플레이를 대신하지 마세요. 서버/클라이언트, 조작·카메라·충돌·보상·재시작을 확인하고, 멀티플레이 기능이 있으면 여러 클라이언트로 검증하세요. Blender 아트 확장은 첫 플레이가 확인된 뒤 진행하세요.' : feature.projectType === 'lookbook' ? 'AI 룩북: 한 상품·한 장의 생성→저장→편집→상품 연결을 먼저 완성하세요. Figma는 화면 설계, FASHN 등은 콘텐츠 생성, Blender는 필요한 3D 연출에 사용합니다. 실제 연결을 확인하고 생성 대기·실패·작업 ID 보존·재접속·중복 요청 방지·상품 표현 검토를 포함하세요. 샘플 화면은 실제 API 검증으로 처리하지 마세요.' : feature.projectType === 'web' ? WEB_GUIDE : '웹·게임·도구 등 저장소의 실제 실행 환경에 맞게 작업을 나누고, 작은 사용자 흐름 하나를 먼저 끝까지 검증하세요.',
     `현재 단계 필수 항목: ${JSON.stringify(required)}. checks에 각 id, status(pass/fail/unverified), 구체적인 detail, 프로젝트 상대 경로 artifact, proofIds를 반환하세요. 필수 항목이 없으면 checks는 빈 배열입니다.`,
     'preview 항목에는 실제 시안(이미지·HTML·Blender·Studio 파일)을 만드세요. Markdown 설명만으로 시안을 대신하지 마세요. visual 항목은 실제 비교·검토 캡처(이미지·동영상)를 artifact에 연결하세요. 외부 디자인 결과는 프로젝트에 내보내세요.',
     'runtime/integration/visual 검사는 CLI test <id> --revision <현재 revision> --verification <해당 kind> --checks <항목 id,항목 id> -- <실행파일> <인수>로 기록하세요. 검증 종류는 실제 검사에 맞게 지정하고 문법·파일 존재·샘플 검사를 runtime/integration/visual로 표시하지 마세요. 도구 미연결·실행 불가 항목은 unverified입니다. checks의 proofIds는 최상위 proofIds에도 넣으세요.',
@@ -312,17 +313,17 @@ export function createRequestRunner({ root, execute = runAgentSession, notify = 
   async function submit({ id = `request-${randomUUID()}`, body, author, tool = 'codex', mode = 'sm', projectType: requestedType = 'auto' }) {
     if (stopped) throw new WaxError('실행 연결이 종료되었습니다. 새로고침하세요.', 409);
     requestId(id); body = v.body(body, 8000, '요청'); author = v.author(author); tool = agentTool(tool).id; mode = modeOf(mode);
-    let type;
-    try { type = projectType(requestedType, body); } catch (error) { throw new WaxError(error.message); }
+    try { projectType(requestedType, body); } catch (error) { throw new WaxError(error.message); }
+    const type = requestedType === 'auto' ? null : requestedType;
     const file = await requestFile(root, id, true);
     const r = await withLock(`${file}.lock`, async () => {
       try {
         const existing = await read(root, id);
-        if (existing.author !== author || existing.messages[0].text !== body || existing.tool !== tool || existing.mode !== mode || (existing.projectType || 'general') !== type) throw new WaxError('같은 요청 ID에 다른 내용, 실행 도구, 진행 모드 또는 프로젝트 종류가 있습니다.', 409);
+        if (existing.author !== author || existing.messages[0].text !== body || existing.tool !== tool || existing.mode !== mode || (type && (existing.projectType || 'general') !== type)) throw new WaxError('같은 요청 ID에 다른 내용, 실행 도구, 진행 모드 또는 프로젝트 종류가 있습니다.', 409);
         return existing;
       } catch (error) { if (error.status !== 404) throw error; }
       const now = new Date().toISOString();
-      const created = { schema: 1, id, author, tool, mode, projectType: type, title: body.replace(/\s+/g, ' ').slice(0, 100), phase: 'plan', status: 'queued', detail: mode === 'project' ? '프로젝트 워크플로우를 준비하고 있습니다.' : '유지보수 요청을 접수하고 있습니다.', owner, createdAt: now, updatedAt: now, messages: [] };
+      const created = { schema: 1, id, author, tool, mode, projectType: type ?? projectType('auto', body, await detectProjectType(root)), title: body.replace(/\s+/g, ' ').slice(0, 100), phase: 'plan', status: 'queued', detail: mode === 'project' ? '프로젝트 워크플로우를 준비하고 있습니다.' : '유지보수 요청을 접수하고 있습니다.', owner, createdAt: now, updatedAt: now, messages: [] };
       addMessage(created, 'user', body);
       await writeJsonAtomic(file, created);
       return created;

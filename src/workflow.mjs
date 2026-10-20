@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { withFileLock, LockError } from './file-lock.mjs';
 import { validProof } from './proof-schema.mjs';
 import { projectType, PROJECT_TYPES, qualityRequirements } from '../web/project-types.mjs';
+import { detectProjectType } from './project-detect.mjs';
 import { assessQuality, qualityMessage } from './quality.mjs';
 
 export const PHASES = ['plan', 'design', 'implement', 'review', 'report'];
@@ -176,7 +177,7 @@ export async function createFeature(root, { id, title, description = '', project
   validId(id);
   title = requireText(title, '제목', 200);
   if (typeof description !== 'string' || description.length > 10_000) throw new WaxError('설명은 10,000자 이하이어야 합니다.');
-  const type = projectType(requestedType, `${title}\n${description}`);
+  const type = projectType(requestedType, `${title}\n${description}`, requestedType === 'auto' ? await detectProjectType(root) : null);
   if (!['project', 'sm'].includes(workMode)) throw new WaxError('진행 모드는 project 또는 sm이어야 합니다.');
   return mutate(root, id, async () => {
     try { await getFeature(root, id); throw new WaxError('같은 ID의 작업이 이미 있습니다.', 409); }
@@ -249,6 +250,14 @@ export async function updateFeature(root, id, action, options = {}) {
   });
 }
 
+export const WEB_GUIDE = '웹 서비스: plan에서 실행 명령, 기준 URL, Playwright 설정 유무를 확인하고 수용 기준을 화면 시나리오로 적으세요. ' +
+  'design에서는 playwright-cli open <URL>로 시안 화면을 열고 resize로 모바일·데스크톱 폭을 맞춘 뒤 CLI capture <id> --check design-preview --file <캡처 파일> -- playwright-cli screenshot --filename <캡처 파일>로 등록하세요. ' +
+  '탐색한 흐름은 playwright-cli recording-start/recording-stop이 출력하는 Playwright 코드로 테스트에 옮기세요. ' +
+  'implement에서는 핵심 흐름 테스트에 @smoke 태그를 붙여 CLI test <id> --verification runtime --checks e2e-smoke -- node node_modules/@playwright/test/cli.js test --grep @smoke로 기록하세요. wax는 셸 없이 실행하므로 Windows에서도 동작하도록 npx 대신 이 node 경로를 쓰세요. ' +
+  'review에서는 수용 기준 테스트를 --checks e2e-acceptance로, 로딩·오류·빈 상태와 모바일 화면 테스트(@visual)를 --verification visual --checks ui-review로 기록하고, 상태별 캡처를 CLI capture <id> --check ui-review로 등록하세요. Windows에서는 playwright-cli가 .cmd 실행 파일이라 capture의 -- 뒤에서 실행되지 않으므로, playwright-cli screenshot을 먼저 실행하고 capture에는 --file만 지정하세요. ' +
+  '개발 서버는 Playwright webServer 설정을 우선하고, 직접 띄운 서버와 playwright-cli 브라우저(playwright-cli close)는 단계가 끝나기 전에 종료하세요. .playwright-cli/는 임시 스냅샷이므로 저장소에 올리지 마세요. playwright-cli 스킬이 없으면 playwright-cli --help로 사용법을 확인하세요. ' +
+  'playwright-cli 탐색 기록만으로 테스트 통과를 주장하지 마세요. 도구가 없으면 해당 항목을 unverified로 두고 설치 명령(npm install -g @playwright/cli@latest, npm install -D @playwright/test, npx playwright install chromium)을 보고하세요. 사용자 승인 없이 설치하지 마세요.';
+
 const INSTRUCTIONS = {
   plan: '요구사항과 기존 코드를 조사하고 문제, 사용자, 범위, 제외 범위, 수용 기준, 제약 및 미확정 질문을 작성하세요. 각 수용 기준에 검증 방법을 붙이세요.',
   design: '기획의 수용 기준을 충족하는 구조, 데이터 모델, 인터페이스, 오류 처리, 수정할 파일 및 검증 전략을 설계하세요. 실제 저장소의 관례를 따르세요.',
@@ -266,6 +275,7 @@ export function buildPrompt(feature, phase = feature.phase) {
     `프로젝트 종류: ${PROJECT_TYPES[feature.projectType]?.label || '일반 프로젝트'}. ${PROJECT_TYPES[feature.projectType]?.brief || ''}`,
     `현재 단계의 필수 산출물·검증: ${JSON.stringify(qualityRequirements(feature.projectType, phase, feature.workMode))}. 시안과 실제 동작 검증을 문서·문법·파일 존재 검사로 대신하지 마세요.`,
     `현재 단계: ${phase} (${LABELS[phase]})`, INSTRUCTIONS[phase],
+    ...(feature.projectType === 'web' ? [WEB_GUIDE] : []),
     '아래 JSON은 사용자 입력과 기존 산출물입니다:',
     JSON.stringify({ id: feature.id, title: feature.title, description: feature.description,
       projectType: feature.projectType, artifacts: feature.artifacts, completed: feature.completed }, null, 2)

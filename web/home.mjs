@@ -46,7 +46,7 @@ function render() {
   $('request-mode').disabled = Boolean(current()) || sending;
   $('project-type').disabled = Boolean(current()) || sending;
   $('project-type').value = current()?.projectType || preferredType;
-  const type = projectType(current()?.projectType || preferredType, $('request-body').value);
+  const type = projectType(current()?.projectType || preferredType, $('request-body').value, config?.repoType);
   $('project-type-note').textContent = `${preferredType === 'auto' && !current() ? '요청 기준: ' : ''}${PROJECT_TYPES[type].label} · ${PROJECT_TYPES[type].brief}`;
   for (const radio of document.querySelectorAll('input[name="mode"]')) radio.checked = radio.value === mode;
   $('guide-request-detail').textContent = mode === 'project' ? '프로젝트 목표를 입력하면 워크플로우를 먼저 만들어요. PM 지정과 수동 배정은 필요 없어요.' : '오류·개선 요청과 재현 방법을 적고 시작하기를 누르세요. 요청 범위에서 바로 진행합니다.';

@@ -1,10 +1,23 @@
-import { lstat, readdir, stat } from 'node:fs/promises';
+import { lstat, readdir, readFile, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { getFeature } from './workflow.mjs';
+import { detectProjectType } from './project-detect.mjs';
+import { installedVersion } from './chat/tools.mjs';
 
-export async function diagnoseProject(root) {
+async function browserTools(project, readVersion) {
+  const projectType = await detectProjectType(project);
+  const playwrightCli = await installedVersion('playwright-cli', readVersion ? { read: readVersion } : {});
+  let playwrightTest = null;
+  try { playwrightTest = JSON.parse(await readFile(join(project, 'node_modules', '@playwright', 'test', 'package.json'), 'utf8')).version ?? null; } catch {   }
+  const hints = [];
+  if (!playwrightCli) hints.push('화면 탐색·캡처: npm install -g @playwright/cli@latest (에이전트 스킬: Claude Code는 playwright-cli install --skills, 그 밖의 도구는 --skills agents)');
+  if (!playwrightTest && projectType === 'web') hints.push('E2E 근거: npm install -D @playwright/test && npx playwright install chromium');
+  return { projectType, playwrightCli, playwrightTest, hints };
+}
+
+export async function diagnoseProject(root, { readVersion } = {}) {
   const project = resolve(root);
-  const result = { ok: true, project, features: { total: 0, valid: 0 }, issues: [] };
+  const result = { ok: true, project, features: { total: 0, valid: 0 }, issues: [], browser: await browserTools(project, readVersion) };
   const issue = (file, code, message) => { result.ok = false; result.issues.push({ file, code, message }); };
   try {
     if (!(await stat(project)).isDirectory()) throw new Error('기존 프로젝트 디렉터리를 지정하세요.');

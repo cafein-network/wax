@@ -48,3 +48,18 @@ test('diagnostics does not initialize an empty project and rejects symlink data 
   assert.equal((await diagnoseProject(root)).issues[0].code, 'INVALID_DIRECTORY');
   assert.deepEqual(await readdir(outside), []);
 });
+
+test('diagnostics reports Playwright tools for web projects without installing or creating anything', async (t) => {
+  const root = await workspace(t);
+  await writeFile(join(root, 'package.json'), JSON.stringify({ dependencies: { react: '^19.0.0' } }));
+  const asked = [];
+  let result = await diagnoseProject(root, { readVersion: async (bin) => { asked.push(bin); return null; } });
+  assert.equal(result.ok, true);
+  assert.deepEqual(asked, ['playwright-cli']);
+  assert.deepEqual({ ...result.browser, hints: result.browser.hints.length }, { projectType: 'web', playwrightCli: null, playwrightTest: null, hints: 2 });
+  await mkdir(join(root, 'node_modules', '@playwright', 'test'), { recursive: true });
+  await writeFile(join(root, 'node_modules', '@playwright', 'test', 'package.json'), JSON.stringify({ version: '1.56.0' }));
+  result = await diagnoseProject(root, { readVersion: async () => '0.1.0' });
+  assert.deepEqual(result.browser, { projectType: 'web', playwrightCli: '0.1.0', playwrightTest: '1.56.0', hints: [] });
+  assert.deepEqual((await readdir(root)).sort(), ['node_modules', 'package.json']);
+});

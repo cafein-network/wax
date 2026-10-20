@@ -6,11 +6,12 @@ import { buildPrompt, createFeature, getFeature, listFeatures, updateFeature } f
 import { diagnoseProject } from '../src/diagnostics.mjs';
 import { createBackup, previewRestore, restoreBackup } from '../src/backup.mjs';
 import { collectGitProof, runTestProof } from '../src/evidence.mjs';
+import { captureArtifact } from '../src/capture.mjs';
 
 const { version } = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
 const HELP = `wax ${version} — 기획에서 검증까지
 
-node bin/wax.mjs start <id> --title <제목> [--description <설명>] [--type auto|general|roblox|lookbook]
+node bin/wax.mjs start <id> --title <제목> [--description <설명>] [--type auto|general|web|roblox|lookbook]
 node bin/wax.mjs status [id]
 node bin/wax.mjs context <id> [--budget 3000]   인수인계 문맥 (문자 수 제한)
 node bin/wax.mjs prompt <단계> <id>
@@ -25,6 +26,7 @@ node bin/wax.mjs backup > wax-backup.json
 node bin/wax.mjs import --file wax-backup.json [--prefix copy-] [--apply <미리보기 fingerprint>]
 node bin/wax.mjs evidence <id> [--commit HEAD] [--revision <숫자>]
 node bin/wax.mjs test <id> [--revision <숫자>] [--timeout 120000] -- <실행 파일> [인수...]
+node bin/wax.mjs capture <id> --check <검증 ID> --file <캡처 파일> [--revision <숫자>] [-- <캡처 명령> [인수...]]   화면 캡처를 .wax/artifacts에 보관
 종류별 검증: test ... --verification runtime|integration|visual|static --checks <검증 ID,ID> -- <실행 파일> [인수...]
 필수 산출물·검증 보고: complete ... --checks-file <JSON 배열 파일>
 단계 완료에 근거 연결: complete ... --proofs <근거 ID,근거 ID>
@@ -67,7 +69,7 @@ try {
     project: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' },
     file: { type: 'string' }, evidence: { type: 'string' }, verdict: { type: 'string' }, type: { type: 'string' }, verification: { type: 'string' }, checks: { type: 'string' }, 'checks-file': { type: 'string' },
     reason: { type: 'string' }, revision: { type: 'string' }, help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'v' },
-    prefix: { type: 'string' }, apply: { type: 'string' }, commit: { type: 'string' }, proofs: { type: 'string' }, timeout: { type: 'string' }, budget: { type: 'string' }
+    prefix: { type: 'string' }, apply: { type: 'string' }, commit: { type: 'string' }, proofs: { type: 'string' }, timeout: { type: 'string' }, budget: { type: 'string' }, check: { type: 'string' }
   } });
   const [command, first, second] = positionals;
   const root = resolve(values.project ?? process.cwd());
@@ -95,6 +97,7 @@ try {
     }
     else if (command === 'evidence') { const feature = await getFeature(root, first); result = await updateFeature(root, first, 'attach-evidence', { proof: await collectGitProof(root, feature, values.commit), revision: revision ?? feature.revision }); }
     else if (command === 'test') { result = await runTestProof(root, first, commandArgs, { revision, timeout: values.timeout === undefined ? undefined : Number(values.timeout), verification: values.verification, checks: values.checks?.split(',') }); if (!result.recorded || result.proof.exitCode !== 0 || result.proof.timedOut) process.exitCode = 1; }
+    else if (command === 'capture') result = await captureArtifact(root, first, { check: values.check, file: values.file, command: commandArgs, revision, timeout: values.timeout === undefined ? undefined : Number(values.timeout) });
     else if (command === 'prompt') { console.log(buildPrompt(await getFeature(root, second), first)); process.exit(0); }
     else if (command === 'save') {
       if (!values.file) throw new Error('--file 문서 경로가 필요합니다.');
