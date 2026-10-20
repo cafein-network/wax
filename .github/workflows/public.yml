@@ -52,6 +52,14 @@ jobs:
       - name: Release archive extracts and runs without install
         if: matrix.os == 'ubuntu-latest' && matrix.node == '24'
         run: python3 test/package_test.py
+      - name: Codex discovers and installs the packaged marketplace without AI calls
+        if: matrix.os == 'ubuntu-latest' && matrix.node == '24'
+        shell: bash
+        run: |
+          npm install --global @openai/codex@0.163.0
+          python3 scripts/package-release.py --out-dir "$RUNNER_TEMP/wax-package"
+          python3 -m zipfile -e "$RUNNER_TEMP/wax-package/wax-latest.zip" "$RUNNER_TEMP/wax-unpacked"
+          node scripts/verify-codex-marketplace.mjs "$(command -v codex)" "$RUNNER_TEMP/wax-unpacked/wax"
 
   release:
     # Publish verified tag builds with a stable latest ZIP alias.

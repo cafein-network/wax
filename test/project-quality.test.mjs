@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { writeFile, symlink, rename } from 'node:fs/promises';
+import { writeFile, rename } from 'node:fs/promises';
 import { join } from 'node:path';
 import { once } from 'node:events';
-import { project } from './chat-helpers.mjs';
+import { project, createTestSymlink } from './chat-helpers.mjs';
 import { createFeature, getFeature, listFeatures, updateFeature } from '../src/workflow.mjs';
 import { runTestProof } from '../src/evidence.mjs';
 import { assessQuality } from '../src/quality.mjs';
@@ -51,7 +51,7 @@ test('quality coverage rejects missing, wrong-phase, failed and outside-project 
   await writeFile(join(outside, 'preview.png'), png);
   let feature = await createFeature(root, { id: 'look', title: '룩북' });
   feature = await next(root, feature);
-  await symlink(join(outside, 'preview.png'), join(root, 'external.png'));
+  if (!await createTestSymlink(t, join(outside, 'preview.png'), join(root, 'external.png'))) return;
   assert.equal((await assessQuality(root, feature, [record('design-preview', [], 'external.png')])).ok, false);
   assert.equal((await assessQuality(root, feature, [record('design-preview', [], join(outside, 'preview.png'))])).ok, false);
   await writeFile(join(root, 'preview.png'), png);
@@ -123,6 +123,6 @@ test('design previews serve only registered local artifacts with a sandbox and r
   assert.equal((await fetch(`${base}/api/features/unknown/artifacts/design-preview`)).status, 404);
   await writeFile(join(outside, 'preview.html'), '프로젝트 밖의 파일');
   await rename(join(root, 'preview.html'), join(root, 'preview-original.html'));
-  await symlink(join(outside, 'preview.html'), join(root, 'preview.html'));
+  if (!await createTestSymlink(t, join(outside, 'preview.html'), join(root, 'preview.html'))) return;
   assert.equal((await fetch(`${base}/api/features/preview/artifacts/design-preview`)).status, 404);
 });

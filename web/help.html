@@ -20,6 +20,7 @@
       <h2>목차</h2>
       <ol>
         <li><a href="#start">시작하기</a></li>
+        <li><a href="#cli-install">CLI 설치와 인증</a></li>
         <li><a href="#session">세션 이름과 맡은 작업</a></li>
         <li><a href="#screens">화면 구성</a></li>
         <li><a href="#channel">채널 사용 규칙</a></li>
@@ -48,6 +49,25 @@
           <li>터미널에서 직접 켜려면 <code>node "&lt;wax&gt;/bin/wax.mjs" --project "&lt;프로젝트 경로&gt;" dashboard</code>를 실행합니다. 포트는 <code>--port</code>나 <code>WAX_DASHBOARD_PORT</code>로 바꿉니다(기본 4330).</li>
           <li>지금 보고 있는 대시보드 주소: <code data-fill="origin"></code></li>
         </ul>
+      </section>
+
+      <section class="panel" id="cli-install">
+        <h2>CLI 설치와 인증</h2>
+        <h3>Codex 마켓플레이스 오류</h3>
+        <p>아래 명령은 PowerShell 등 터미널에서 한 줄씩 실행합니다. 앞 명령이 실패하면 다음으로 넘어가지 마세요.</p>
+        <pre class="markdown">codex plugin marketplace list</pre>
+        <p>already added from a different source: 기존 wax 등록이 다른 Git 주소나 ZIP 경로를 가리킵니다. 목록에서 출처를 확인한 뒤 공개 저장소로 전환하려면 다시 등록하세요.</p>
+        <pre class="markdown">codex plugin marketplace remove wax
+codex plugin marketplace add cafein-network/wax
+codex plugin add wax@wax</pre>
+        <p>등록 출처가 이미 공개 GitHub 저장소인데 플러그인을 찾지 못하면 목록을 갱신하고 wax@wax가 표시되는지 확인합니다.</p>
+        <pre class="markdown">codex plugin marketplace upgrade wax
+codex plugin list --marketplace wax --available --json
+codex plugin add wax@wax</pre>
+        <p>ZIP 출처는 새 ZIP을 같은 경로에 풉니다. 등록 제거는 프로젝트 소스와 .wax 기록을 삭제하지 않습니다. 설치 후 새 Codex 세션을 열고 대화창에 $wax:init을 입력하세요. 여전히 실패하면 codex --version과 마켓플레이스·플러그인 목록을 함께 확인합니다.</p>
+        <h3>Gemini CLI 인증 변경</h3>
+        <p>2026-10-20 확인: 개인 Google 로그인으로 제공되던 Gemini CLI 이용은 2026-06-18 종료됐습니다. 무료·Google AI Pro·Ultra 모두 포함됩니다. 지원되는 API 인증 또는 기존 Gemini Code Assist Standard·Enterprise 라이선스가 필요합니다. Google 전환 공지는 유료 API 키 이용과 개인 사용자의 Antigravity CLI 이전을 안내합니다. Standard·Enterprise 신규 구독 판매도 2026-10-09 중단됐으며 기존 구독은 계약과 별도 종료 일정에 따릅니다. wax 설치는 AI 이용 권한을 제공하지 않습니다.</p>
+        <p><a href="https://developers.google.com/gemini-code-assist/docs/deprecations/code-assist-individuals" target="_blank" rel="noopener noreferrer">개인 계정 종료 안내</a> · <a href="https://developers.googleblog.com/an-important-update-transitioning-gemini-cli-to-antigravity-cli/" target="_blank" rel="noopener noreferrer">API와 Antigravity 전환 안내</a> · <a href="https://docs.cloud.google.com/gemini/docs/codeassist/sunset" target="_blank" rel="noopener noreferrer">기업 구독 종료 일정</a></p>
       </section>
 
       <section class="panel" id="session">

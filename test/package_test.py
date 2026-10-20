@@ -53,6 +53,10 @@ class ReleaseTests(unittest.TestCase):
                 self.assertEqual(set(zipped.namelist()), {f'wax/{name}' for name in (*release.FILES, 'RELEASE_NOTES.md')})
                 zipped.extractall(work / 'extracted')
             plugin = work / 'extracted/wax'
+            codex_catalog = json.loads((plugin / '.agents/plugins/marketplace.json').read_text(encoding='utf-8'))
+            self.assertEqual(codex_catalog['name'], 'wax')
+            self.assertEqual(codex_catalog['plugins'][0]['source'], {'source': 'local', 'path': './'})
+            self.assertTrue((plugin / '.codex-plugin/plugin.json').is_file())
             notes = (plugin / 'RELEASE_NOTES.md').read_text(encoding='utf-8')
             self.assertTrue(notes.startswith(f'# wax {first["version"]}'))
             self.assertNotIn('\n## ', notes)
@@ -61,7 +65,7 @@ class ReleaseTests(unittest.TestCase):
             self.assertEqual(repacked, first)
             for command in (plugin / 'commands/wax').glob('*.toml'):
                 tomllib.loads(command.read_text(encoding='utf-8'))
-            subprocess.run(['npm', 'run', 'check'], cwd=plugin, check=True, capture_output=True)
+            subprocess.run([shutil.which('npm') or 'npm', 'run', 'check'], cwd=plugin, check=True, capture_output=True)
             try:
                 checked = subprocess.run(['node', '--test', '--test-timeout=60000'], cwd=plugin, capture_output=True, encoding='utf-8', timeout=180)
             except subprocess.TimeoutExpired as error:

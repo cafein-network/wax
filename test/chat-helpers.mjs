@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
@@ -6,6 +6,17 @@ import { fileURLToPath } from 'node:url';
 import { createFeature } from '../src/workflow.mjs';
 
 export const BIN = fileURLToPath(new URL('../bin/wax.mjs', import.meta.url));
+
+export async function createTestSymlink(t, target, path, type) {
+  try {
+    await symlink(target, path, type);
+    return true;
+  } catch (error) {
+    if (process.platform !== 'win32' || error.code !== 'EPERM') throw error;
+    t.skip('Windows file symlink privilege is unavailable');
+    return false;
+  }
+}
 
 export async function project(t, features = []) {
   const root = await mkdtemp(join(tmpdir(), 'wax-chat-테스트-'));

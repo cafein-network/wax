@@ -35,6 +35,32 @@ gemini extensions install https://github.com/cafein-network/wax
 
 ## Codex
 
+Codex용 마켓플레이스는 `.agents/plugins/marketplace.json`에 정의되어 있으며, 저장소와 ZIP 모두 같은 루트의 wax 플러그인을 가리킵니다. Claude·Copilot용 목록도 함께 제공합니다.
+
+### 마켓플레이스 등록·검색 오류
+
+`marketplace 'wax' is already added from a different source`는 이전 ZIP 경로나 다른 Git 주소가 `wax`라는 이름으로 등록되어 있다는 뜻입니다. 먼저 `codex plugin marketplace list`로 출처를 확인하고, 공개 GitHub 저장소로 전환하려면 아래 명령을 한 줄씩 실행합니다. 앞 명령이 실패하면 다음 명령으로 넘어가지 말고 오류를 확인하세요.
+
+```sh
+codex plugin marketplace remove wax
+codex plugin marketplace add cafein-network/wax
+codex plugin add wax@wax
+```
+
+마켓플레이스 등록 제거는 작업 프로젝트의 `.wax`나 소스 파일을 삭제하지 않습니다.
+
+등록 출처가 이미 `cafein-network/wax`인데 `plugin wax was not found in marketplace wax`가 나오면 목록을 갱신하고, 설치 가능한 플러그인에 `wax@wax`가 있는지 확인합니다.
+
+```sh
+codex plugin marketplace upgrade wax
+codex plugin list --marketplace wax --available --json
+codex plugin add wax@wax
+```
+
+목록에 `wax@wax`가 없으면 설치를 반복하지 말고 `codex --version`, `codex plugin marketplace list`와 위 목록 조회 결과를 함께 확인하세요. ZIP 출처는 Git 갱신 대신 이 정의가 포함된 새 ZIP을 같은 경로에 풀어야 합니다. 설치 뒤에는 새 Codex 세션을 시작합니다.
+
+### 특정 프로젝트에만 연결
+
 위의 한 번 설치를 권장합니다. 특정 프로젝트에만 연결하려면 압축을 푼 플러그인과 사용할 프로젝트의 실제 경로를 지정합니다(Antigravity CLI·GitHub Copilot CLI도 같은 연결을 읽습니다).
 
 ```sh
@@ -94,6 +120,8 @@ WSL에서 Claude Code를 실행한다면 Windows의 `C:\Tools\wax` 대신 `/mnt/
 한 명령은 한 단계를 실행합니다. 실제 수정과 테스트는 호스트의 도구·권한을 사용합니다.
 
 ## Gemini CLI
+
+**인증 안내(2026-10-20 확인):** 개인 Google 로그인으로 제공되던 Gemini CLI 이용은 2026-06-18 종료됐습니다(무료·Google AI Pro·Ultra 포함). 지원되는 API 인증 또는 기존 Gemini Code Assist Standard·Enterprise 라이선스가 필요하며, Google 전환 공지는 유료 API 키 이용과 개인 사용자의 Antigravity CLI 이전을 안내합니다. Standard·Enterprise 신규 구독 판매도 2026-10-09 중단됐습니다. 기존 구독은 계약과 별도 종료 일정에 따릅니다. [개인 계정 종료](https://developers.google.com/gemini-code-assist/docs/deprecations/code-assist-individuals) · [전환 안내](https://developers.googleblog.com/an-important-update-transitioning-gemini-cli-to-antigravity-cli/) · [기업 구독 일정](https://docs.cloud.google.com/gemini/docs/codeassist/sunset)
 
 ```sh
 gemini extensions link "/absolute/path/to/wax"
