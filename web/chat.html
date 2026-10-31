@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>wax 채널</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>wax 채널</h1>
+    <span class="status" id="status" data-state="down">연결 중…</span>
+    <span class="spacer"></span>
+    <nav><a href="/" aria-current="page">채널</a><a href="/start">요청과 보고</a><a href="/search">검색</a><a href="/office">가상 사무실</a><a href="/help">도움말</a></nav>
+  </header>
+  <div class="chat">
+    <aside aria-label="채널과 작업">
+      <div class="side-tabs" role="tablist" aria-label="보기">
+        <button type="button" role="tab" id="tab-channels" aria-selected="true" aria-controls="channels-pane">채널</button>
+        <button type="button" role="tab" id="tab-work" aria-selected="false" aria-controls="work-pane">작업 <span class="tab-count" id="work-count" hidden></span></button>
+      </div>
+      <div id="channels-pane" role="tabpanel" aria-labelledby="tab-channels">
+        <h2>채널</h2>
+        <ul class="channel-list" id="channels"></ul>
+      </div>
+      <div id="work-pane" role="tabpanel" aria-labelledby="tab-work" hidden>
+        <input type="search" class="work-search" id="work-search" placeholder="작업 찾기 (모든 상태)" aria-label="작업 찾기" autocomplete="off">
+        <div class="work-filters" id="work-filters" role="group" aria-label="작업 상태"></div>
+        <ul class="thread-list" id="threads"></ul>
+      </div>
+    </aside>
+    <main class="timeline-wrap">
+      <div class="channel-start-hint">
+        <p>팀 채널입니다. 참여한 AI 세션과 사람이 나눈 대화·결정·보고가 모입니다. 메시지에서 @이름으로 부르면 듣고 있는 세션이 답합니다.</p>
+        <p class="channel-start-actions"><a class="start-action primary" href="/start">＋ 새 요청</a><a class="start-action" href="/start#terminal-guide">기존 AI 세션으로 팀 작업하기</a><a href="/manage#tasks-heading">PM 업무 배정</a></p>
+      </div>
+      <section id="approvals" class="panel approvals-panel" aria-label="실행 승인" hidden></section>
+      <header class="thread-head" id="thread-head" hidden></header>
+      <div class="timeline" id="timeline" aria-live="polite" aria-label="메시지"></div>
+      <form class="composer" id="composer">
+        <div class="recipients" id="recipients-wrap">
+          <span class="recipients-label" id="recipients-label">받는 사람</span>
+          <div class="recipient-list" id="recipients" role="group" aria-labelledby="recipients-label"></div>
+        </div>
+        <div class="replying" id="replying" hidden>
+          <span id="replying-text"></span>
+          <button type="button" class="link" id="replying-cancel" aria-label="답장 취소">취소</button>
+        </div>
+        <label class="visually-hidden" for="body">메시지</label>
+        <ul class="complete-list" id="complete" role="listbox" aria-label="자동완성" hidden></ul>
+        <textarea id="body" name="body" placeholder="메시지를 입력하세요 (Ctrl+Enter로 보내기 · @세션 /명령 #작업)" maxlength="8000" required aria-autocomplete="list" aria-controls="complete" aria-expanded="false"></textarea>
+        <div class="row">
+          <label for="type">유형</label>
+          <select id="type" name="type">
+            <option value="message">메시지</option>
+            <option value="opinion">의견</option>
+            <option value="question">질문</option>
+            <option value="answer">답변</option>
+            <option value="decision">결정</option>
+          </select>
+          <span class="kind" id="author"></span>
+          <span class="spacer"></span>
+          <button type="submit" class="primary">보내기</button>
+        </div>
+        <p class="delivery" id="delivery" aria-live="polite" hidden></p>
+        <p class="error" id="error" hidden></p>
+      </form>
+    </main>
+  </div>
+  <script type="module" src="/locale.mjs"></script>
+  <script type="module" src="/app.mjs"></script>
+  <script type="module" src="/approvals.mjs"></script>
+  <script type="module" src="/notify.mjs"></script>
+</body>
+</html>

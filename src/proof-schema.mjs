@@ -1,0 +1,22 @@
+import { validTree } from './freshness.mjs';
+const phases = ['plan', 'design', 'implement', 'review', 'report'];
+export const AUTHOR = /^[\p{L}\p{N}][\p{L}\p{N} _.-]{0,39}$/u;
+export function validProof(proof) {
+  if (!proof || !/^[a-f0-9-]{36}$/.test(proof.id) || !phases.includes(proof.phase) || !Number.isSafeInteger(proof.iteration) || proof.iteration < 0 ||
+      typeof proof.at !== 'string' || !Number.isFinite(Date.parse(proof.at)) ||
+      (proof.author !== undefined && (typeof proof.author !== 'string' || !AUTHOR.test(proof.author))) || !validTree(proof.tree)) return false;
+  if (proof.kind === 'git') return /^[a-f0-9]{40,64}$/.test(proof.commit) && Array.isArray(proof.files) && proof.files.length <= 1000 && proof.files.every((file) => typeof file === 'string' && file.length <= 4096);
+  if (proof.verification !== undefined || proof.checks !== undefined) {
+    if (!['static', 'runtime', 'integration', 'visual'].includes(proof.verification) || !Array.isArray(proof.checks) || proof.checks.length > 20 || !proof.checks.every(id => typeof id === 'string' && /^[a-z][a-z0-9-]{0,63}$/.test(id))) return false;
+  }
+  return proof.kind === 'test' && Array.isArray(proof.command) && proof.command.length > 0 && proof.command.length <= 100 && proof.command.every((arg) => typeof arg === 'string' && arg.length <= 2000) &&
+    (proof.exitCode === null || Number.isInteger(proof.exitCode)) && typeof proof.output === 'string' && proof.output.length <= 20_000 &&
+    typeof proof.durationMs === 'number' && Number.isFinite(proof.durationMs) && proof.durationMs >= 0;
+}
+
+export const CAPTURE_LABELS = { viewport: /^([1-9]\d{1,4})x([1-9]\d{1,4})$/, scroll: /^(?:top|bottom|0|[1-9]\d{0,6})$/, state: /^[a-z][a-z0-9-]{0,31}$/ };
+export function validCaptureLabel(name, value) {
+  if (typeof value !== 'string' || !CAPTURE_LABELS[name]?.test(value)) return false;
+  return name !== 'viewport' || value.split('x').every((size) => Number(size) <= 16384);
+}
+export const captureLabels = (source) => Object.fromEntries(Object.keys(CAPTURE_LABELS).filter((name) => validCaptureLabel(name, source?.[name])).map((name) => [name, source[name]]));

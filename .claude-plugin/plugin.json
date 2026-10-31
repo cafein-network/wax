@@ -1,0 +1,15 @@
+{
+  "name": "wax",
+  "version": "0.14.0",
+  "description": "기획부터 구현·검토까지, 근거를 남기는 AI 코딩 워크플로",
+  "author": {
+    "name": "cafein-network"
+  },
+  "license": "AGPL-3.0-only",
+  "keywords": [
+    "workflow",
+    "coding",
+    "pdca"
+  ],
+  "hooks": "./claude-mods/hooks.json"
+}
