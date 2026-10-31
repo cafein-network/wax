@@ -181,6 +181,52 @@ test('auto: a block runs a PM judgment, retry is applied with the judged tool, a
   assert.equal(g.id, stopped.id);
 });
 
+test('auto: an accepted reassign carries to the remaining phases (one block, one judgment), review still uses another tool, and the preference is cleared when the task finishes', async (t) => {
+  const execute = async (root, { tool, prompt }) => {
+    if (tool === 'codex') return reply({ outcome: 'blocked', report: 'model_not_found' });
+    await finishPhase(root, 'f1', phaseOf(prompt), authorOf(prompt));
+    return reply({ outcome: 'done', report: '끝냈습니다.' });
+  };
+  const executeJudge = async () => reply({ action: 'reassign', tool: 'claude', question: null, reason: 'Codex 계정 문제' });
+  const { calls, step, view, records } = await setup(t, { execute, executeJudge, tools: ['codex', 'claude', 'gemini'] });
+  for (let n = 0; n < 12 && !(await view()).suggestions.some((card) => card.kind === 'pr-body'); n++) await step();
+  await step();
+  assert.deepEqual(calls.workers.map((call) => `${phaseOf(call.prompt)}:${call.tool}`),
+    ['plan:codex', 'plan:claude', 'design:claude', 'implement:claude', 'review:gemini', 'report:claude'], 'review avoids both the implementer and the tool that failed');
+  assert.equal(calls.judges.length, 1, 'one judgment, not one per phase');
+  const autos = (await autoRecords(records)).filter((item) => item.outcome === 'executed').map((item) => item.rule);
+  assert.deepEqual(autos, ['start-worker', 'judge-block', 'apply-reassign', 'start-worker', 'start-worker', 'start-worker', 'start-worker-review', 'start-worker']);
+  const final = await view();
+  assert.deepEqual([final.storedState, final.state, final.daily.used], ['running', 'waiting-human', 7]);
+  const cleared = (await records()).filter((item) => item.kind === 'preference');
+  assert.deepEqual(cleared.map((item) => [item.outcome, item.by, item.tool]), [['cleared', 'pm-loop', 'claude']]);
+  assert.match(cleared[0].reason, /작업 f1이\(가\) 끝나 선호 도구\(Claude Code\)를 지웠습니다/);
+  await step();
+  assert.equal((await records()).filter((item) => item.kind === 'preference').length, 1, 'cleared once');
+});
+
+test('auto: with an Antigravity preference, auto runs the command phases with another tool and leaves a review only Antigravity could take to a person', async (t) => {
+  let first = true;
+  const execute = async (root, { tool, prompt }) => {
+    if (first) { first = false; return reply({ outcome: 'blocked', report: '세션 문제' }); }
+    await finishPhase(root, 'f1', phaseOf(prompt), authorOf(prompt));
+    return reply({ outcome: 'done', report: `${tool} 끝` });
+  };
+  const executeJudge = async () => reply({ action: 'reassign', tool: 'antigravity', question: null, reason: '다른 도구로' });
+  const { calls, step, view, records } = await setup(t, { execute, executeJudge, tools: ['claude', 'antigravity'] });
+  for (let n = 0; n < 10; n++) await step();
+  assert.deepEqual(calls.workers.map((call) => `${phaseOf(call.prompt)}:${call.tool}`), ['plan:claude', 'plan:antigravity', 'design:antigravity', 'implement:claude']);
+  const implement = (await records()).find((item) => item.kind === 'start-worker' && item.phase === 'implement');
+  assert.deepEqual([implement.by, implement.rule, implement.tool], ['auto', 'start-worker', 'claude']);
+  assert.match(implement.reason, /auto가 implement 단계를 Claude Code\(으\)로 띄웠습니다.*Antigravity CLI은\(는\) headless에서 명령 실행 권한을 물을 수 없어/);
+  assert.deepEqual((await records()).filter((item) => item.kind === 'preference'), [], 'auto avoiding a tool is not a person picking one');
+  const final = await view();
+  const review = final.suggestions.find((card) => card.kind === 'start-worker');
+  assert.deepEqual([final.storedState, final.state, review.phase, review.tool, review.autoTool, autoRule(review)], ['running', 'waiting-human', 'review', 'antigravity', null, null]);
+  assert.match(review.options[0].warning, /permissions\.allow/);
+  assert.ok((await records()).some((item) => item.outcome === 'suggested' && item.key === review.key), 'the person is notified');
+});
+
 test('auto: an ask from a block judgment stays a card for a person (iterate likewise, see the rule test)', async (t) => {
   const answer = { action: 'ask', tool: null, question: '테스트 DB 주소는?', reason: '설정 누락' };
   const { root, calls, step, view, records } = await setup(t, { execute: async () => reply({ outcome: 'blocked', report: 'DB 없음' }), executeJudge: async () => reply(answer) });

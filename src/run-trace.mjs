@@ -7,11 +7,11 @@ import { phaseDurations } from './durations.mjs';
 import { createTreeObserver, evidenceFreshness, headState } from './freshness.mjs';
 import { code, inline, PR_BODY_LIMITS } from './pr-body.mjs';
 import { chatDir, checkFile } from './chat/paths.mjs';
-import { featureDecisions } from './chat/pm-loop.mjs';
+import { featureDecisions, launchedTool } from './chat/pm-loop.mjs';
 import { cliText } from './cli-locale.mjs';
 import { captureLabelText, listCaptures } from './capture.mjs';
 import { compareCaptures, compareLines, hasComparison } from './visual-compare.mjs';
-const PM_OUTCOME = { executed: 'trace.pmExecuted', dismissed: 'trace.pmDismissed', launched: 'trace.pmLaunched', exited: 'trace.pmExited', timeout: 'trace.pmTimeout', failed: 'trace.pmFailed', stopped: 'trace.pmStopped' };
+const PM_OUTCOME = { executed: 'trace.pmExecuted', dismissed: 'trace.pmDismissed', launched: 'trace.pmLaunched', exited: 'trace.pmExited', timeout: 'trace.pmTimeout', failed: 'trace.pmFailed', stopped: 'trace.pmStopped', cleared: 'trace.pmCleared' };
 const JUDGE_OUTCOME = { requested: 'trace.pmRequested', proposed: 'trace.pmProposed', rejected: 'trace.pmRejected', failed: 'trace.judgeFailed', timeout: 'trace.judgeTimeout', stopped: 'trace.judgeStopped' };
 const pmOutcome = (decision) => (decision.kind === 'judgment' ? JUDGE_OUTCOME[decision.outcome] : PM_OUTCOME[decision.outcome]) ?? 'trace.pmDismissed';
 
@@ -129,6 +129,7 @@ export function traceVisits(feature, { request = null, pm = [], now = Date.now()
     visit.waiting = visit.open && request && ['question', 'blocked'].includes(request.status) && request.phase === visit.phase ? request.status : null;
     visit.files = null;
     visit.pm = [];
+    if (!visit.tool && visit.author) visit.tool = launchedTool(pm, visit.author, visit.phase);
   }
   for (const decision of Array.isArray(pm) ? pm : []) {
     const at = time(decision?.at);

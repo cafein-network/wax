@@ -1339,6 +1339,7 @@ export const messages = {
   'errors.agentSession.theExecutionApprovalRequest': ['실행 승인 요청 한도를 초과했습니다.', 'The execution approval request limit was exceeded.'],
   'errors.agentSession.unsupportedApprovalScopeOr': ['지원하지 않는 승인 범위 또는 세션입니다.', 'Unsupported approval scope or session.'],
   'errors.agentSession.antigravityCliRequestedExecution': ['Antigravity CLI에서 실행 권한을 요청했지만 비대화형 모드에서는 승인할 수 없습니다. 터미널의 권한 설정을 확인한 뒤 이어서 진행하세요.', 'Antigravity CLI requested execution permission, but it can’t be approved in non-interactive mode. Check the permission settings in your terminal, then continue.'],
+  'errors.agentSession.antigravityDeniedActions': ['Antigravity CLI가 비대화형 모드에서 물을 수 없는 권한({0})이 필요해 그 실행을 거부하고 끝났습니다. Antigravity CLI 설정(settings.json의 permissions.allow)에 이 프로젝트에 필요한 실행만 허용한 뒤 이어서 진행하세요.', 'Antigravity CLI needed a permission it can’t ask for in non-interactive mode ({0}), so it refused that action and stopped. Allow only the actions this project needs in the Antigravity CLI settings (permissions.allow in settings.json), then continue.'],
   'errors.agentSession.theFinalReportFrom': ['{0}의 최종 보고가 없거나 너무 큽니다.', 'The final report from {0} is missing or too large.'],
   'errors.agentSession.didNotReceiveA': ['도구 세션 ID를 받지 못했습니다.', 'Did not receive a tool session ID.'],
   'errors.agentSession.invalidAcpResponse': ['잘못된 ACP 응답입니다.', 'Invalid ACP response.'],
@@ -1803,6 +1804,7 @@ node bin/wax.mjs trace <id> [--json]   실행 기록: 단계 방문별 시간·�
 node bin/wax.mjs compare <id> [--json]   같은 폭·스크롤·상태의 시안(design-preview)과 구현(ui-review) 캡처 짝·남은 차이 (Markdown, 읽기 전용)
 node bin/wax.mjs trigger list|test|fire   요청을 제안하는 트리거 (wax trigger --help, 만들기·켜기·수락은 대시보드)
 node bin/wax.mjs pm-loop list|show|next   목표별 다음 행동 제안 (읽기 전용, wax pm-loop --help, 실행은 대시보드)
+WAX_MCP=on node bin/wax.mjs mcp   코딩 도구용 MCP 서버 (stdio, 실험 기능, wax mcp --help, 등록 조각: wax mcp config --host <도구>)
 
 단계: plan → design → implement → review → report
 공통 옵션: --project <경로> (기본값: 현재 디렉터리), --revision <숫자>
@@ -1852,6 +1854,7 @@ node bin/wax.mjs trace <id> [--json]   Run trace: time, outcome, proofs, AC and 
 node bin/wax.mjs compare <id> [--json]   Pair design (design-preview) and implementation (ui-review) captures at the same viewport, scroll and state, with remaining differences (Markdown, read-only)
 node bin/wax.mjs trigger list|test|fire   triggers that propose requests (wax trigger --help; create, turn on and accept in the dashboard)
 node bin/wax.mjs pm-loop list|show|next   next-step suggestions per goal (read-only, wax pm-loop --help; run them in the dashboard)
+WAX_MCP=on node bin/wax.mjs mcp   MCP server for coding tools (stdio, experimental, wax mcp --help; registration snippet: wax mcp config --host <tool>)
 
 Stages: plan → design → implement → review → report
 Common options: --project <path> (default: current directory), --revision <number>
@@ -2338,6 +2341,7 @@ A channel is a wax task ID or the project name (the whole-project channel, also 
   'pmLoop.reason.held': ['사람이 이 제안을 버렸습니다. 배정이 바뀌거나 단계가 넘어가면 다시 계산합니다.', 'A person dismissed this suggestion. It is worked out again when the assignment changes or the phase moves on.'],
   'pmLoop.reason.goalDone': ['모든 작업이 끝났습니다.', 'Every task is finished.'],
   'pmLoop.reason.startWorkerHeadless': ['{0} 단계를 듣고 있는 세션이 없습니다. {1}을(를) headless 작업자로 띄워 이 배정 하나만 맡깁니다. 띄우기 전에 사람이 확인합니다.', 'No session is listening for the {0} phase. Start {1} as a headless worker for this one assignment. A person confirms before it starts.'],
+  'pmLoop.reason.workerToolChosen': ['{0} 단계에 사람이 고른 {1}을(를) headless 작업자로 띄웠습니다(카드의 기본 도구: {2}).', 'A person chose {1} as the headless worker for the {0} phase (card default: {2}).'],
   'pmLoop.reason.reviewWorker': ['검토는 구현 도구({0})와 다른 도구인 {1}을(를) headless 작업자로 띄워 맡깁니다.', 'Review goes to {1}, a tool other than the implementing tool ({0}), started as a headless worker.'],
   'pmLoop.reason.reviewWorkerUnknown': ['구현 도구 기록이 없어, 구현 세션과 다른 {0} headless 작업자에게 검토를 맡깁니다.', 'No implementing tool is recorded, so review goes to a {0} headless worker, separate from the implementer.'],
   'pmLoop.reason.dailyWorkers': ['하루 headless 실행 한도 {0}번에 닿았습니다. 세션을 직접 띄워 듣게 하거나 내일 다시 하세요.', 'The daily limit of {0} headless runs is reached. Start a session yourself and let it listen, or try again tomorrow.'],
@@ -2358,7 +2362,15 @@ A channel is a wax task ID or the project name (the whole-project channel, also 
   'pmLoop.reason.judgeReport': ['보고까지 끝난 작업이 있습니다. 대표에게 보낼 진행 보고 초안을 PM 판단({0})에 물어볼 수 있습니다. 보내지는 않습니다.', 'Some tasks have finished report. You can ask the PM judgment ({0}) for a progress report draft for the CEO. Nothing is sent.'],
   'pmLoop.reason.judgeNotInstalled': ['이 목표의 PM 판단 도구({0})가 이 컴퓨터에 설치되어 있지 않습니다. 목표의 PM 판단 도구를 바꾸세요.', 'This goal’s PM judgment tool ({0}) is not installed on this computer. Change the goal’s PM judgment tool.'],
   'pmLoop.reason.dailyJudge': ['하루 headless 실행 한도 {0}번에 닿아 PM 판단을 부를 수 없습니다(작업자와 PM 판단을 함께 셉니다).', 'The daily limit of {0} headless runs is reached, so the PM judgment cannot be called (workers and PM judgments count together).'],
-  'pmLoop.reason.judgedWorker': ['받아들인 PM 판단에 따라 {1}을(를) headless 작업자로 띄워 {0} 단계를 다시 맡깁니다. 띄우기 전에 사람이 확인합니다.', 'Following the accepted PM judgment, start {1} as a headless worker to take the {0} phase again. A person confirms before it starts.'],
+  'pmLoop.reason.judgedWorker': ['받아들인 PM 판단에 따라 {1}을(를) headless 작업자로 띄워 {0} 단계를 맡깁니다. 이 도구는 이 작업의 남은 단계에서도 기본이고, 카드에서 다른 도구를 고르면 그 선호를 지웁니다. 띄우기 전에 사람이 확인합니다.', 'Following the accepted PM judgment, start {1} as a headless worker for the {0} phase. This tool stays the default for the rest of this task’s phases; picking another tool on the card clears that preference. A person confirms before it starts.'],
+  'pmLoop.reason.autoAvoidedTool': ['auto가 {0} 단계를 {1}(으)로 띄웠습니다. 카드의 기본 도구 {2}은(는) headless에서 명령 실행 권한을 물을 수 없어 이 단계를 끝내지 못할 수 있습니다.', 'auto started {1} for the {0} phase. The card’s default tool, {2}, can’t ask for command permission when headless, so it may not finish this phase.'],
+  'pmLoop.warning.noPromptCommands': ['{0}은(는) headless에서 실행 권한을 물을 수 없어, 사용자 {0} 설정 settings.json(예: ~/.gemini/antigravity-cli/settings.json)의 permissions.allow에 허용되지 않은 명령을 바로 거부합니다. {1} 단계는 검사와 wax test를 실행해야 끝나므로, 허용 목록을 먼저 확인하거나 다른 도구를 고르세요. wax는 이 설정을 읽거나 바꾸지 않습니다.', '{0} can’t ask for permission when headless, so it refuses any command permissions.allow in your {0} settings.json (for example ~/.gemini/antigravity-cli/settings.json) don’t already allow. The {1} phase needs to run checks and wax test to finish, so check that allow list first or pick another tool. wax never reads or changes that setting.'],
+  'pmLoop.preference.clearedChosen': ['사람이 작업자 카드에서 {0}을(를) 골라 이 작업의 선호 도구({1})를 지웠습니다.', 'A person picked {0} on the worker card, which cleared this task’s preferred tool ({1}).'],
+  'pmLoop.preference.clearedDone': ['작업 {0}이(가) 끝나 선호 도구({1})를 지웠습니다.', 'Task {0} finished, so its preferred tool ({1}) was cleared.'],
+  'pmLoop.judge.avoidTool': ['{0}이(가) 아닌 도구', 'a tool other than {0}'],
+  'pmLoop.kind.preference': ['선호 도구', 'Preferred tool'],
+  'pmLoop.outcome.cleared': ['지움', 'Cleared'],
+  'trace.pmCleared': ['선호 도구 지움', 'Preferred tool cleared'],
   'pmLoop.reason.judgeToolSet': ['PM 판단 도구를 {0}(으)로 정했습니다.', 'Set the PM judgment tool to {0}.'],
   'pmLoop.reason.judgeToolDefault': ['PM 판단 도구를 기본으로 되돌렸습니다.', 'Reset the PM judgment tool to the default.'],
   'pmLoop.judge.proposed': ['PM 판단({1})의 {0} 제안입니다. 받아들이거나 고치거나 버리세요. 받아들이면 이미 있는 행동으로만 옮깁니다.', 'A {0} proposal from the PM judgment ({1}). Accept, edit or dismiss it. Accepting maps it only to existing actions.'],
@@ -2373,8 +2385,8 @@ A channel is a wax task ID or the project name (the whole-project channel, also 
   'pmLoop.judge.closed': ['대시보드를 닫아 {0}을(를) 멈췄습니다.', 'The dashboard closed, so the {0} was stopped.'],
   'pmLoop.judge.failed': ['{1}의 {0}이(가) 실패했습니다: {2}', 'The {0} by {1} failed: {2}'],
   'pmLoop.judge.interrupted': ['PM 판단을 부른 대시보드가 종료되어 연결이 끊겼습니다.', 'The dashboard that called the PM judgment has exited, so the connection was lost.'],
-  'pmLoop.judge.acceptedRetry': ['PM 판단(다시 시도)을 받아들여 업무 {0}을(를) 회수했습니다. 다음 작업자 카드의 기본 도구: {1}', 'Accepted the PM judgment (retry) and reclaimed assignment {0}. Default tool for the next worker card: {1}'],
-  'pmLoop.judge.acceptedReassign': ['PM 판단(다시 맡김)을 받아들여 업무 {0}을(를) 회수했습니다. 다음 작업자 카드의 기본 도구: {1}', 'Accepted the PM judgment (reassign) and reclaimed assignment {0}. Default tool for the next worker card: {1}'],
+  'pmLoop.judge.acceptedRetry': ['PM 판단(다시 시도)을 받아들여 업무 {0}을(를) 회수했습니다. 이 작업의 남은 단계 작업자 기본 도구: {1}', 'Accepted the PM judgment (retry) and reclaimed assignment {0}. Default worker tool for the rest of this task’s phases: {1}'],
+  'pmLoop.judge.acceptedReassign': ['PM 판단(다시 맡김)을 받아들여 업무 {0}을(를) 회수했습니다. 이 작업의 남은 단계 작업자 기본 도구: {1}', 'Accepted the PM judgment (reassign) and reclaimed assignment {0}. Default worker tool for the rest of this task’s phases: {1}'],
   'pmLoop.judge.acceptedAsk': ['PM 판단(사람에게 질문)을 받아들였습니다. 업무 {0}은(는) 막힌 채로 사람이 답을 정합니다.', 'Accepted the PM judgment (ask a person). Assignment {0} stays blocked while a person decides the answer.'],
   'pmLoop.judge.acceptedIterate': ['PM 판단(되돌리기 제안)을 받아들였습니다. 업무 {0}은(는) 막힌 채로, {1}을(를) 되돌릴지는 사람이 wax iterate로 정합니다.', 'Accepted the PM judgment (propose iteration). Assignment {0} stays blocked; a person decides with wax iterate whether to iterate {1}.'],
   'pmLoop.judge.acceptedPlan': ['계획 초안을 받아들였습니다: 새 작업 {0}개, AC 초안 저장 {1}개, 그대로 둔 작업 {2}개. 계획 확정은 사람이 합니다.', 'Accepted the plan draft: {0} new tasks, {1} AC drafts saved, {2} tasks left as they were. A person confirms the plan.'],

@@ -1,6 +1,6 @@
 {
   "name": "wax",
-  "version": "0.14.1",
+  "version": "0.14.2",
   "description": "기획부터 구현·검토까지, 근거를 남기는 AI 코딩 워크플로",
   "contextFileName": "GEMINI.md"
 }

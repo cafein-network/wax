@@ -210,3 +210,14 @@ test('wax trace prints Markdown by default and the trace data with --json', asyn
   const missing = wax(['trace', 'nope', '--project', root], { WAX_LANG: 'en' });
   assert.equal(missing.status, 1);
 });
+
+test('a phase a headless worker completed through the CLI shows the tool from the PM loop worker launch record', () => {
+  const feature = { id: 'f1', phase: 'review', iteration: 0, history: [ev('create', 'plan', 0), ev('complete', 'plan', HOUR, { author: 'wax-worker-codex' }),
+    ev('complete', 'design', 2 * HOUR, { author: 'claude-a', tool: 'claude' }), ev('complete', 'implement', 3 * HOUR, { author: 'wax-worker-codex' })] };
+  const launched = (tool, phase, ms) => ({ kind: 'worker', outcome: 'launched', tool, to: `wax-worker-${tool}`, phase, at: at(ms) });
+  const pm = [launched('codex', 'plan', MIN), launched('codex', 'implement', 2 * HOUR + MIN), { kind: 'worker', outcome: 'exited', tool: 'codex', to: 'wax-worker-codex', phase: 'implement', at: at(3 * HOUR) }];
+  const { visits } = traceVisits(feature, { pm, now: T0 + 4 * HOUR });
+  assert.deepEqual(visits.map((visit) => [visit.phase, visit.author, visit.tool]), [
+    ['plan', 'wax-worker-codex', 'codex'], ['design', 'claude-a', 'claude'], ['implement', 'wax-worker-codex', 'codex'], ['review', null, null]]);
+  assert.equal(traceVisits(feature, { pm: [], now: T0 + 4 * HOUR }).visits[0].tool, null);
+});

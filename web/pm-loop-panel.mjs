@@ -14,7 +14,7 @@ export const STATE_LABELS = { planning: t('pmLoop.state.planning'), running: t('
 const OUTCOME_LABELS = { executed: t('pmLoop.outcome.executed'), dismissed: t('pmLoop.outcome.dismissed'), failed: t('pmLoop.outcome.failed'), created: t('pmLoop.outcome.created'),
   stopped: t('pmLoop.outcome.stopped'), resumed: t('pmLoop.outcome.resumed'), done: t('pmLoop.outcome.done'),
   launched: t('pmLoop.outcome.launched'), exited: t('pmLoop.outcome.exited'), timeout: t('pmLoop.outcome.timeout'),
-  requested: t('pmLoop.outcome.requested'), proposed: t('pmLoop.outcome.proposed'), rejected: t('pmLoop.outcome.rejected'), settings: t('pmLoop.outcome.settings'), mode: t('pmLoop.outcome.mode') };
+  requested: t('pmLoop.outcome.requested'), proposed: t('pmLoop.outcome.proposed'), rejected: t('pmLoop.outcome.rejected'), settings: t('pmLoop.outcome.settings'), mode: t('pmLoop.outcome.mode'), cleared: t('pmLoop.outcome.cleared') };
 const JUDGMENT_LABELS = { plan: t('pmLoop.judge.plan'), block: t('pmLoop.judge.block'), report: t('pmLoop.judge.report') };
 const BLOCK_ACTIONS = [['retry', t('pmLoop.judge.actionRetry')], ['reassign', t('pmLoop.judge.actionReassign')], ['ask', t('pmLoop.judge.actionAsk')], ['iterate', t('pmLoop.judge.actionIterate')]];
 const BUDGETS = [['phaseRuns', t('pmLoop.budgetLabel.phaseRuns')], ['workers', t('pmLoop.budgetLabel.workers')], ['hours', t('pmLoop.budgetLabel.hours')], ['iterations', t('pmLoop.budgetLabel.iterations')], ['failures', t('pmLoop.budgetLabel.failures')], ['autoPerHour', t('pmLoop.budgetLabel.autoPerHour')]];
@@ -83,8 +83,11 @@ export function pmCard(card, decide, { busy = false, choices = new Map(), drafts
   const editor = card.kind === 'judge-proposal' && card.proposal ? proposalEditor(card, drafts, { busy }) : null;
   const extra = () => (launch ? { tool } : card.kind === 'assign' ? { to: card.to } : editor ? { proposal: editor.read() } : {});
   const execute = card.executable ? el('button', { type: 'button', class: 'primary', disabled: busy, text: executeLabel(card, tool), onclick: () => decide(card, 'execute', extra()) }) : null;
+  const toolWarning = launch ? el('p', { class: 'error pm-tool-warning', role: 'note' }) : null;
+  const showWarning = () => { if (!toolWarning) return; const text = card.options?.find((item) => item.id === tool)?.warning ?? ''; toolWarning.textContent = text; toolWarning.hidden = !text; };
+  showWarning();
   const picker = launch && card.options?.length > 1 ? el('label', { class: 'trigger-field pm-tool' }, el('span', { text: t('pmLoop.workerTool') }),
-    el('select', { name: 'tool', disabled: busy, onchange: (event) => { tool = event.target.value; choices.set(card.key, tool); execute.textContent = executeLabel(card, tool); } },
+    el('select', { name: 'tool', disabled: busy, onchange: (event) => { tool = event.target.value; choices.set(card.key, tool); execute.textContent = executeLabel(card, tool); showWarning(); } },
       card.options.map((item) => el('option', { value: item.id, selected: item.id === tool || undefined, text: item.label })))) : null;
   return el('article', { class: `proposal-card pm-card${card.human ? ' pm-human' : ''}`, dataset: { key: card.key, kind: card.kind } },
     el('header', {}, el('span', { class: 'badge', text: KIND_LABELS[card.kind] ?? card.kind }),
@@ -104,6 +107,7 @@ export function pmCard(card, decide, { busy = false, choices = new Map(), drafts
     card.kind === 'start-worker' && !launch ? el('p', { class: 'kind' }, t('pmLoop.startWorkerHow'), ' ', el('code', { translate: 'no', text: 'wax chat watch' })) : null,
     launch ? el('p', { class: 'kind', text: t('pmLoop.workers.approvals') }) : null,
     picker,
+    toolWarning,
     el('div', { class: 'row proposal-actions' },
       execute,
       card.kind === 'confirm-plan' ? null : el('button', { type: 'button', disabled: busy, text: card.executable ? t('pmLoop.action.dismiss') : t('pmLoop.action.acknowledge'), onclick: () => { drafts.delete(card.key); decide(card, 'dismiss'); } })));
@@ -153,7 +157,8 @@ function judgeToolPicker(goal, { act, busy, toolOptions = [] }) {
     el('small', { class: 'kind', text: t('pmLoop.judge.toolHint') }));
 }
 
-const recordKind = (item) => (item.kind === 'worker' ? t('pmLoop.kind.workerRecord') : item.kind === 'judgment' ? t('pmLoop.kind.judgmentRecord') : KIND_LABELS[item.kind] ?? item.kind);
+const recordKind = (item) => (item.kind === 'worker' ? t('pmLoop.kind.workerRecord') : item.kind === 'judgment' ? t('pmLoop.kind.judgmentRecord')
+  : item.kind === 'preference' ? t('pmLoop.kind.preference') : KIND_LABELS[item.kind] ?? item.kind);
 const byLabel = (item) => (item.by === 'auto' ? [el('span', { class: 'badge pm-auto-badge', text: t('pmLoop.auto.by') }), item.rule ? ' ' : null, item.rule ? el('code', { class: 'kind', translate: 'no', text: item.rule }) : null] : raw(item.by));
 
 function modeView(goal, { act, busy }) {
@@ -181,7 +186,11 @@ function modeView(goal, { act, busy }) {
         : el('p', { class: 'kind', text: t('pmLoop.auto.none') })) : null);
 }
 
-export function goalView(goal, { decide, act, busy, choices, drafts, toolOptions }) {
+function keptOpen(opened, id) {
+  return { open: opened?.has(id) || undefined, ontoggle: (event) => { if (!opened) return; if (event.target.open) opened.add(id); else opened.delete(id); } };
+}
+
+export function goalView(goal, { decide, act, busy, choices, drafts, toolOptions, opened = null }) {
   const usage = goal.budget.usage, limits = goal.budget.limits;
   const budgets = budgetInputs(goal);
   const stopped = goal.state === 'stopped';
@@ -202,7 +211,7 @@ export function goalView(goal, { decide, act, busy, choices, drafts, toolOptions
       stopped ? el('button', { type: 'button', class: 'primary pm-resume-button', disabled: busy, text: t('pmLoop.action.resume'), onclick: () => act(goal, 'resume', { budgets: readBudgets(budgets) }) }) : null),
     goal.suggestions.length ? el('div', { class: 'proposal-list pm-cards' }, goal.suggestions.map((card) => pmCard({ ...card, goal: goal.id }, (item, action, extra) => decide(goal, item, action, extra), { busy, choices, drafts }))) : null,
     el('ul', { class: 'note-list pm-features' }, goal.features.map(featureRow)),
-    goal.decisions.length ? el('details', { class: 'pm-decisions' }, el('summary', { text: t('pmLoop.decisions', goal.decisions.length) }),
+    goal.decisions.length ? el('details', { class: 'pm-decisions', ...keptOpen(opened, `${goal.id}:decisions`) }, el('summary', { text: t('pmLoop.decisions', goal.decisions.length) }),
       el('ul', {}, goal.decisions.map((item) => el('li', {}, el('span', { class: 'kind', text: `${timeLabel(item.at)} · ` }),
         item.kind && item.kind !== 'goal' ? `${recordKind(item)} · ` : '', OUTCOME_LABELS[item.outcome] ?? item.outcome,
         item.feature ? el('span', { class: 'kind' }, ' · ', raw(item.feature)) : null, item.by ? el('span', { class: 'kind' }, ' · ', byLabel(item)) : null,
@@ -213,6 +222,7 @@ export function mountPmLoop(container) {
   let config, loading = null, again = false, busy = false, data = null;
   const toolChoices = new Map();
   const drafts = new Map();
+  const opened = new Set();
   const count = el('span', { class: 'kind' });
   const errorBox = el('p', { class: 'error', role: 'alert', hidden: true });
   const pmHint = el('div', { class: 'pm-hint', hidden: true });
@@ -278,7 +288,7 @@ export function mountPmLoop(container) {
     pmHint.hidden = canAssign || !data.goals.length;
     clear(pmHint).append(el('p', { class: 'kind', text: data.pm ? t('pmLoop.notPm', data.pm) : t('pmLoop.noPm') }),
       data.pm ? '' : el('button', { type: 'button', text: t('pmLoop.takePm'), onclick: takePm }));
-    clear(list).append(...(data.goals.length ? [...data.goals].reverse().map((goal) => goalView(goal, { decide, act, busy, choices: toolChoices, drafts, toolOptions: data.toolOptions ?? [] })) : [el('p', { class: 'empty kind', text: t('pmLoop.empty') })]));
+    clear(list).append(...(data.goals.length ? [...data.goals].reverse().map((goal) => goalView(goal, { decide, act, busy, choices: toolChoices, drafts, opened, toolOptions: data.toolOptions ?? [] })) : [el('p', { class: 'empty kind', text: t('pmLoop.empty') })]));
     if (data.issues?.length) showError({ message: t('pmLoop.unreadable', data.issues.join(', ')) });
   }
   function refresh() {

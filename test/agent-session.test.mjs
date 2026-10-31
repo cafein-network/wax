@@ -35,6 +35,8 @@ createInterface({ input:process.stdin }).on('line', (line) => {
     if (config.tool === 'claude') emit({type:'system',subtype:'init',session_id:'session-1'});
     if (config.tool === 'antigravity') {
       if (config.denied) process.stderr.write('permission required: soft-denied\\n', () => setTimeout(finish,30));
+      // Antigravity CLI 1.4: the result frame arrives first with denied_actions and an empty response; the stderr hint comes after it.
+      else if (config.deniedResult) { emit({ event:'result', result:{ status:'SUCCESS', conversation_id:'session-1', response:'', denied_actions:[{ action:'command', display_name:'RunCommand' }] } }); setTimeout(() => process.stderr.write('a tool required the "command" permission that headless mode cannot prompt for, so it was auto-denied\\n'), 30); }
       else finish();
     } else if (config.permission) emit({type:'control_request',request_id:'permission-1',request:{subtype:'can_use_tool',tool_name:'Bash',input:{command:'echo fixture'}}});
     else finish();
@@ -112,6 +114,14 @@ test('protocol failures and headless permission denial cannot become successful 
     const { root, options } = await setup(t, config);
     await assert.rejects(runAgentSession(root, options), /마치지|다른 세션|권한/);
   }
+});
+test('antigravity: a denied action in the result frame is reported as a permission problem, not a missing report', async (t) => {
+  const { root, options } = await setup(t, { tool: 'antigravity', deniedResult: true });
+  await assert.rejects(runAgentSession(root, options), (error) => {
+    assert.match(error.message, /권한\(RunCommand\)/);
+    assert.doesNotMatch(error.message, /최종 보고가 없거나/);
+    return true;
+  });
 });
 test('unknown provider and missing executable never fall back to another account', async () => {
   assert.throws(() => agentTool('other'), /지원하지/);

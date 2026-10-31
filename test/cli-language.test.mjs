@@ -46,6 +46,7 @@ test('wax --help and errors follow the language; --json output does not', async 
   const korean = wax(['--help']), english = wax(['--help'], { WAX_LANG: 'en' });
   assert.match(korean.stdout, /기획에서 검증까지/);
   assert.match(english.stdout, /from planning to verification/);
+  for (const help of [korean.stdout, english.stdout]) assert.match(help, /^WAX_MCP=on node bin\/wax\.mjs mcp /m, 'the top-level help lists wax mcp');
   assert.doesNotMatch(english.stdout, HANGUL);
   assert.equal(korean.stdout.split('\n').length, english.stdout.split('\n').length, 'the same lines in both languages');
   assert.equal(wax(['--help'], { LANG: 'en_US.UTF-8' }).stdout, english.stdout, 'an English locale selects English');

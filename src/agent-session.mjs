@@ -128,6 +128,8 @@ export async function runAgentSession(root, options = {}) {
         complete(m);
       }
     } else if (m.event === 'result') {
+      const refused = Array.isArray(m.result?.denied_actions) ? m.result.denied_actions : [];
+      if (refused.length) throw new WaxError(t('errors.agentSession.antigravityDeniedActions', [...new Set(refused.map((item) => String(item?.display_name || item?.action || '?').slice(0, 40)))].slice(0, 5).join(', ')));
       if (m.result?.status !== 'SUCCESS') throw new WaxError(t('errors.agentSession.antigravityDidntFinishRunning'));
       complete(m.result);
     }

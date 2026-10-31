@@ -8,7 +8,7 @@ import { promisify } from 'node:util';
 import { createChatServer } from '../src/chat/server.mjs';
 import { createFeature, getFeature } from '../src/workflow.mjs';
 import { setPm } from '../src/chat/team.mjs';
-import { joinPresence } from '../src/chat/presence.mjs';
+import { joinPresence, setPresence } from '../src/chat/presence.mjs';
 import { startBeat } from '../src/chat/listeners.mjs';
 
 const modulePath = process.env.WAX_PLAYWRIGHT_MODULE || process.argv[2];
@@ -49,7 +49,8 @@ async function executeJudge(dir, input) {
   judgeRuns.push({ tool: input.tool, prompt: input.prompt, schema: input.outputSchema });
   return { threadId: 'fake-judge', status: 'completed', message: JSON.stringify({ tasks: [{ id: 'pay', title: '결제 화면', ac: ['카드 결제가 된다'] }, { id: 'pay-api', title: '결제 API', ac: ['영수증을 돌려준다', '실패 이유를 알린다'] }], reason: '화면과 API로 나눔' }) };
 }
-const requestTools = async () => [{ id: 'codex', label: 'Codex', installed: true, approval: 'dashboard' }, { id: 'claude', label: 'Claude Code', installed: true, approval: 'dashboard' }];
+const requestTools = async () => [{ id: 'codex', label: 'Codex', installed: true, approval: 'dashboard' }, { id: 'claude', label: 'Claude Code', installed: true, approval: 'dashboard' },
+  { id: 'antigravity', label: 'Antigravity CLI', installed: true, approval: 'configured' }];
 const server = createChatServer({ root, env: { WAX_CHAT_USER: '대표', WAX_TOOL_NEWS: 'off' }, intervalMs: 50, executeWorker, executeJudge, requestTools });
 await server.startWatching();
 await new Promise((done) => server.listen(0, '127.0.0.1', done));
@@ -67,6 +68,16 @@ async function until(check, what, timeoutMs = 10_000) {
   for (const started = Date.now(); !(await check()); await new Promise((done) => setTimeout(done, 50))) {
     if (Date.now() - started > timeoutMs) throw new Error(`timed out waiting for ${what}`);
   }
+}
+async function openedText(details, pattern, what) {
+  let text = '';
+  await until(async () => {
+    const open = await details.evaluate((node) => node.open).catch(() => false);
+    if (!open) await details.locator(':scope > summary').click({ timeout: 2000 }).catch(() => {});
+    text = await details.innerText().catch(() => '');
+    return pattern.test(text);
+  }, `${what} to show ${pattern}`);
+  return text;
 }
 const noHorizontalScroll = (page) => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
 
@@ -127,8 +138,7 @@ try {
   await waiting.waitFor();
   assert.match(await waiting.innerText(), new RegExp(`\\.wax/chat/pm-loop/${goalId}\\.login\\.pr-body\\.md`));
   assert.match(await readFile(join(root, '.wax', 'chat', 'pm-loop', `${goalId}.login.pr-body.md`), 'utf8'), /로그인 화면/);
-  await goal.locator('.pm-decisions summary').click();
-  assert.match(await goal.locator('.pm-decisions').innerText(), /PR 초안 · 실행함[\s\S]*배정 제안 · 실행함/);
+  await openedText(goal.locator('.pm-decisions'), /PR 초안 · 실행함[\s\S]*배정 제안 · 실행함/, 'the login decision log');
 
   const trace = await (await fetch(`${base}/api/features/login/trace`)).json();
   assert.equal(trace.visits.find((visit) => visit.phase === 'review').pm[0].to, assignedTo.review);
@@ -180,8 +190,37 @@ try {
   await second.waitFor({ timeout: 10_000 });
   await second.getByRole('button', { name: '작업자 멈추기' }).click();
   await second.waitFor({ state: 'detached', timeout: 10_000 });
-  await signup.locator('.pm-decisions summary').click();
-  assert.match(await signup.locator('.pm-decisions').innerText(), /작업자 · 정지함[\s\S]*작업자 · 종료함[\s\S]*작업자 · 시작함/);
+  await openedText(signup.locator('.pm-decisions'), /작업자 · 정지함[\s\S]*작업자 · 종료함[\s\S]*작업자 · 시작함/, 'the signup decision log');
+  await signup.locator('.pm-decisions').evaluate((node) => { node.dataset.before = '1'; });
+  await setPresence(root, { author: 'codex-a', session: sessions['codex-a'], kind: 'codex', state: 'idle', note: '다시 그리기 확인' });
+  await until(() => signup.locator('.pm-decisions').evaluate((node) => node.dataset.before !== '1').catch(() => false), 'the panel to re-render');
+  assert.equal(await signup.locator('.pm-decisions').evaluate((node) => node.open), true, 'the decision log stays open across re-renders');
+
+  await createFeature(root, { id: 'audit', title: '감사 로그' });
+  for (const phase of ['plan', 'design']) {
+    const doc = join(root, `audit-${phase}.md`);
+    await writeFile(doc, `# ${phase}\n`);
+    await wax('save', phase, 'audit', '--file', doc);
+    await wax('complete', phase, 'audit', '--evidence', `${phase} 완료`, '--author', '대표');
+  }
+  await panel.getByRole('button', { name: '＋ 새 목표' }).click();
+  await panel.locator('input[name="title"]').fill('감사 로그');
+  await panel.locator('input[name="feature"][value="audit"]').check();
+  await panel.getByRole('button', { name: '목표 만들기' }).click();
+  const audit = panel.locator('.pm-goal', { has: manage.locator('.pm-feature[data-feature="audit"]') });
+  await audit.getByRole('button', { name: '계획 확인하고 시작' }).click();
+  const implementCard = audit.locator('.pm-card[data-kind="start-worker"][data-key^="audit:0:implement:start-worker"]');
+  await implementCard.waitFor({ timeout: 10_000 });
+  assert.equal(await implementCard.locator('.pm-tool-warning').isVisible(), false, 'no warning for the default tool');
+  await implementCard.locator('select[name="tool"]').selectOption('antigravity');
+  const warning = implementCard.locator('.pm-tool-warning');
+  await warning.waitFor({ state: 'visible' });
+  assert.match(await warning.innerText(), /Antigravity CLI은\(는\) headless에서 실행 권한을 물을 수 없어[\s\S]*permissions\.allow[\s\S]*implement 단계/);
+  assert.equal(await implementCard.getByRole('button', { name: 'Antigravity CLI 작업자 시작' }).isVisible(), true, 'a person can still choose it');
+  await implementCard.locator('select[name="tool"]').selectOption('codex');
+  await warning.waitFor({ state: 'hidden' });
+  await audit.getByRole('button', { name: '목표 정지' }).click();
+  await panel.locator('.pm-goal[data-state="stopped"]', { has: manage.locator('.pm-feature[data-feature="audit"]') }).waitFor({ timeout: 10_000 });
 
   await panel.getByRole('button', { name: '＋ 새 목표' }).click();
   await panel.locator('input[name="title"]').fill('결제 기능');
@@ -210,8 +249,7 @@ try {
   assert.match(payApi.artifacts.plan, /- AC-2: 실패 이유를 알린다/);
   assert.equal(await pay.getAttribute('data-state'), 'planning', 'plan confirmation stays with a person');
   await pay.locator('.pm-card[data-kind="confirm-plan"]').waitFor();
-  await pay.locator('.pm-decisions summary').click();
-  assert.match(await pay.locator('.pm-decisions').innerText(), /PM 판단 제안 · 실행함[\s\S]*PM 판단 기록 · 제안 받음[\s\S]*PM 판단 기록 · 요청함/);
+  await openedText(pay.locator('.pm-decisions'), /PM 판단 제안 · 실행함[\s\S]*PM 판단 기록 · 제안 받음[\s\S]*PM 판단 기록 · 요청함/, 'the pay decision log');
   const payTrace = await (await fetch(`${base}/api/features/pay/trace`)).json();
   assert.deepEqual(payTrace.visits[0].pm.filter((item) => item.kind === 'judgment').map((item) => item.outcome), ['requested', 'proposed']);
 
@@ -223,8 +261,7 @@ try {
   const mode = refund.locator('.pm-mode');
   await mode.waitFor({ timeout: 10_000 });
   assert.equal(await mode.getAttribute('data-mode'), 'suggest', 'suggest is the default');
-  await mode.locator('summary').click();
-  assert.match(await mode.innerText(), /auto가 카드 없이 하는 일[\s\S]*auto가 하지 않는 일[\s\S]*PR 만들기·push·병합/);
+  await openedText(mode.locator('.pm-mode-help'), /auto가 카드 없이 하는 일[\s\S]*auto가 하지 않는 일[\s\S]*PR 만들기·push·병합/, 'the auto mode help');
   await mode.getByRole('button', { name: 'auto 켜기' }).click();
   await refund.locator('.pm-mode[data-mode="auto"]').waitFor({ timeout: 10_000 });
   assert.match(await refund.locator('.pm-mode').innerText(), /auto 켜짐 · 대표/);
@@ -240,8 +277,7 @@ try {
   await assert.rejects(readFile(join(root, '.wax', 'chat', 'pm-loop', `${await refund.getAttribute('data-goal')}.refund.pr-body.md`)), 'auto does not write the PR draft');
   assert.match(await refund.locator('.pm-auto-usage').innerText(), /지난 1시간 auto 행동 5\/12/);
   assert.ok(await refund.locator('.pm-auto-activity li[data-rule="start-worker-review"]').count() > 0, 'the review worker started by auto shows with its rule');
-  await refund.locator('.pm-decisions summary').click();
-  assert.match(await refund.locator('.pm-decisions').innerText(), /작업자 필요 · 실행함 · refund · auto start-worker/);
+  await openedText(refund.locator('.pm-decisions'), /작업자 필요 · 실행함 · refund · auto start-worker/, 'the refund decision log');
   const refundTrace = await (await fetch(`${base}/api/features/refund/trace`)).json();
   assert.ok(refundTrace.visits.find((visit) => visit.phase === 'review').pm.some((item) => item.by === 'auto' && /start-worker-review/.test(item.reason)));
   const phoneAuto = await open('/manage', { width: 390, height: 844 });
@@ -264,8 +300,7 @@ try {
   await cancel.getByRole('button', { name: '목표 정지' }).click();
   await panel.locator('.pm-goal[data-state="stopped"]', { has: manage.locator('.pm-feature[data-feature="cancel-flow"]') }).waitFor({ timeout: 10_000 });
   await autoWorker.waitFor({ state: 'detached', timeout: 10_000 });
-  await cancel.locator('.pm-decisions summary').click();
-  assert.match(await cancel.locator('.pm-decisions').innerText(), /작업자 · 정지함 · cancel-flow · 대표[\s\S]*작업자 · 시작함 · cancel-flow · auto/);
+  await openedText(cancel.locator('.pm-decisions'), /작업자 · 정지함 · cancel-flow · 대표[\s\S]*작업자 · 시작함 · cancel-flow · auto/, 'the cancel-flow decision log');
   const cancelId = await cancel.getAttribute('data-goal');
   const launches = async () => (await (await fetch(`${base}/api/pm-loop/${cancelId}`)).json()).decisions.filter((item) => item.kind === 'worker' && item.outcome === 'launched').length;
   server.pmLoop.poke();
