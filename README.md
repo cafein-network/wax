@@ -8,7 +8,7 @@
 
 - 홈페이지: https://wax.me2shop.com
 - 배포 ZIP과 출처 증명: [GitHub Releases](https://github.com/cafein-network/wax/releases/latest). Ubuntu·macOS·Windows와 Node 22·24에서 검사를 통과한 버전만 올라갑니다.
-- 이 저장소는 **AGPLv3 배포본만** 담습니다. **0.12.0을 초기 릴리스**로 시작하며, 이후 릴리스마다 갱신됩니다.
+- 이 저장소는 **AGPLv3 배포본만** 담습니다. **0.14.0부터 새 이력으로 다시 시작**했으며(0.12.0~0.13.x의 변경 내역은 [변경 이력](https://wax.me2shop.com/changelog/)과 `CHANGELOG.md`), 이후 릴리스마다 갱신됩니다.
 
 ## 요청과 보고
 

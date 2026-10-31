@@ -2,79 +2,39 @@
 
 wax splits each feature into **plan → design → implement → review → report** and keeps the documents and completion evidence in your project.
 
-## One-line requests that run on their own (0.12.0)
+This guide describes wax 0.14.0. Check the installed version with `node bin/wax.mjs --version` in the plugin folder. What changed in each version is in `CHANGELOG.md` in the release and on the [changelog](https://wax.me2shop.com/changelog/) page (in Korean).
 
-`init` joins with defaults and opens the dashboard right away. A new request offers two modes.
+There are two ways to work. Run the stage commands one by one in an AI session in your terminal (sections 3 and 4; other tools in section 5), or send a one-line request from the dashboard and let the chosen tool carry it through (section 6-3). Either way the records go to the same `.wax/`.
 
-| Mode | How it starts and runs |
-| --- | --- |
-| Project | Enter a goal and wax first writes a workflow with scope, task order and dependencies, deliverables and done criteria. Review it on screen and press **Start with this workflow** to move on to design, implementation, review and reporting. A change request rewrites the workflow, and the new version has to be reviewed before it starts. |
-| SM · Maintenance | Bug and improvement requests go straight through triage and analysis → impact check → fix → regression check → report. Plan and design documents stay short to match the request, and real test evidence is still required. |
+## Contents
 
-Project mode is selected at first, and after that each project remembers your last choice. You can also open the request screen in a given mode with `init --mode sm` or `init --mode project` (in each host's syntax). A request keeps its mode once created; to use the other mode, create a new request. Older requests without a mode continue as SM. Both modes run in a separate session of the CLI you choose; wax does not spread the work across your existing terminal AIs.
-
-The start guide on the Requests & reports screen (`/start`) walks you through choosing an execution tool → describing the task → following progress and reports. It checks whether each tool is installed; sign-in is checked when the tool actually runs. After installing a tool, press **Check tools again**.
-
-For a new request, choose an installed execution tool: Codex, Claude Code, Gemini CLI, GitHub Copilot CLI or Antigravity CLI. Grok Build does not support automatic runs yet, so use it for team work in a terminal session by asking for a wax skill by name. That CLI's sign-in or API settings, and its account usage, cost and data policies, apply. A request keeps using the tool it was created with; to use another tool, create a new request. New permission requests from Codex, Claude, Gemini and Copilot are allowed once or denied on screen. Antigravity runs within the permissions it already has, and if a new permission request is blocked you need to check its terminal settings. wax never wakes up an existing terminal session or changes another AI's assignment by itself. The PM for automatic runs handles the request and does not replace your project's PM.
-
-- Answer questions in the chat. Extra instructions sent during a run are applied after the current stage finishes. Press **Stop** to halt right away.
-- The reason for a stop or error is shown above the request. **Continue** resumes from the saved stage. Restarting the server or viewing a page never calls the AI again.
-- Requests run one at a time per project. Implementation and review need real passing test evidence, and a stage changed by another session is reported as a conflict. Each stage may run for up to 30 minutes.
-- Records are saved in `.wax/chat/requests/` and stage documents in `docs/wax/<generated ID>/`. Existing tasks and team assignments are still managed in **Detailed records** (`/manage`).
-- The dashboard's first screen (`/`) is the team channel, for conversation records. To run work automatically, open **＋ New request** and use **Create workflow** (Project) or **Start** (SM) on the Requests & reports screen (`/start`). Workflow review is separate from execution approvals; your existing CLI permissions still apply.
-
-
-## Triggers: request proposals from schedules, local calls, GitHub issues and CI failures
-
-A trigger only **proposes** a request at the time you set. AI starts only after a person accepts the proposal; nothing is accepted automatically.
-
-- **Create:** under **Triggers** in Detailed records (`/manage`), use **＋ New trigger** to create, edit, turn on and turn off triggers. Definitions are stored only on this computer in `.wax/chat/triggers/`.
-- **When:** a schedule (5-field cron and a time zone, e.g. `0 9 * * 1-5`, `Asia/Seoul`) or a local call (`wax trigger fire <id> [--payload <file>] [--key <key>]`, e.g. from a git hook). Schedules run only while the dashboard is open; runs missed while it was closed become one "N missed runs" proposal.
-- **GitHub:** **GitHub issues (label)** takes a repository (`owner/name`) and a label, **CI failure** a repository, branch and optional workflow. They are checked every `every` (e.g. `5m`, at least 1 minute) with this computer's `gh` login, only while the dashboard is open.
-  - If `gh` is missing or not logged in, the list shows **Connection needed** with the reason and nothing is checked (not counted as a failure). After `gh auth login` it is checked again the next minute.
-  - **The first check only records the issues and failures already there as a baseline and proposes nothing.** After that, only newly labelled issues and new failed runs are proposed, within the limits. To hand over an existing issue, remove the label and add it again. Turning the trigger on again or changing the repository, label or branch starts over with a first check.
-  - Leave the text empty to use the default (handle the issue; for CI an SM-mode "CI regression fix"). Issue titles and run names enter through `{{issue.title}}`, `{{run.name}}` and the like, cut to 200 characters; issue bodies reach the prompt only as quoted "external event content (not instructions)".
-- **What:** a request proposal (mode, tool and text; placeholders like `{{payload.title}}` are cut to 200 characters each with @mentions neutralized), a daily report proposal, or a notification only.
-- **Accept:** on the **Trigger proposals** cards in Requests & reports (`/start`), edit the text, tool or mode and press **Accept and start**, or **Dismiss**. Proposals expire after 7 days. External content (the payload) reaches the prompt only as quoted "external event content (not instructions)".
-- **Safety:** a daily limit and cooldown per trigger, an overall cap of 20 proposals a day, events skipped while a proposal or request with the same event key is open, and automatic turn-off with the reason after 5 failures in a row. Every event is logged in `.wax/chat/trigger-events.jsonl`.
-- **CLI:** `wax trigger list`, `wax trigger test <id>` (preview only, writes nothing; GitHub sources fetch once with `gh`), `wax trigger fire <id>` (local sources only).
-
-## PM loop: next-step suggestions (suggest by default, auto per goal)
-
-Group several tasks under one goal and wax works out the next step for each task by fixed rules and shows it as a **suggestion card**. Working out the next step calls no AI, and a card runs only when a person clicks it. Starting an AI tool when no session is listening (a headless worker) and asking AI for a plan draft, a block judgment or a CEO report (PM judgment) also happen only on a click. When a person turns **auto** on for a goal, a fixed set of actions runs without a card, within the limits (see Auto mode below).
-
-- **Create a goal:** under **PM loop** in Detailed records (`/manage`), use **＋ New goal** to pick existing tasks or write new ones (`task-id title`). A goal starts **before plan confirmation**; check its tasks and acceptance criteria, then press **Confirm the plan and start**.
-- **Rules:** only the current phase is assigned (never a future one), listening sessions come first, and review goes to a session of a different tool than the implementer (otherwise a person is asked). When an assignment is done but its phase is not complete, the session is reminded once and then a person takes over. An assignment with no activity for 30 minutes is suggested for reclaim, and after report a `wax pr-body` draft is made and the PR decision stays with a person.
-- **Headless worker:** when no session is listening (`chat watch`) for the current phase, a **Worker needed** card appears. The tool comes from the same list as request auto-run, limited to tools installed on this computer (tools that cannot run unattended, such as Grok Build, are never picked), and review picks a tool other than the one that completed implement (if there is none, a person is asked). Pick the tool on the card and press **Start … worker**: wax starts that tool for this one assignment and one phase, and it exits when done. Each phase is capped at 30 minutes, and permission requests go to the execution approvals screen. The worker completes the phase through the CLI (the evidence and acceptance-criteria conditions still apply); after it exits, the runner marks the assignment done or blocked from its result. Done goes through the existing assignment done check, so a phase that is not complete does not advance and goes to a person. Running workers show on the goal with their tool, elapsed time and a **Stop worker** button, and stopping the goal stops them too. If you dismiss a worker card, assigning a present (not listening) session is suggested instead.
-- **PM judgment:** a **PM judgment** card appears in three places only: a goal whose plan is not confirmed (plan draft), a blocked assignment (block judgment) and a goal with tasks that finished report (CEO report). Only pressing **Ask the PM judgment** calls the goal's PM judgment tool, once, with read-only instructions (10 minutes at most; permission requests go to the execution approvals screen). Pick the judgment tool under the goal's **Limits**, separately from the request auto-run tool; the default is the first installed tool in the request auto-run order, and tools that cannot run headless are not listed. The judgment receives the goal, `wax context` for each task and recent decisions and blocks, as quoted data that is not instructions. The result is accepted only as JSON in a fixed schema and shown as a **PM judgment proposal** card that a person edits and accepts, or dismisses. A result outside the schema is discarded and handed to a person with the reason on a **PM judgment handed over** card. Accepting maps only to existing actions: retry or reassign for a block reclaims the assignment and only sets the default tool of the next worker card (starting it is confirmed again), and ask or propose iteration only shows the question or a `wax iterate` hint on the blocked card. A plan draft creates missing tasks and saves AC drafts to tasks with an empty plan document, but a person still confirms the plan. A CEO report only writes a draft file under `.wax/chat/pm-loop/`. Each place is judged once, and judgment requests count toward the daily headless limit (20).
-- **What a card can do:** assign (under the existing PM rules: the person on the dashboard must be the PM), remind a session, reclaim (cancel) an assignment, write the PR draft file, start a worker, or ask for a PM judgment and accept its proposal. Each worker start, exit, timeout, failure and stop is logged with its reason in the same record. Every run or dismissed card is logged with its reason in `.wax/chat/pm-loop/<goal>.jsonl` and shows in the task's run trace.
-- **Limits and stop:** per goal, 15 phase runs (worker starts included), 2 concurrent workers (running workers included), 8 hours, 3 iterations, 3 blocks in a row (a worker failure or timeout counts as a block) and 12 auto actions per hour (auto only). Across the project, at most 20 headless runs (worker starts and PM judgment requests) per day (24 hours). No new worker starts while the same task and phase has an open assignment or a running worker. The goal stops at a limit; only a person raises a limit and resumes. **Stop goal** stops it at any time.
-- **Auto mode:** the default is suggest (every action is a card). Press **Turn auto on** in a goal's **Mode** box to switch that goal alone to auto. Only the person on the dashboard can switch it, and since auto assigns in that person's name they must be the PM. The switch is logged. Without a card, auto only assigns the current phase to a listening session, sends the first reminder after a done warning, starts a headless worker (review uses a different tool than implement), reclaims an assignment stalled for 30 minutes, and asks the PM judgment about a block, applying only its **retry** or **reassign**. Plan confirmation and accepting a plan draft, run approvals and permission prompts, rule approval, accepting trigger proposals, creating, pushing or merging a PR (the PR draft card after report waits for a person), raising limits, the CEO report, and anything handed to a person, asked or iterated stay cards in auto, and such cards raise a browser notification. Auto goes through the same checks and limits as a click, plus a per-goal **auto actions per hour** limit (12 by default). Hitting any limit, or an auto action failing, stops the goal and notifies you. **Stop goal** also stops running workers and judgments at once. Everything auto did is logged with `by: auto`, the rule name and the reason, and shows in the run trace and in the goal's **Auto activity**. With two dashboards it still runs once.
-- **CLI (read-only):** `wax pm-loop list`, `wax pm-loop show <goal>` (including the mode and auto usage), `wax pm-loop next <goal>` (shows the suggestions computed now and writes nothing). The CLI cannot switch the mode.
-
-## Execution approvals
-
-To answer the permission requests a tool asks in its console from the chat window instead, see [Managing execution approvals](./APPROVALS.md) (in Korean). Only connected requests can be answered, each with its own **Allow once / Deny** buttons.
-
-## Handing over a task
-
-When a new session picks up an existing task, first read the handover context with:
-
-```sh
-node /path/to/wax/bin/wax.mjs --project /path/to/my-app context login --budget 3000
-```
-
-`login` is the existing task ID. The output shows the goal, the current stage and next action, whiteboard decisions and questions without an answer or decision, execution evidence, improvement reasons and excerpts from stage documents. Each item carries a `.wax/features/<id>.json#/...` or `.wax/chat/board/<id>.jsonl#<note ID>` reference so you can open the source. Stage skills and `work` also tell the AI to read this before starting.
-
-`--budget` counts Unicode characters, not tokens. The default is 3,000 and the range is 1,000–100,000. The shown/total counts and `…` at the end mark omitted items and longer originals. The output is a rule-based excerpt, so also check the latest `status`, the full stage `prompt` and any source you need. Questions are limited to that task's board, and a linked answer does not guarantee the problem is solved. Damaged board records are counted as excluded, and unsafe storage paths or damaged task files are reported as errors.
-
-Reading this is read-only and never calls an external AI. Tests from earlier cycles are kept apart from tests in the current cycle, and each shows the commit and working-tree state at the time it ran. A recorded pass does not guarantee the current code passes, so run the tests again after changes.
-
-**Evidence freshness.** `wax test` and `wax evidence` store a working-tree fingerprint (`tree`) with each proof: the HEAD commit plus the Git blob ID of every file that differs from HEAD or is untracked and not ignored (`.wax/` is left out). Afterwards `wax context` marks each proof with "N files changed since" and puts the files changed since the current cycle's review proof (or implement proof when there is none) in its header; `wax status <id>` reports the same as `evidenceFreshness`, and the report-phase prompt (`wax prompt report` and dashboard auto-run) says "N files changed since the review proof: …". Dashboard evidence cards show "N files changed since" with the file list on hover. This is an observation, not a verdict, and never blocks a phase; rerun the tests when the changed files matter to the proof. When more than 200 files are changed or untracked, they total more than 64 MB, or a Git command takes longer than 5 seconds, the fingerprint is recorded as unknown instead of stalling. Projects without Git and proofs from before this feature have no fingerprint and show "unknown"; they still load, back up and restore as before. Archived and completed tasks are never resumed automatically.
+- [1. What do I need?](#1-what-do-i-need)
+- [2. Getting the code](#2-getting-the-code)
+- [3. Starting your first task in Claude Code](#3-starting-your-first-task-in-claude-code)
+- [4. Moving through the stages](#4-moving-through-the-stages)
+- [5. Using Gemini CLI (existing users)](#5-using-gemini-cli-existing-users)
+- [5-1. Using Codex](#5-1-using-codex)
+- [5-2. Using Antigravity CLI](#5-2-using-antigravity-cli)
+- [5-3. Using GitHub Copilot CLI](#5-3-using-github-copilot-cli)
+- [5-4. Using Grok Build](#5-4-using-grok-build)
+- [6. Team dashboard: AI sessions working together and daily reports](#6-team-dashboard-ai-sessions-working-together-and-daily-reports)
+- [6-1. Searching records](#6-1-searching-records)
+- [6-2. MCP server (experimental)](#6-2-mcp-server-experimental)
+- [6-3. One-line requests that run on their own](#6-3-one-line-requests-that-run-on-their-own)
+- [6-4. Execution approvals](#6-4-execution-approvals)
+- [6-5. Triggers: request proposals from schedules, local calls, GitHub issues and CI failures](#6-5-triggers-request-proposals-from-schedules-local-calls-github-issues-and-ci-failures)
+- [6-6. PM loop: next-step suggestions per goal and auto mode](#6-6-pm-loop-next-step-suggestions-per-goal-and-auto-mode)
+- [6-7. Project rules and wiki](#6-7-project-rules-and-wiki)
+- [6-8. Project types and the B1 design studio](#6-8-project-types-and-the-b1-design-studio)
+- [7. Where things are stored and resuming](#7-where-things-are-stored-and-resuming)
+- [8. Troubleshooting](#8-troubleshooting)
+- [9. Updating and what has been verified](#9-updating-and-what-has-been-verified)
 
 ## 1. What do I need?
 
 Node.js 22 or later and one signed-in Claude Code, Codex, Antigravity CLI, GitHub Copilot CLI, Grok Build or Gemini CLI. Install wax from the public repository [cafein-network/wax](https://github.com/cafein-network/wax) through each tool's marketplace, or download the ZIP from the [wax site](https://wax.me2shop.com/#download). The release includes the plugin source, tests and this guide. The wax code is licensed under AGPL-3.0 (free to use, change and share; distributions must offer the source, and if you provide a modified version over a network, remote users must be able to get its corresponding source). Usage fees and limits of AI tools and APIs are separate.
+
+**0.14.0 public repository note.** From 0.14.0 the public repository `cafein-network/wax` was recreated with a fresh history. The install address is the same. If updating a marketplace registered with 0.13.x or earlier fails because the history does not match, remove the `wax` marketplace registration in that tool and register it again (section 9, and "업데이트 및 직접 개선" in INSTALL.md). Leave `.wax` and `docs/wax` in your projects as they are. GitHub release ZIPs and provenance attestations for 0.13.x and earlier are no longer offered; the change history remains in `CHANGELOG.md` and on the [changelog](https://wax.me2shop.com/changelog/) page.
 
 ## 2. Getting the code
 
@@ -105,7 +65,7 @@ At first, run the start command once in the Claude chat.
 
 It joins with a default name and opens the dashboard without setup questions. If exactly one task is in progress it picks that task, otherwise none. If the project has no PM, the init session becomes the PM (skip with `--no-pm`); an existing PM is kept. Name, task and PM options you pass are applied as given. When it finishes, the session has joined the team channel, appears as a character in the virtual office, and shows how other AI sessions join (`/wax:join`). init and join join in the idle state and switch to working when real stage work starts. Run `/wax:init` again later to reopen the dashboard.
 
-Automatic runs are requested in one line on the dashboard's Requests & reports screen (`/start`). To manage each stage yourself from the terminal, request a feature like this:
+Automatic runs are requested in one line on the dashboard's Requests & reports screen (`/start`, section 6-3). To manage each stage yourself from the terminal, request a feature like this:
 
 ```text
 /wax:plan email-login Build sign-in with email and password
@@ -138,24 +98,9 @@ For example, after the first plan, run each of these once:
 
 The next stage opens only when the current stage has its document and completion evidence. Implement must link a passing test (`wax test`) or commit (`wax evidence`) proof, and review must link a passing test proof together with a confirmed pass. When there is no runnable check, such as a documentation-only change, complete with `--no-proof <reason>`; the reason stays in the completion record and in the handoff context other tools read. Besides the acceptance-criteria table, review checks in the order structure → function → efficiency → presentation: role flows and permissions (blocked on the server, not just hidden on screen), confirm, cancel or edit paths for actions that cannot be undone, numbers and totals against the source data, search and speed with a realistic amount of data, and loading, error and empty screens, marking anything that does not apply as not applicable with a reason. Each finding also says who is affected and why. If problems or unverified criteria remain, review does not complete and tells you why.
 
-Acceptance-criteria trace: the plan writes one acceptance criterion per line with its ID at the start of the line, such as `- AC-1: <criterion> — check: <method>` (only `AC-<number>` at the start of a line counts as an ID; mentions in the middle of a sentence are not declarations). When the plan declares AC IDs, completing review needs one `{"id": "ac-1", "status": "pass", "detail": "<what was checked>", "proofIds": ["<proof ID>"]}` item per ID in the `--checks-file` JSON array. A `pass` counts only with a passing test or commit proof from the current iteration; if any criterion is missing, `unverified` or without proof, review does not complete. Only for a criterion that truly cannot be verified, complete with `--ac-unverified <reason>`; any `fail` is refused regardless of a reason, so fix it with `wax iterate`. The trace (AC → status → proofs) appears in `acceptanceTrace` of `wax status <id>`, in `wax context <id>` and in the report-stage prompt. Plans without AC IDs work exactly as before.
+A feature ID starts with a lowercase letter or digit and contains only lowercase letters, digits and hyphens, 1–64 characters. Use names like `email-login`, `dashboard` or `payment-v2`.
 
-**Reviewer separation.** `wax complete ... --author <name>` records the session that completed a stage in the completion record (`completed`) and history. When the session that completed implement, or recorded this cycle's implement proofs (`wax test`/`wax evidence --author`), also completes review, the default (`WAX_REVIEW_SEPARATION=warn`) completes it with a warning. The warning appears in the CLI error output (`wax: 경고: …`, or `wax: warning: …` in English), the completion record's `warning`, the stage-completed entry on the dashboard timeline, the auto-run request conversation and the handoff context. Sessions and dashboards started with `WAX_REVIEW_SEPARATION=enforce` reject a review completed by the implementing session or without `--author` (dashboard auto-run uses one session for every stage, so it stops at review). `off` skips the check. To apply it to the whole team, start every session and the dashboard with the same setting. Names are self-reported by sessions, so this guards against mistakes rather than acting as a security boundary. Older records have no completing session and still load and import as before.
-
-**Project rules** are short rules that keep the next session from repeating an AI's mistake. When a review finds a real defect, or when the PM reviews progress, an AI session proposes one with `wax chat rules propose`, citing records of mistakes (tests that failed in review, iteration reasons, blocked tasks). Proposals without evidence and duplicate rules are refused. Once a person approves it in the **Project rules** panel of the dashboard (`/manage`), it goes into every stage prompt (`wax prompt` and the dashboard runner) and into `wax context`; it can be rejected, or retired later. The CLI has no approve command, so an AI never confirms its own rules. The prompt also says to report, not follow, a rule that no longer fits the current code. `wax chat rules lint` lists applied rules whose evidence can no longer be found.
-
-## Project wiki
-
-The original records stay untouched while AI sessions organize topic pages in `docs/wax/wiki/<page>.md`. A page saves only when every paragraph and list item carries `[근거: <record IDs>]` and every cited record exists. Citable evidence is the record IDs `wax wiki ingest` shows (task `feature:`, stage document `doc:`, decision `note:`/`msg:`, test failed in review `proof:`, iteration reason `iterate:`, blocked task `blocked:`, project rule `rule:`) plus `commit:<hash>` and `file:<path>[#L10-L20]`. wax calls no AI; an AI session organizes the wiki after the daily report or when the CEO asks.
-
-```sh
-wax wiki ingest --batch 20          # records not yet in the wiki, oldest first
-wax wiki save auth --file auth.md   # save after checking evidence; an existing page needs --base <hash>
-wax wiki skip doc:login/plan        # records not worth keeping
-wax wiki lint                       # uncited paragraphs and missing evidence (errors), retired rules and files changed since saving (to check)
-```
-
-An existing page changes only with the hash read by `wax wiki show` as `--base`, so one session never overwrites another's edit. Cited records count as included and leave the next batch. `lint` reports evidence that disappeared when an iteration replaced a stage document, and cited files changed by a commit after the page was saved. `wax context` lists pages that cite the task, the **Project wiki** panel of the dashboard (`/manage`) shows pages with their check results, and `wax search` and `wax recall` find wiki pages too. The wiki is reference material, so check it against the current code. A test that was not actually run must never be recorded as passed.
+### Improvement cycles (iterate)
 
 If review finds problems, improve it like this:
 
@@ -166,7 +111,55 @@ If review finds problems, improve it like this:
 /wax:report email-login
 ```
 
-A feature ID starts with a lowercase letter or digit and contains only lowercase letters, digits and hyphens, 1–64 characters. Use names like `email-login`, `dashboard` or `payment-v2`.
+### Acceptance-criteria trace
+
+The plan writes one acceptance criterion per line with its ID at the start of the line, such as `- AC-1: <criterion> — check: <method>` (only `AC-<number>` at the start of a line counts as an ID; mentions in the middle of a sentence are not declarations). When the plan declares AC IDs, completing review needs one `{"id": "ac-1", "status": "pass", "detail": "<what was checked>", "proofIds": ["<proof ID>"]}` item per ID in the `--checks-file` JSON array. A `pass` counts only with a passing test or commit proof from the current iteration; if any criterion is missing, `unverified` or without proof, review does not complete. Only for a criterion that truly cannot be verified, complete with `--ac-unverified <reason>`; any `fail` is refused regardless of a reason, so fix it with `wax iterate`. The trace (AC → status → proofs) appears in `acceptanceTrace` of `wax status <id>`, in `wax context <id>` and in the report-stage prompt. Plans without AC IDs work exactly as before.
+
+### Reviewer separation
+
+`wax complete ... --author <name>` records the session that completed a stage in the completion record (`completed`) and history. When the session that completed implement, or recorded this cycle's implement proofs (`wax test`/`wax evidence --author`), also completes review, the default (`WAX_REVIEW_SEPARATION=warn`) completes it with a warning. The warning appears in the CLI error output (`wax: 경고: …`, or `wax: warning: …` in English), the completion record's `warning`, the stage-completed entry on the dashboard timeline, the auto-run request conversation and the handoff context. Sessions and dashboards started with `WAX_REVIEW_SEPARATION=enforce` reject a review completed by the implementing session or without `--author` (dashboard auto-run uses one session for every stage, so it stops at review). `off` skips the check. To apply it to the whole team, start every session and the dashboard with the same setting. Names are self-reported by sessions, so this guards against mistakes rather than acting as a security boundary. Older records have no completing session and still load and import as before.
+
+### Evidence freshness
+
+`wax test` and `wax evidence` store a working-tree fingerprint (`tree`) with each proof: the HEAD commit plus the Git blob ID of every file that differs from HEAD or is untracked and not ignored (`.wax/` is left out). Afterwards `wax context` marks each proof with "N files changed since" and puts the files changed since the current cycle's review proof (or implement proof when there is none) in its header; `wax status <id>` reports the same as `evidenceFreshness`, and the report-phase prompt (`wax prompt report` and dashboard auto-run) says "N files changed since the review proof: …". Dashboard evidence cards show "N files changed since" with the file list on hover. This is an observation, not a verdict, and never blocks a phase; rerun the tests when the changed files matter to the proof. When more than 200 files are changed or untracked, they total more than 64 MB, or a Git command takes longer than 5 seconds, the fingerprint is recorded as unknown instead of stalling. Projects without Git and proofs from before this feature have no fingerprint and show "unknown"; they still load, back up and restore as before.
+
+### Handing over a task
+
+When a new session picks up an existing task, first read the handover context with:
+
+```sh
+node /path/to/wax/bin/wax.mjs --project /path/to/my-app context login --budget 3000
+```
+
+`login` is the existing task ID. The output shows the goal, the current stage and next action, whiteboard decisions and questions without an answer or decision, execution evidence, improvement reasons and excerpts from stage documents. Each item carries a `.wax/features/<id>.json#/...` or `.wax/chat/board/<id>.jsonl#<note ID>` reference so you can open the source. Stage skills and `work` also tell the AI to read this before starting.
+
+`--budget` counts Unicode characters, not tokens. The default is 3,000 and the range is 1,000–100,000. The shown/total counts and `…` at the end mark omitted items and longer originals. The output is a rule-based excerpt, so also check the latest `status`, the full stage `prompt` and any source you need. Questions are limited to that task's board, and a linked answer does not guarantee the problem is solved. Damaged board records are counted as excluded, and unsafe storage paths or damaged task files are reported as errors.
+
+Reading this is read-only and never calls an external AI. Tests from earlier cycles are kept apart from tests in the current cycle, and each shows the commit and working-tree state at the time it ran. A recorded pass does not guarantee the current code passes, so run the tests again after changes.
+
+### Time per stage and the run trace
+
+wax computes the time each stage took from the task history: the real elapsed time from entering a stage until completing it, with the time spent on a revisit after an improvement cycle added to the same stage. Each task under **Task progress** on the dashboard shows the time per stage and the total, and the stage in progress shows as "12 min so far". `wax status <id>` JSON includes it as `durations`. Time while archived and the gap between a backup and its restore are not counted, and older records with missing or backward timestamps are skipped. Cost and tokens are left out because no record ties them to a task stage.
+
+For each stage visit, see when it happened, which session and tool did it, on what evidence and what changed with `wax trace <id>` (Markdown) or `wax trace <id> --json`, or in the run trace panel on the dashboard (section 6, "Checking records on the dashboard"). Both are read-only and call no AI.
+
+### Screen captures and design comparison
+
+Work with a screen keeps captures as evidence. `wax capture <task-id> --check <check-id> --file <file> [-- <capture command>]` stores the capture in `.wax/artifacts/`, and each capture can carry labels for the conditions it was taken under.
+
+- `--viewport <width>x<height>`: screen size (e.g. `1280x800`, each 16384 or less)
+- `--scroll top|bottom|<pixels>`: scroll position
+- `--state <name>`: screen state, a name of up to 32 characters starting with a lowercase letter (e.g. `default`, `hover`, `focus`, `open`, `loading`, `error`, `empty`)
+
+For web projects (section 6-8) the design and review guidance captures each state at 360, 768 and 1280 and at 1920, wider than the design, and asks what caused each change: scrolling, a click, hover or time. The labels also show in the PR description draft, `wax trace` and the dashboard's run trace panel.
+
+`wax compare <task-id> [--json]` pairs each review capture (`ui-review`) with the design capture (`design-preview`) that has the same width, scroll and state. The baseline is only design captures taken in this project. The latest capture per label is used, and the baseline comes from the latest design iteration at or before the reviewed one. Captures without a partner (no baseline, baseline not re-captured) and older unlabeled captures are listed separately instead of paired, and design-studio handoff previews show as unlabeled references. When the two PNGs have the same size, the share of differing pixels is shown as an observation, not a match verdict; when the sizes differ, it only says so. The last review visit in the dashboard's run trace panel shows the two captures side by side (stacked at phone width), and the PR description draft carries a summary. It is read-only and calls no AI. The review guidance captures with the same labels as the design captures, reads `wax compare` and writes down the remaining differences instead of hiding them.
+
+### PR description draft
+
+`wax pr-body <task-id> [--out <file>] [--json]` builds a Markdown PR description draft from the task records alone: a suggested PR title, the task stage and iteration, the saved report document, the acceptance-criteria table, the current iteration's test and commit proofs and screen captures, the design comparison summary, the reasons for stages completed without proof, and evidence freshness. Missing records are reported as missing, never made up. `@name` in the records is turned into code so GitHub sends no notification. It writes only to standard output or the `--out` file (an existing file is overwritten; directories and symbolic links are refused), calls neither `gh` nor the network, and never creates a PR.
+
+After report completes, the report guidance offers to make this draft and runs `gh pr create --draft --body-file <file>` only when the user approves. Creating, pushing and merging a PR is always a person's call. The PM loop (section 6-6) likewise only offers a draft file card for tasks that finished report and leaves the PR decision to a person.
 
 ## 5. Using Gemini CLI (existing users)
 
@@ -286,16 +279,39 @@ node "/path/to/wax/bin/wax.mjs" --project "/path/to/my-app" dashboard
 
 This opens `http://127.0.0.1:4330/` (change it with `--port` or `WAX_DASHBOARD_PORT`). In an AI session, `/wax:init` (Codex `$wax:init`, Antigravity `/init`) opens the dashboard directly. Its first screen is the team channel; **＋ New request** opens the start guide on the Requests & reports screen (`/start`). Addresses from 0.13.5 and earlier (`/?mode=…`, `/?request=…`) lead to `/start`. There is no separate dashboard command; run init again to reopen it later. If the dashboard is already running it just gives you the address; if not, the session starts it in the background or tells you the command to run. `dashboard --status` only checks whether it is running. How to use each screen is in **Help** (`/help`) at the top of the dashboard. The server only listens on this computer (127.0.0.1). Set the person's name used on the web with `WAX_CHAT_USER` (default "대표", the CEO). Switch the screen language with the language menu at the top right (한국어 or English); this browser remembers the choice. The first visit opens in Korean when the browser language is Korean and in English otherwise, and `?lang=ko` or `?lang=en` in the address also sets it. Only the screen text changes: messages, documents, reports and other content written by people and AI sessions are shown as written.
 
-**Browser notifications.** Click **Turn on notifications** at the top of the team channel, Requests & reports or the detail records screen and the browser asks for permission (never when the page opens). From then on, while you are not looking at the tab, AI questions, new execution approval requests and completed task phases arrive as browser notifications; clicking one brings the tab back and opens that message, approval or task. Nothing is notified while the tab is in view, for your own messages, or for records that existed before the page opened or reconnected, and the same event is notified once. The count gathered while away shows in front of the tab title, like `(2)`, until you look at the tab again. The choice is saved in this browser only; if the browser blocks or does not support notifications, the button says **Notifications blocked** or **Notifications unsupported**.
+### Browser notifications
+
+Click **Turn on notifications** at the top of the team channel, Requests & reports or the detail records screen and the browser asks for permission (never when the page opens). From then on, while you are not looking at the tab, these arrive as browser notifications:
+
+- questions from AI sessions
+- new execution approval requests
+- completed task stages
+- new trigger proposals and notify-only triggers (section 6-5)
+- PM loop cards that need a person, and a PM loop stopping (section 6-6). Actions that auto handles without a card are not notified.
+
+Clicking a notification brings the tab back and opens that message, approval or task. Nothing is notified while the tab is in view, for your own messages, or for records that existed before the page opened or reconnected, and the same event is notified once. The count gathered while away shows in front of the tab title, like `(2)`, until you look at the tab again. The choice is saved in this browser only; if the browser blocks or does not support notifications, the button says **Notifications blocked** or **Notifications unsupported**. When blocked, allow notifications in the site settings next to the address bar and reload. A dashboard tab has to be open to receive notifications.
+
+### Screens
 
 | Screen | Contents |
 | --- | --- |
-| `/` Requests & reports | One-line requests, automatic runs from planning to the final report, answering questions, stop and resume |
-| `/manage` Detailed records | Today's numbers, the virtual office panel, the timeline (stages, evidence, conversations, assignments, reports), team status and "doing now", assignments, task stages, open questions and daily reports |
-| `/chat` Channels | Conversations in each task channel and the project-wide channel (general). The CEO can post too |
+| `/` and `/chat` Team channel | Conversations in each task channel and the project-wide channel (general), choosing recipients and the Work tab. The CEO can post too |
+| `/start` Requests & reports | The start guide, one-line requests run automatically from planning to the final report (section 6-3), answering questions, stop and resume, and trigger proposal cards (section 6-5) |
+| `/manage` Detailed records | Today's numbers, the run trace, the PM loop (section 6-6), the virtual office panel, the timeline (stages, evidence, conversations, assignments, reports), check first, team status and "doing now", assignments, task progress with time per stage, recent decisions, project rules and wiki (section 6-7), open questions, daily reports and triggers (section 6-5) |
 | `/office` Virtual office | Selecting a character opens its HR record card: front-facing face, department lead or member (no titles; the project name is the department and the PM leads it), level, a hexagon of six skills (plan, design, implement, review, test, communicate, report), bug rate (share of failed tests in my work), bugs found (failed tests during review), commits, work time (accepted → done) and achievement badges. Everything is computed from records (tests and commits count for the `--author` name given to `wax test` or `wax evidence`, or else for whoever had accepted the same task and stage at that time), and without records skills start at average (50). AI sessions rise through ranks with the level they earn from records: staff → senior staff → assistant manager → manager → deputy general manager → general manager. The person gives the AI team its work, so they always appear as the CEO regardless of level. The project's PM also carries the team lead (PM) role apart from rank. **Skill map** at the top shows a member × area grid (stage, check kind and code area): who has actually done which kind of work, which areas nobody has done, and which only one member has. Each cell counts completed tasks, passed checks and linked commits (failed checks are marked ✕ separately), and code areas come from the paths a commit changed. On a phone it opens full screen, only the table scrolls sideways, and the member column stays in place. In the CLI it is `wax chat skills`, and the PM reads it before assigning. The HR card's **Work notes** tab collects, straight from the records, what that member did each day over the last 7 days (tasks assigned, started, done or blocked, passed and failed tests, commits and the areas they changed, messages and whiteboard notes, reports and memos), folded by day, with current assignments and the latest memo on top. It calls no AI and writes no sentences of its own. A session reads the notes of its own name with `wax chat notes <name>` when it starts a stage to see where earlier sessions stopped, and leaves what remains and what to watch with `wax chat memo` when it stops partway. When new records raise a skill, a glow in that skill's color briefly circles the character's head. The building is seen from the side; from bottom to top, B1 Design studio, 1F Meeting room, 2F Development, 3F Lab, 4F CEO's office and the RF Rooftop garden follow the wax order of work (discuss → implement → review → report). Characters do not walk around to work. The PM sits in the CEO's office, idle sessions are in the rooftop garden, and everyone else discusses, designs, implements and reviews from their own seat in development. Reports, conversations and whiteboard posts travel as a line of notes that streams from the sender's seat along the corridors and the elevator shaft to the recipient (or, without one, the latest conversation partner in the same channel) or to the whiteboard, while speech bubbles still appear above heads. The room follows each session's current state, not the task stage. The dashboard panel shows the same view |
+| `/search` Search · `/help` Help | Record search and index management (section 6-1), how to use each screen and how to call commands in each tool |
 
 Changing the date shows that day's records.
+
+### Checking records on the dashboard
+
+Selecting a stat card at the top jumps to the related tasks, assignments or timeline. **Check first** lists blocked assignments, failed test evidence on the selected date, and old open questions, in that order. If a later pass exists for the same task and stage, the earlier failure leaves this list but stays in the timeline. Don't conclude that a whole task failed from a failure record alone.
+
+**View original** shows the full text of questions and decisions shortened in summaries, and **View evidence** shows the saved command, exit code and output in the existing document window. The buttons never rerun the command. Recent decisions and test evidence follow the selected date; assignments and open questions follow all current records.
+
+**Run trace.** Select **Run trace** next to a task in **Task progress**, or open `/manage?feature=<task ID>`, to see how the task went through its phases as a vertical timeline of phase visits. Each visit expands to its start, end and time taken (computed like the time per stage), outcome (phase completed, sent back to implement with the reason, in progress, and questions or blocks when a request is linked), the completing session and tool, the commits at the time, completion evidence and reasons, linked test and commit proofs with files changed since they were recorded, review acceptance-criteria results, and files changed between the commit at the end of the previous visit and the end of this one (committed changes). Iterations show as revisits of the same phase. **Download Markdown** saves the same content with the PR-description rules (`@name` and HTML neutralized); on the command line use `wax trace <id>` (Markdown) or `wax trace <id> --json`. It is read-only and calls no AI. Completing or sending back a phase now also records the commit (`head`), whether there were uncommitted changes (`dirty`, `.wax/` excluded) and, when known, the tool (`tool`, dashboard auto-run) in the history; projects without Git and older records leave those cells empty. Tokens and cost are not shown because no record ties a Claude Code usage session to a phase visit.
+
+Even if you switch dates quickly, only the response for the last selected date is applied. If a refresh fails, the last successful records and a retry button stay. Reconnecting rereads session information, and background refreshes never clear an assignment or new task you are typing.
 
 ### Sessions talking to each other
 
@@ -325,6 +341,10 @@ To talk directly, run `/wax:chat [channel] [message]` (Codex `$wax:chat`, Antigr
 **Work tab.** The **Work** tab on the left of the channel lists requests, assignments, continued conversations and execution approvals as **Answer needed · In progress · Done**, grouped into today, yesterday, the last 7 days, the last 30 days and earlier. **Find work** above searches titles, content, owners and IDs in every state. Work pinned with the star button stays on top whatever its state; pins are kept in this browser only. A request stopped by an AI question is listed under **Answer needed**. Opening a request folds its conversation by stage (in SM: intake and analysis → impact check → fix → regression check → resolution report), with only the current stage (or the last one once finished) open, and each stage header shows its progress updates, passing tests and commits. Test and commit evidence recorded in a stage appears as cards that open the detail records with the actual output. A card shows "N files changed since" when files changed after the proof was recorded (an observation).
 
 **Direct notifications between Claude Code sessions.** Claude Code can message other Claude Code sessions on the same computer directly. A session records its own session name with `--peer` when joining (shown as `session <name>` in `wax chat who`). When you post with another Claude session as a recipient, that session only receives a pointer like `wax: #<channel> <message ID> from <name>`. The content stays in the channel record, so the notified session reads the message from the channel and ignores ones it already handled. When this isn't available it is skipped, and the message still arrives through the channel and listening.
+
+### Session names and rejoining
+
+Keep the `session` returned by `wax chat join --author <name> --session <ID> --json`, and pass `--session <ID>` with every status change, post, report and assignment change for that name. On a 409 error, join again with the same session ID and use the name it returns. PM and assignment roles stay with the name, and a name inactive for 24 hours is taken over by the next session. Records without tokens from earlier versions are handed over on join. CLI records written without join are identified separately, and once a session takes over a name, it cannot be written without the token.
 
 ### The PM and sharing work
 
@@ -374,7 +394,9 @@ wax chat daily [--date YYYY-MM-DD]           # timeline
 wax chat daily draft | report --file <report.md> | list
 ```
 
-`wax` means `node "/path/to/wax/bin/wax.mjs"`. **CLI language.** Help (`--help`), messages and errors are in English with `WAX_LANG=en`. Without `WAX_LANG`, the CLI uses English when `LC_ALL`, `LC_MESSAGES` or `LANG` (the first one set) starts with `en`, and Korean otherwise; `WAX_LANG=ko` keeps Korean on an English system. `--json` output, records and the stage prompts given to AI sessions stay the same in either language. The kind (`--kind`) is one of `claude`, `codex`, `copilot`, `gemini`, `antigravity`, `human` or `other`.
+`wax` means `node "/path/to/wax/bin/wax.mjs"`. The kind (`--kind`) is one of `claude`, `codex`, `copilot`, `gemini`, `antigravity`, `grok`, `human` or `other`. For other commands see `wax --help`, `wax chat --help`, `wax trigger --help`, `wax pm-loop --help`, `wax mcp --help` and so on.
+
+**CLI language.** Help (`--help`), messages, warnings and errors are in English with `WAX_LANG=en` (values such as `en_US` and `ko-KR` are accepted too). Without `WAX_LANG`, the CLI uses English when the first of `LC_ALL` → `LC_MESSAGES` → `LANG` that is set starts with `en`, and Korean otherwise; `WAX_LANG=ko` keeps Korean on an English system. `--json` output, saved records, and the stage prompts, handoff context and skills given to AI sessions stay the same in either language. The dashboard's screen language is set separately (section 6, "Opening the dashboard").
 
 | Path | Contents |
 | --- | --- |
@@ -384,8 +406,9 @@ wax chat daily draft | report --file <report.md> | list
 | `.wax/chat/team.json`, `assignments.jsonl` | The PM and assignment and status history |
 | `.wax/chat/daily.jsonl`, `docs/wax/daily/<date>/NN.md` | Daily report records and text |
 
-In an empty directory, run `node scripts/chat-demo.mjs --project ./demo --loop` to watch a repeating scene of PM assignments, conversations and reports on the dashboard.
+Other storage locations are listed in section 7.
 
+In an empty directory, run `node scripts/chat-demo.mjs --project ./demo --loop` to watch a repeating scene of PM assignments, conversations and reports on the dashboard.
 
 ## 6-1. Searching records
 
@@ -502,6 +525,93 @@ env = { WAX_MCP = "on" }
 
 Config file locations and formats for Gemini CLI, Codex and Copilot CLI can change between versions, so check each tool's MCP documentation (this repository's tests check the server and the printed snippets, not the registration in each tool). Antigravity CLI and Grok Build have not been checked yet. If registration does not work, run `WAX_MCP=on node /path/to/wax/bin/wax.mjs mcp --project /path/to/my-app` in a terminal and read its error output (stderr). Without `WAX_MCP=on` it explains how to turn it on and exits.
 
+## 6-3. One-line requests that run on their own
+
+`init` joins with defaults and opens the dashboard right away. A new request offers two modes.
+
+| Mode | How it starts and runs |
+| --- | --- |
+| Project | Enter a goal and wax first writes a workflow with scope, task order and dependencies, deliverables and done criteria. Review it on screen and press **Start with this workflow** to move on to design, implementation, review and reporting. A change request rewrites the workflow, and the new version has to be reviewed before it starts. |
+| SM · Maintenance | Bug and improvement requests go straight through triage and analysis → impact check → fix → regression check → report. Plan and design documents stay short to match the request, and real test evidence is still required. |
+
+Project mode is selected at first, and after that each project remembers your last choice. You can also open the request screen in a given mode with `init --mode sm` or `init --mode project` (in each host's syntax). A request keeps its mode once created; to use the other mode, create a new request. Older requests without a mode continue as SM. Both modes run in a separate session of the CLI you choose; wax does not spread the work across your existing terminal AIs.
+
+The start guide on the Requests & reports screen (`/start`) walks you through choosing an execution tool → describing the task → following progress and reports. It checks whether each tool is installed; sign-in is checked when the tool actually runs. After installing a tool, press **Check tools again**.
+
+For a new request, choose an installed execution tool: Codex, Claude Code, Gemini CLI, GitHub Copilot CLI or Antigravity CLI. Grok Build does not support automatic runs yet, so use it for team work in a terminal session by asking for a wax skill by name. That CLI's sign-in or API settings, and its account usage, cost and data policies, apply. A request keeps using the tool it was created with; to use another tool, create a new request. New permission requests from Codex, Claude, Gemini and Copilot are allowed once or denied on screen. Antigravity runs within the permissions it already has, and if a new permission request is blocked you need to check its terminal settings. wax never wakes up an existing terminal session or changes another AI's assignment by itself. The PM for automatic runs handles the request and does not replace your project's PM.
+
+- Answer questions in the chat. Extra instructions sent during a run are applied after the current stage finishes. Press **Stop** to halt right away.
+- The reason for a stop or error is shown above the request. **Continue** resumes from the saved stage. Restarting the server or viewing a page never calls the AI again.
+- Requests run one at a time per project. Implementation and review need real passing test evidence, and a stage changed by another session is reported as a conflict. Each stage may run for up to 30 minutes.
+- Records are saved in `.wax/chat/requests/` and stage documents in `docs/wax/<generated ID>/`. Existing tasks and team assignments are still managed in **Detailed records** (`/manage`).
+- The dashboard's first screen (`/`) is the team channel, for conversation records. To run work automatically, open **＋ New request** and use **Create workflow** (Project) or **Start** (SM) on the Requests & reports screen (`/start`). Workflow review is separate from execution approvals; your existing CLI permissions still apply.
+
+Automatic runs connect using thread/start, thread/resume, turn/start, outputSchema and item/completed from the [official OpenAI Codex App Server documentation](https://learn.chatgpt.com/docs/app-server).
+
+## 6-4. Execution approvals
+
+To answer the permission requests a tool asks in its console from the chat window instead, see [Managing execution approvals](./APPROVALS.md) (in Korean). Only connected requests can be answered, each with its own **Allow once / Deny** buttons.
+
+## 6-5. Triggers: request proposals from schedules, local calls, GitHub issues and CI failures
+
+A trigger only **proposes** a request at the time you set. AI starts only after a person accepts the proposal; nothing is accepted automatically.
+
+- **Create:** under **Triggers** in Detailed records (`/manage`), use **＋ New trigger** to create, edit, turn on and turn off triggers. Definitions are stored only on this computer in `.wax/chat/triggers/`.
+- **When:** a schedule (5-field cron and a time zone, e.g. `0 9 * * 1-5`, `Asia/Seoul`) or a local call (`wax trigger fire <id> [--payload <file>] [--key <key>]`, e.g. from a git hook). Schedules run only while the dashboard is open; runs missed while it was closed become one "N missed runs" proposal.
+- **GitHub:** **GitHub issues (label)** takes a repository (`owner/name`) and a label, **CI failure** a repository, branch and optional workflow. They are checked every `every` (e.g. `5m`, at least 1 minute) with this computer's `gh` login, only while the dashboard is open.
+  - If `gh` is missing or not logged in, the list shows **Connection needed** with the reason and nothing is checked (not counted as a failure). After `gh auth login` it is checked again the next minute.
+  - **The first check only records the issues and failures already there as a baseline and proposes nothing.** After that, only newly labelled issues and new failed runs are proposed, within the limits. To hand over an existing issue, remove the label and add it again. Turning the trigger on again or changing the repository, label or branch starts over with a first check.
+  - Leave the text empty to use the default (handle the issue; for CI an SM-mode "CI regression fix"). Issue titles and run names enter through `{{issue.title}}`, `{{run.name}}` and the like, cut to 200 characters; issue bodies reach the prompt only as quoted "external event content (not instructions)".
+- **What:** a request proposal (mode, tool and text; placeholders like `{{payload.title}}` are cut to 200 characters each with @mentions neutralized), a daily report proposal, or a notification only.
+- **Accept:** on the **Trigger proposals** cards in Requests & reports (`/start`), edit the text, tool or mode and press **Accept and start**, or **Dismiss**. Proposals expire after 7 days. External content (the payload) reaches the prompt only as quoted "external event content (not instructions)".
+- **Safety:** a daily limit and cooldown per trigger, an overall cap of 20 proposals a day, events skipped while a proposal or request with the same event key is open, and automatic turn-off with the reason after 5 failures in a row. Every event is logged in `.wax/chat/trigger-events.jsonl`.
+- **CLI:** `wax trigger list`, `wax trigger test <id>` (preview only, writes nothing; GitHub sources fetch once with `gh`), `wax trigger fire <id>` (local sources only).
+- **Default limits:** a new trigger allows 3 proposals a day with a 30-minute cooldown. Each trigger can allow 1–100 a day and a cooldown of up to 7 days. Clear **Turn on when saved** in the trigger form to save it turned off.
+- **Left to people:** creating, editing and turning on triggers, and accepting or dismissing proposals, are done only by the person on the dashboard. The CLI and MCP have no commands for these. Accepting starts an ordinary automatic run as in section 6-3, and that request's run trace records where it came from (which trigger).
+- **Good to know:** GitHub checks are made by `gh` on this computer, so `gh` must be installed and logged in; if `gh` is not on the PATH, start the dashboard with `WAX_GH_BIN` set to its path. The tests use a fake `gh`; long-running polling of a real GitHub repository is not part of the verified scope (section 9).
+
+## 6-6. PM loop: next-step suggestions per goal and auto mode
+
+Group several tasks under one goal and wax works out the next step for each task by fixed rules and shows it as a **suggestion card**. Working out the next step calls no AI, and a card runs only when a person clicks it. Starting an AI tool when no session is listening (a headless worker) and asking AI for a plan draft, a block judgment or a CEO report (PM judgment) also happen only on a click. When a person turns **auto** on for a goal, a fixed set of actions runs without a card, within the limits (see Auto mode below).
+
+- **Create a goal:** under **PM loop** in Detailed records (`/manage`), use **＋ New goal** to pick existing tasks or write new ones (`task-id title`). A goal starts **before plan confirmation**; check its tasks and acceptance criteria, then press **Confirm the plan and start**.
+- **Rules:** only the current phase is assigned (never a future one), listening sessions come first, and review goes to a session of a different tool than the implementer (otherwise a person is asked). When an assignment is done but its phase is not complete, the session is reminded once and then a person takes over. An assignment with no activity for 30 minutes is suggested for reclaim, and after report a `wax pr-body` draft is made and the PR decision stays with a person.
+- **Headless worker:** when no session is listening (`chat watch`) for the current phase, a **Worker needed** card appears. The tool comes from the same list as request auto-run, limited to tools installed on this computer (tools that cannot run unattended, such as Grok Build, are never picked), and review picks a tool other than the one that completed implement (if there is none, a person is asked). Pick the tool on the card and press **Start … worker**: wax starts that tool for this one assignment and one phase, and it exits when done. Each phase is capped at 30 minutes, and permission requests go to the execution approvals screen. The worker completes the phase through the CLI (the evidence and acceptance-criteria conditions still apply); after it exits, the runner marks the assignment done or blocked from its result. Done goes through the existing assignment done check, so a phase that is not complete does not advance and goes to a person. Running workers show on the goal with their tool, elapsed time and a **Stop worker** button, and stopping the goal stops them too. If you dismiss a worker card, assigning a present (not listening) session is suggested instead.
+- **PM judgment:** a **PM judgment** card appears in three places only: a goal whose plan is not confirmed (plan draft), a blocked assignment (block judgment) and a goal with tasks that finished report (CEO report). Only pressing **Ask the PM judgment** calls the goal's PM judgment tool, once, with read-only instructions (10 minutes at most; permission requests go to the execution approvals screen). Pick the judgment tool under the goal's **Limits**, separately from the request auto-run tool; the default is the first installed tool in the request auto-run order, and tools that cannot run headless are not listed. The judgment receives the goal, `wax context` for each task and recent decisions and blocks, as quoted data that is not instructions. The result is accepted only as JSON in a fixed schema and shown as a **PM judgment proposal** card that a person edits and accepts, or dismisses. A result outside the schema is discarded and handed to a person with the reason on a **PM judgment handed over** card. Accepting maps only to existing actions: retry or reassign for a block reclaims the assignment and only sets the default tool of the next worker card (starting it is confirmed again), and ask or propose iteration only shows the question or a `wax iterate` hint on the blocked card. A plan draft creates missing tasks and saves AC drafts to tasks with an empty plan document, but a person still confirms the plan. A CEO report only writes a draft file under `.wax/chat/pm-loop/`. Each place is judged once, and judgment requests count toward the daily headless limit (20).
+- **What a card can do:** assign (under the existing PM rules: the person on the dashboard must be the PM), remind a session, reclaim (cancel) an assignment, write the PR draft file, start a worker, or ask for a PM judgment and accept its proposal. Each worker start, exit, timeout, failure and stop is logged with its reason in the same record. Every run or dismissed card is logged with its reason in `.wax/chat/pm-loop/<goal>.jsonl` and shows in the task's run trace.
+- **Limits and stop:** per goal, 15 phase runs (worker starts included), 2 concurrent workers (running workers included), 8 hours, 3 iterations, 3 blocks in a row (a worker failure or timeout counts as a block) and 12 auto actions per hour (auto only). Across the project, at most 20 headless runs (worker starts and PM judgment requests) per day (24 hours). No new worker starts while the same task and phase has an open assignment or a running worker. The goal stops at a limit; only a person raises a limit and resumes. **Stop goal** stops it at any time.
+- **Auto mode:** the default is suggest (every action is a card). Press **Turn auto on** in a goal's **Mode** box to switch that goal alone to auto. Only the person on the dashboard can switch it, and since auto assigns in that person's name they must be the PM. The switch is logged. Without a card, auto only assigns the current phase to a listening session, sends the first reminder after a done warning, starts a headless worker (review uses a different tool than implement), reclaims an assignment stalled for 30 minutes, and asks the PM judgment about a block, applying only its **retry** or **reassign**. Plan confirmation and accepting a plan draft, run approvals and permission prompts, rule approval, accepting trigger proposals, creating, pushing or merging a PR (the PR draft card after report waits for a person), raising limits, the CEO report, and anything handed to a person, asked or iterated stay cards in auto, and such cards raise a browser notification. Auto goes through the same checks and limits as a click, plus a per-goal **auto actions per hour** limit (12 by default). Hitting any limit, or an auto action failing, stops the goal and notifies you. **Stop goal** also stops running workers and judgments at once. Everything auto did is logged with `by: auto`, the rule name and the reason, and shows in the run trace and in the goal's **Auto activity**. With two dashboards it still runs once.
+- **CLI (read-only):** `wax pm-loop list`, `wax pm-loop show <goal>` (including the mode and auto usage), `wax pm-loop next <goal>` (shows the suggestions computed now and writes nothing). The CLI cannot switch the mode.
+- **Changing limits and resuming:** under the goal's **Limits**, a person sets the per-goal limits and the PM judgment tool (phase runs 1–200, concurrent workers 1–10, hours 1–168, iterations 0–50, blocks in a row 1–20, auto actions per hour 1–120). The 20 headless runs a day are a project-wide limit and cannot be changed. A goal stopped at a limit continues after a person checks the limits under **Resume goal**.
+- **Verified scope:** unit tests and browser checks replace the worker and PM judgment runners with fakes. A full PM loop round trip with real AI tools (a worker actually finishing a stage, a judgment tool keeping to the read-only instructions and answering in the fixed JSON schema, auto going all the way with real tools) has not been checked yet. Read-only is enforced only by the instructions, not by changing the tool's permission settings, so deny any write permission request that arrives during a judgment on the execution approvals screen.
+
+## 6-7. Project rules and wiki
+
+### Project rules
+
+**Project rules** are short rules that keep the next session from repeating an AI's mistake. When a review finds a real defect, or when the PM reviews progress, an AI session proposes one with `wax chat rules propose`, citing records of mistakes (tests that failed in review, iteration reasons, blocked tasks). Proposals without evidence and duplicate rules are refused. Once a person approves it in the **Project rules** panel of the dashboard (`/manage`), it goes into every stage prompt (`wax prompt` and the dashboard runner) and into `wax context`; it can be rejected, or retired later. The CLI has no approve command, so an AI never confirms its own rules. The prompt also says to report, not follow, a rule that no longer fits the current code. `wax chat rules lint` lists applied rules whose evidence can no longer be found.
+
+`wax chat rules` lists the applied rules, `--all` adds pending, rejected and retired ones, and `rules candidates` shows mistake records that no rule cites yet. Prompts carry the 20 most recent approved rules. The dashboard panel lists pending approval → applied, with rejected and retired rules folded away, and a rule proposed from the CLI shows up in the panel within a second or two. Records are only ever appended to `.wax/chat/rules.jsonl`.
+
+### Project wiki
+
+The original records stay untouched while AI sessions organize topic pages in `docs/wax/wiki/<page>.md`. A page saves only when every paragraph and list item carries `[근거: <record IDs>]` and every cited record exists. Citable evidence is the record IDs `wax wiki ingest` shows (task `feature:`, stage document `doc:`, decision `note:`/`msg:`, test failed in review `proof:`, iteration reason `iterate:`, blocked task `blocked:`, project rule `rule:`) plus `commit:<hash>` and `file:<path>[#L10-L20]`. wax calls no AI; an AI session organizes the wiki after the daily report or when the CEO asks.
+
+```sh
+wax wiki ingest --batch 20          # records not yet in the wiki, oldest first
+wax wiki save auth --file auth.md   # save after checking evidence; an existing page needs --base <hash>
+wax wiki skip doc:login/plan        # records not worth keeping
+wax wiki lint                       # uncited paragraphs and missing evidence (errors), retired rules and files changed since saving (to check)
+```
+
+An existing page changes only with the hash read by `wax wiki show` as `--base`, so one session never overwrites another's edit. Cited records count as included and leave the next batch. `lint` reports evidence that disappeared when an iteration replaced a stage document, and cited files changed by a commit after the page was saved. `wax context` lists pages that cite the task, the **Project wiki** panel of the dashboard (`/manage`) shows pages with their check results, and `wax search` and `wax recall` find wiki pages too. The wiki is reference material, so check it against the current code. A test that was not actually run must never be recorded as passed.
+
+## 6-8. Project types and the B1 design studio
+
+Choose a project type on the Requests & reports screen to see the current mission, room, required deliverables and checks. Roblox games and AI lookbooks require checks that fit real play or real generation, storage and product links. **Web service** is chosen automatically from the request or the repository's `package.json` (React, Next.js, Vite, Vue, Svelte, `@playwright/test` and similar), including workspace packages (`workspaces`, `pnpm-workspace.yaml`). React Native, Expo, Electron and Tauri apps are not chosen as web services. It requires screen captures in design, a Playwright test of the core flow (`e2e-smoke`) in implementation, and acceptance tests (`e2e-acceptance`) plus a review of loading, error, empty and mobile screens (`ui-review`) in review. The AI opens screens with `playwright-cli` to explore, reproduce and capture; only `node node_modules/@playwright/test/cli.js test` runs recorded with `wax test` count as evidence. wax runs commands without a shell, so this path works on Windows where `npx` does not. On Windows `playwright-cli` cannot run after `wax capture`'s `--`; capture first and pass only `--file`. `wax capture <task-id> --check <check-id> --file <file> [-- <capture command>]` keeps captures in `.wax/artifacts/`. `wax doctor` shows whether the tools are installed under `browser`. Open the moodboard or Design deliverables in the B1 design studio to see registered previews. When review fails, **Fix and verify again** continues from the implementation stage. Connect a Figma frame or a Blender collection in Design deliverables, and the MCP of the execution tool you choose (Codex or Claude Code) makes the real design; the CEO's revision notes become the next version of the same target, and the approved version is handed off to development. The connection is checked for real in that execution tool. See the [design studio guide](DESIGN_STUDIO.md) (in Korean) for details.
+
+For capture labels (`--viewport`, `--scroll`, `--state`) and same-condition design comparison (`wax compare`), see "Screen captures and design comparison" in section 4.
+
 ## 7. Where things are stored and resuming
 
 ```text
@@ -512,7 +622,47 @@ my-app/
 
 The source of truth is `.wax/features/*.json`. Don't edit the JSON by hand; use wax commands or the CLI.
 
+Other records live in these places, all inside this project.
+
+| Path | Contents |
+| --- | --- |
+| `.wax/artifacts/` | Screen captures stored with `wax capture`, with their labels |
+| `.wax/chat/` | Team channels, whiteboards, assignments, the PM, presence and the daily report list (section 6) |
+| `.wax/chat/requests/` | Automatic-run requests and their conversations (section 6-3) |
+| `.wax/chat/triggers/`, `proposals/`, `trigger-state.json`, `trigger-events.jsonl` | Trigger definitions, proposals, check state and every trigger event (section 6-5) |
+| `.wax/chat/pm-loop/` | PM loop goals and decision records, PR draft and CEO report draft files (section 6-6) |
+| `.wax/chat/rules.jsonl`, `memos.jsonl` | Project rules and work-note memos |
+| `.wax/wiki/`, `docs/wax/wiki/` | Wiki ingest state and wiki pages (section 6-7) |
+| `.wax/search/index.db` | The search index (a rebuildable copy, section 6-1) |
+| `.wax/usage/` | Claude Code usage numbers (section 6, "Claude usage monitor") |
+| `docs/wax/daily/<date>/NN.md` | Daily reports |
+
 In a new AI session, load the plugin, check the current state with `/wax:status email-login` (Codex `$wax:status email-login`) and continue from the remaining stage. Saved records stay even after you close each program.
+
+### Backup and restore
+
+Back up with `wax backup > wax-backup.json`, preview the restore with `wax import --file wax-backup.json`, then restore by passing the preview's fingerprint as `--apply <fingerprint>`.
+
+`wax backup` carries the task records (`.wax/features`) together with project rules, work-note memos, assignments, the PM, channels, whiteboards, the daily report list (`.wax/chat`) and the wiki state (`.wax/wiki`). Session presence, running requests, the search index and run approvals are not included. Wiki pages and report documents (`docs/wax`) are repository files, so keep them with git. `wax import` skips a task or record file that already exists in the target project instead of overwriting or merging it, and the preview lists each file's status under `files`. With `--prefix`, only tasks are restored, because record files point to the original task IDs. Record files are kept up to 128 MB in total; beyond that only their size is kept. Backups from earlier versions (task records only) still restore.
+
+Damaged backup originals are kept up to 1 MB per file, 1,000 files and 64 MB of original text in the JSON. Files over the limit keep their size and the reason they were left out, and healthy work keeps being backed up.
+
+### Environment variables
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `WAX_LANG` | system language | CLI language, `en` or `ko` (section 6, "Using the CLI directly") |
+| `WAX_CHAT_USER` | 대표 (the CEO) | The person's name used on the dashboard |
+| `WAX_DASHBOARD_PORT` | 4330 | Dashboard port (same as `--port`) |
+| `WAX_PROJECT` | current directory | The project when `--project` is not given |
+| `WAX_TASK_DONE_CHECK` | `warn` | Task done before its stage completes: `warn`, `enforce` or `off` (section 6, "Task completion check") |
+| `WAX_REVIEW_SEPARATION` | `warn` | Review completed by the implementing session: `warn`, `enforce` or `off` (section 4, "Reviewer separation") |
+| `WAX_MCP` | off | `on` starts the `wax mcp` server (section 6-2) |
+| `WAX_APPROVALS` | off | Sends permission requests from a Claude Code session started with `on` to the dashboard ([Managing execution approvals](./APPROVALS.md), in Korean) |
+| `WAX_TOOL_NEWS` | on | `off` stops Rina's tool news from checking external releases |
+| `WAX_GH_BIN` | `gh` | The `gh` executable GitHub triggers call (section 6-5) |
+
+`WAX_TASK_DONE_CHECK` and `WAX_REVIEW_SEPARATION` follow the value each session and dashboard was started with, so start them all with the same value to apply it to the whole team.
 
 ## 8. Troubleshooting
 
@@ -523,43 +673,36 @@ In a new AI session, load the plugin, check the current state with `/wax:status 
 | Skills don't appear in Grok Build | Check the `.grok/skills` link with `install-project.mjs --project <path> --check` (rerun the link command for projects linked before 0.13.5), then start a new `grok` session. |
 | Skills don't appear in Codex | Check the link and the original folder with `install-project.mjs --project <path> --check`, then start a new session. |
 | A stage won't move on | Check the current stage document, completion evidence and whether review passed. Implement and review need a linked passing test or commit proof (`--proofs`). |
-| AI buttons are disabled | Set the provider, model ID and key, then restart the server. |
-| An AI request shows 401, 403 or 404 | Check the API key, the model name and access to the model. |
-| An AI request shows 429 | Check the provider's usage limits and billing, then try again later. |
-| A save conflict appears | Download the draft from the recovery panel or compare it with the latest record, then bring it in again. The server never overwrites the original by itself. |
-| It still says saving after a crash | Make sure all wax work in that project has finished, then remove the `.wax/features/<id>.lock` directory. |
+| Grok Build is missing from the dashboard's execution tools | Grok Build does not support automatic runs or PM loop workers. Ask for skills by name in a terminal session (section 5-4). |
+| Browser notifications don't arrive | Check that you pressed **Turn on notifications**, that you allowed notifications in the site settings if the button says **Notifications blocked**, and that a dashboard tab is open. Nothing is notified while you are looking at the tab. |
+| A trigger shows **Connection needed** | Check `gh auth status` on this computer; after `gh auth login` it is checked again the next minute. If `gh` is not on the PATH, give its path with `WAX_GH_BIN` and restart the dashboard. |
+| Existing GitHub issues are not proposed | The first check only records what is already there as a baseline. Remove the label and add it again (section 6-5). |
+| A trigger turned itself off | It turns off after 5 failures in a row. Fix the reason shown in the list, then turn it on again. |
+| A PM loop goal stopped | Check the reason on the goal (a limit, blocks in a row, a failed auto action), fix the cause, then check the limits under **Resume goal**. |
+| `wax mcp` doesn't start | Check that the registered settings' env has `WAX_MCP=on`, and read the error output of `WAX_MCP=on node /path/to/wax/bin/wax.mjs mcp --project <path>` in a terminal (section 6-2). |
+| The CLI speaks English (or Korean) | Set `WAX_LANG=ko` or `WAX_LANG=en`. Without it the CLI follows `LC_ALL`, `LC_MESSAGES` and `LANG`. |
+| It still says saving after a crash | wax reclaims a save lock whose owner process has ended at the next save. If one remains, find the lock path with `doctor`, make sure all wax work in that project has finished, then remove the `.wax/features/<id>.lock` directory. |
+| (Web service) AI buttons are disabled | Set the provider, model ID and key, then restart the server. |
+| (Web service) An AI request shows 401, 403 or 404 | Check the API key, the model name and access to the model. |
+| (Web service) An AI request shows 429 | Check the provider's usage limits and billing, then try again later. |
+| (Web service) A save conflict appears | Download the draft from the recovery panel or compare it with the latest record, then bring it in again. The server never overwrites the original by itself. |
 
+Rows marked "(Web service)" apply when you also use the wax web service (wax-service).
 
 Check records in one go with `node "/path/to/wax/bin/wax.mjs" doctor --project "/path/to/project"`. It prints the number of healthy records and the problem files and lock paths as JSON. It never changes files or removes locks, and it exits with code 1 if there is a problem.
 
 ## 9. Updating and what has been verified
 
-Close the host sessions, back up the existing plugin, and put the new ZIP at the same plugin path. Keep `.wax` and `docs/wax` in your projects. If you changed the plugin yourself, compare and merge your changes before updating.
+Close the host sessions, back up the existing plugin, and put the new ZIP at the same plugin path. If you installed through a marketplace, use each tool's update command (INSTALL.md). Keep `.wax` and `docs/wax` in your projects. If you changed the plugin yourself, compare and merge your changes before updating.
 
-Automated checks cover state storage, stage transitions, concurrent-edit conflicts, the CLI, Codex installation and the skill runner, read-only diagnostics, and running after extracting the ZIP. The Claude plugin format and the Gemini command syntax are checked too. Marketplace installation and real command runs were confirmed in Claude Code 2.1, Codex 0.162 and GitHub Copilot CLI 1.0.97. Junction installs, linked runs, Korean paths, stage transitions, test evidence and backups were verified on Windows with Node.js 22.17.0; reproduce them with `npm run test:windows` on Windows. The full process from code changes to final review with a real AI account, a real Gemini session and paid API calls have not been verified yet.
+If you registered the public repository as a marketplace with 0.13.x or earlier, updating may fail because the repository history started over in 0.14.0. Remove the registration and register again (section 1, "0.14.0 public repository note"). For Codex use the switch commands in section 5-1 as they are; for other tools, remove the marketplace with that tool's command, then register and install as on the first install.
 
+Automated checks cover state storage, stage transitions, concurrent-edit conflicts, the CLI, Codex installation and the skill runner, read-only diagnostics, and running after extracting the ZIP. The Claude plugin format and the Gemini command syntax are checked too. Marketplace installation and real command runs were confirmed in Claude Code 2.1, Codex 0.162 and GitHub Copilot CLI 1.0.97. Junction installs, linked runs, Korean paths, stage transitions, test evidence and backups were verified on Windows with Node.js 22.17.0; reproduce them with `npm run test:windows` on Windows. Only versions that pass the checks on Ubuntu, macOS and Windows with Node 22 and 24 are published.
 
+Not verified yet:
 
-### Checking records on the dashboard
-
-The floors and characters of the office are shown as before. Selecting a stat card at the top jumps to the related tasks, assignments or timeline. **Check first** lists blocked assignments, failed test evidence on the selected date, and old open questions, in that order. If a later pass exists for the same task and stage, the earlier failure leaves this list but stays in the timeline. Don't conclude that a whole task failed from a failure record alone.
-
-**View original** shows the full text of questions and decisions shortened in summaries, and **View evidence** shows the saved command, exit code and output in the existing document window. The buttons never rerun the command. Recent decisions and test evidence follow the selected date; assignments and open questions follow all current records.
-
-**Run trace.** Select **Run trace** next to a task in **Task progress**, or open `/manage?feature=<task ID>`, to see how the task went through its phases as a vertical timeline of phase visits. Each visit expands to its start, end and time taken (computed like the time per stage), outcome (phase completed, sent back to implement with the reason, in progress, and questions or blocks when a request is linked), the completing session and tool, the commits at the time, completion evidence and reasons, linked test and commit proofs with files changed since they were recorded, review acceptance-criteria results, and files changed between the commit at the end of the previous visit and the end of this one (committed changes). Iterations show as revisits of the same phase. **Download Markdown** saves the same content with the PR-description rules (`@name` and HTML neutralized); on the command line use `wax trace <id>` (Markdown) or `wax trace <id> --json`. It is read-only and calls no AI. Completing or sending back a phase now also records the commit (`head`), whether there were uncommitted changes (`dirty`, `.wax/` excluded) and, when known, the tool (`tool`, dashboard auto-run) in the history; projects without Git and older records leave those cells empty. Tokens and cost are not shown because no record ties a Claude Code usage session to a phase visit.
-
-Even if you switch dates quickly, only the response for the last selected date is applied. If a refresh fails, the last successful records and a retry button stay. Reconnecting rereads session information, and background refreshes never clear an assignment or new task you are typing.
-
-
-### Session names and rejoining
-
-Keep the `session` returned by `wax chat join --author <name> --session <ID> --json`, and pass `--session <ID>` with every status change, post, report and assignment change for that name. On a 409 error, join again with the same session ID and use the name it returns. PM and assignment roles stay with the name, and a name inactive for 24 hours is taken over by the next session. Records without tokens from earlier versions are handed over on join. CLI records written without join are identified separately, and once a session takes over a name, it cannot be written without the token.
-
-`wax backup` carries the task records (`.wax/features`) together with project rules, work-note memos, assignments, the PM, channels, whiteboards, the daily report list (`.wax/chat`) and the wiki state (`.wax/wiki`). Session presence, running requests, the search index and run approvals are not included. Wiki pages and report documents (`docs/wax`) are repository files, so keep them with git. `wax import` skips a task or record file that already exists in the target project instead of overwriting or merging it, and the preview lists each file's status under `files`. With `--prefix`, only tasks are restored, because record files point to the original task IDs. Record files are kept up to 128 MB in total; beyond that only their size is kept. Backups from earlier versions (task records only) still restore.
-
-Damaged backup originals are kept up to 1 MB per file, 1,000 files and 64 MB of original text in the JSON. Files over the limit keep their size and the reason they were left out, and healthy work keeps being backed up.
-
-Automatic runs connect using thread/start, thread/resume, turn/start, outputSchema and item/completed from the [official OpenAI Codex App Server documentation](https://learn.chatgpt.com/docs/app-server).
-## Project types and the B1 design studio
-
-Choose a project type on the Requests & reports screen to see the current mission, room, required deliverables and checks. Roblox games and AI lookbooks require checks that fit real play or real generation, storage and product links. **Web service** is chosen automatically from the request or the repository's `package.json` (React, Next.js, Vite, Vue, Svelte, `@playwright/test` and similar), including workspace packages (`workspaces`, `pnpm-workspace.yaml`). React Native, Expo, Electron and Tauri apps are not chosen as web services. It requires screen captures in design, a Playwright test of the core flow (`e2e-smoke`) in implementation, and acceptance tests (`e2e-acceptance`) plus a review of loading, error, empty and mobile screens (`ui-review`) in review. The AI opens screens with `playwright-cli` to explore, reproduce and capture; only `node node_modules/@playwright/test/cli.js test` runs recorded with `wax test` count as evidence. wax runs commands without a shell, so this path works on Windows where `npx` does not. On Windows `playwright-cli` cannot run after `wax capture`'s `--`; capture first and pass only `--file`. `wax capture <task-id> --check <check-id> --file <file> [-- <capture command>]` keeps captures in `.wax/artifacts/`. `wax doctor` shows whether the tools are installed under `browser`. Open the moodboard or Design deliverables in the B1 design studio to see registered previews. When review fails, **Fix and verify again** continues from the implementation stage. Connect a Figma frame or a Blender collection in Design deliverables, and the MCP of the execution tool you choose (Codex or Claude Code) makes the real design; the CEO's revision notes become the next version of the same target, and the approved version is handed off to development. The connection is checked for real in that execution tool. See the [design studio guide](DESIGN_STUDIO.md) (in Korean) for details.
+- The full process from code changes to final review with a real AI account, real Gemini CLI, Antigravity CLI and Grok Build sessions, and paid API calls.
+- A PM loop round trip with real tools (headless workers, PM judgment, auto mode). The tests use fake workers and fake judgments (section 6-6).
+- Registering the MCP server in each tool for real. The tests check only the server and the printed snippets (section 6-2).
+- Trigger polling against a real GitHub repository. The tests use a fake `gh` (section 6-5).
+- Automatic runs with each provider's real account. Approve, deny, stop, continue and report handling were verified with simulated runs of the official CLI protocols (section 6-3).
