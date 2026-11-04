@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "id": "bugfix",
+  "title": "버그 수정",
+  "description": "재현 테스트를 먼저 만들고 고친다.",
+  "input": { "label": "무엇이 고장 났나요?", "example": "로그인 후 새로고침하면 로그아웃됨",
+    "details": { "label": "재현 방법과 기대 동작(선택)", "example": "1. 로그인한다 2. 새로고침한다 → 로그아웃됨. 기대: 로그인이 유지된다" } },
+  "goal": "{input} 고치기",
+  "tasks": [
+    {
+      "id": "fix-{slug}",
+      "title": "{input} 고치기",
+      "description": "{details}",
+      "ac": [
+        "고치기 전에는 실패하고 고친 뒤 통과하는 재현 테스트가 있다",
+        "관련 기존 테스트가 모두 통과한다"
+      ]
+    }
+  ],
+  "budgets": { "phaseRuns": 8, "hours": 2 },
+  "mode": "suggest",
+  "allow": ["wax", "test", "write"],
+  "notes": {
+    "implement": "고치기 전에 재현 테스트부터 만들어 실패하는 것을 확인한다.",
+    "review": "고치기 전 코드에서 재현 테스트가 실패하는지 확인한다(예: `git stash`로 고친 부분을 잠시 치우고 테스트)."
+  }
+}

@@ -1,0 +1,12 @@
+node_modules/
+.wax/
+*.tgz
+.env
+.env.*
+!.env.example
+dist/
+__pycache__/
+
+# Claude Code plugin tooling (claude plugin validate) regenerates these type stubs locally
+/tsconfig.json
+/.claude-plugin/types/

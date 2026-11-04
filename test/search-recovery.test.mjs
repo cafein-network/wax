@@ -1,0 +1,37 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { appendFile, mkdir, readFile, readdir, rename, rm, symlink, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { join } from 'node:path';
+import { spawn } from 'node:child_process';
+import { project, BIN, createTestSymlink } from './chat-helpers.mjs';
+import { createFeature, updateFeature } from '../src/workflow.mjs';
+import { postMessage } from '../src/chat/channels.mjs';
+import { postNote } from '../src/chat/board.mjs';
+import { assignTask, setPm, updateTask } from '../src/chat/team.mjs';
+import { loadSqlite } from '../src/sqlite.mjs';
+import { buildIndex, indexStatus, search, openIndex, syncIndex, plan, terms, bigrams, marksIn } from '../src/search.mjs';
+import { sqlite, korean, skip, STORE, channelFile, line, refs, count, run, RECOVERY_RECORDS, bigChannel, ownerPid } from './search-helpers.mjs';
+
+test('R2: a killed build is reported as interrupted, not building, and search finishes it', { skip }, async (t) => {
+  const root = await project(t);
+  await bigChannel(root);
+  await buildIndex(root);
+  const child = spawn(process.execPath, [BIN, '--project', root, 'search', 'index', '--rebuild']);
+  const closed = new Promise((done) => child.on('close', done));
+  const pid = await ownerPid(root);
+  let status;
+  for (let i = 0; i < 400 && (status = await indexStatus(root)).state !== 'building'; i++) await new Promise((done) => setTimeout(done, 5));
+  assert.equal(status.state, 'building', 'a live build is not interrupted'); assert.equal(status.building.live, true);
+  const partial = await search(root, { query: '개발' });
+  assert.equal(partial.index.complete, false); assert.equal(partial.index.synced, false, 'a live build is left alone');
+  process.kill(pid, 'SIGKILL'); await closed;
+  status = await indexStatus(root);
+  assert.equal(status.state, 'interrupted'); assert.equal(status.building.live, false); assert.match(status.next, /이어서/);
+  await postMessage(root, 'general', { author: 'codex-app', kind: 'codex', body: 'replacementkeyword 중단 뒤 새 기록' });
+  const found = await search(root, { query: 'replacementkeyword' });
+  assert.equal(found.total, 1); assert.equal(found.index.complete, true); assert.equal(found.index.synced, true);
+  assert.equal((await search(root, { query: '개발' })).total, '1000+');
+  status = await indexStatus(root);
+  assert.equal(status.state, 'ready'); assert.equal(status.documents, RECOVERY_RECORDS + 1); assert.equal(status.building, null);
+});

@@ -1,0 +1,34 @@
+{
+  "source": "Real Codex app-server turn errors (turn.error.message) seen on 2026-10-31 in the recipe and goal-1 runs (docs/design/RECIPES.md).",
+  "cases": [
+    {
+      "rule": "model-not-found",
+      "stream": "error",
+      "text": "{\"type\":\"error\",\"status\":400,\"error\":{\"type\":\"invalid_request_error\",\"message\":\"The 'gpt-6.1-sol' model is not supported when using Codex with a ChatGPT account.\",\"code\":\"model_not_found\"}}",
+      "shape": "config"
+    },
+    {
+      "rule": "usage-limit",
+      "stream": "error",
+      "text": "You’ve hit your usage limit. Upgrade to Plus to continue using Codex (https://chatgpt.com/explore/plus), or try again at Nov 22nd, 2026 2:36 PM.",
+      "shape": "quota",
+      "until": [
+        2026,
+        11,
+        22,
+        14,
+        36
+      ]
+    },
+    {
+      "rule": null,
+      "stream": "error",
+      "text": "Codex 작업 interrupted"
+    },
+    {
+      "rule": null,
+      "stream": "error",
+      "text": "not ok 3 - sumTo includes n\n  expected: 6\n  actual: 3"
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "source": "Real Antigravity CLI headless output seen on 2026-11-01 when a review worker needed to run a command (result frame and stderr).",
+  "cases": [
+    {
+      "rule": "headless-command-denied",
+      "stream": "result",
+      "text": "{\"event\":\"result\",\"result\":{\"conversation_id\":\"00000000-0000-0000-0000-000000000000\",\"status\":\"SUCCESS\",\"response\":\"\",\"duration_seconds\":11.53793,\"num_turns\":1,\"json_schema\":{\"type\":\"object\",\"additionalProperties\":false,\"properties\":{\"outcome\":{\"type\":\"string\",\"enum\":[\"done\",\"blocked\"]},\"report\":{\"type\":\"string\"}},\"required\":[\"outcome\",\"report\"]},\"usage\":{\"input_tokens\":11131,\"output_tokens\":495,\"thinking_tokens\":33,\"cache_read_tokens\":0,\"total_tokens\":11626},\"denied_actions\":[{\"action\":\"command\",\"display_name\":\"RunCommand\"}]}}",
+      "shape": "permission",
+      "phases": [
+        "implement",
+        "review"
+      ]
+    },
+    {
+      "rule": "headless-command-denied-stderr",
+      "stream": "stderr",
+      "text": "jetski: no output produced — a tool required the \"command\" permission that headless mode cannot prompt for, so it was auto-denied. Add an allow-rule under permissions.allow in settings.json (e.g. command(<target>)). Alternatively, re-run with --dangerously-skip-permissions to auto-approve all tools.\n",
+      "shape": "permission",
+      "phases": [
+        "implement",
+        "review"
+      ]
+    },
+    {
+      "rule": null,
+      "stream": "result",
+      "text": "{\"event\":\"result\",\"result\":{\"conversation_id\":\"00000000-0000-0000-0000-000000000000\",\"status\":\"SUCCESS\",\"response\":\"\",\"duration_seconds\":11.53793,\"num_turns\":1,\"json_schema\":{\"type\":\"object\",\"additionalProperties\":false,\"properties\":{\"outcome\":{\"type\":\"string\",\"enum\":[\"done\",\"blocked\"]},\"report\":{\"type\":\"string\"}},\"required\":[\"outcome\",\"report\"]},\"usage\":{\"input_tokens\":11131,\"output_tokens\":495,\"thinking_tokens\":33,\"cache_read_tokens\":0,\"total_tokens\":11626},\"denied_actions\":[]}}"
+    }
+  ]
+}

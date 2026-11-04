@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "tool": "antigravity",
+  "version": "2026.11.01",
+  "rules": [
+    {
+      "id": "headless-command-denied",
+      "shape": "permission",
+      "match": { "stream": "result", "regex": "\"denied_actions\":\\[[^\\]]*\"action\":\"command\"" },
+      "phases": ["implement", "review"]
+    },
+    {
+      "id": "headless-command-denied-stderr",
+      "shape": "permission",
+      "match": { "stream": "stderr", "contains": ["the \"command\" permission that headless mode cannot prompt for"] },
+      "phases": ["implement", "review"]
+    }
+  ]
+}

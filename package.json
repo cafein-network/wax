@@ -1,0 +1,64 @@
+{
+  "name": "@cafein-network/wax",
+  "version": "0.16.0",
+  "description": "A portable, evidence-based AI coding workflow and team dashboard for Claude Code, Codex, GitHub Copilot CLI, Gemini CLI, Antigravity CLI and Grok Build",
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "wax": "./bin/wax.mjs"
+  },
+  "exports": {
+    ".": "./src/workflow.mjs",
+    "./backup": "./src/backup.mjs",
+    "./evidence": "./src/evidence.mjs",
+    "./lock": "./src/file-lock.mjs",
+    "./rules": "./src/chat/rules.mjs",
+    "./acceptance": "./src/acceptance.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "web",
+    "recipes",
+    "tool-failures",
+    "claude-mods",
+    "hooks",
+    "commands",
+    "skills",
+    "scripts/install-project.mjs",
+    "scripts/verify-windows.mjs",
+    "docs/APPROVALS.md",
+    "docs/APPROVALS.ko.md",
+    "docs/DESIGN_STUDIO.md",
+    "docs/DESIGN_STUDIO.ko.md",
+    "docs/SEARCH.md",
+    "docs/SEARCH.ko.md",
+    "docs/USER_GUIDE.md",
+    "docs/USER_GUIDE.en.md",
+    ".agents/plugins/marketplace.json",
+    ".codex-plugin",
+    ".claude-plugin",
+    "gemini-extension.json",
+    "GEMINI.md",
+    "README.md",
+    "README.ko.md",
+    "INSTALL.md",
+    "INSTALL.ko.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test --test-timeout=60000 --import ./test/korean-output.mjs",
+    "test:browser": "node scripts/verify-design-browser.mjs && node scripts/verify-i18n-browser.mjs && node scripts/verify-requests-browser.mjs && node scripts/verify-trace-browser.mjs && node scripts/verify-snapshots-browser.mjs && node scripts/verify-compare-browser.mjs && node scripts/verify-search-browser.mjs && node scripts/verify-threads-browser.mjs && node scripts/verify-approvals-browser.mjs && node scripts/verify-approval-diff-browser.mjs && node scripts/verify-notify-browser.mjs && node scripts/verify-triggers-browser.mjs && node scripts/verify-pm-loop-browser.mjs && node scripts/verify-recipes-browser.mjs && node scripts/verify-manual-browser.mjs && node scripts/verify-auto-retry-browser.mjs && node scripts/verify-tool-health-browser.mjs && node scripts/verify-goal-allow-browser.mjs && node scripts/verify-worktrees-browser.mjs",
+    "dashboard": "node bin/wax.mjs dashboard",
+    "bump": "node scripts/bump-version.mjs",
+    "build": "node scripts/build-commands.mjs && node scripts/build-faces.mjs",
+    "check": "node scripts/build-commands.mjs --check && node scripts/build-faces.mjs --check",
+    "size:skills": "node scripts/skill-size.mjs",
+    "package": "python3 scripts/package-release.py",
+    "test:package": "python3 test/package_test.py",
+    "test:windows": "node scripts/verify-windows.mjs"
+  }
+}

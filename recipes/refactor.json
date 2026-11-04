@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "id": "refactor",
+  "title": "동작 유지 정리",
+  "description": "바꾸기 전후 같은 테스트가 통과하고 공개 API와 출력은 그대로 둔다.",
+  "input": { "label": "무엇을 정리하나요?", "example": "설정 읽기 코드를 한 모듈로 모으기",
+    "details": { "label": "범위와 지켜야 할 것(선택)", "example": "src/config*.mjs만, 환경 변수 이름은 그대로" } },
+  "goal": "{input} 정리",
+  "tasks": [
+    {
+      "id": "refactor-{slug}",
+      "title": "{input} 정리",
+      "description": "{details}",
+      "ac": [
+        "바꾸기 전과 후에 같은 테스트가 모두 통과한다",
+        "공개 API와 출력이 바뀌지 않는다"
+      ]
+    }
+  ],
+  "budgets": { "phaseRuns": 8, "hours": 4 },
+  "mode": "suggest",
+  "allow": ["wax", "test", "write"],
+  "notes": {
+    "implement": "동작을 바꾸지 않는다. 바꾸기 전에 관련 테스트를 실행해 통과하는지 먼저 확인한다."
+  }
+}

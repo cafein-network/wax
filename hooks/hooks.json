@@ -1,0 +1,32 @@
+{
+  "description": "wax 실행 승인 연결(WAX_APPROVALS=on일 때)과 세션 상태 자동 표시(WAX_HOST_STATE=off로 끔)",
+  "hooks": {
+    "SessionStart": [{
+      "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/wax-host-hook.mjs\"", "timeout": 5 }]
+    }],
+    "UserPromptSubmit": [{
+      "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/wax-host-hook.mjs\"", "timeout": 5 }]
+    }],
+    "PostToolUse": [{
+      "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/wax-host-hook.mjs\"", "timeout": 5 }]
+    }],
+    "PermissionRequest": [{
+      "hooks": [
+        { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/wax-approval-hook.mjs\"", "timeout": 35 },
+        { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/wax-host-hook.mjs\"", "timeout": 5 }
+      ]
+    }],
+    "Notification": [{
+      "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/wax-host-hook.mjs\"", "timeout": 5 }]
+    }],
+    "Stop": [{
+      "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/wax-host-hook.mjs\"", "timeout": 5 }]
+    }],
+    "SessionEnd": [{
+      "hooks": [
+        { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/wax-approval-hook.mjs\"", "timeout": 5 },
+        { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/wax-host-hook.mjs\"", "timeout": 5 }
+      ]
+    }]
+  }
+}

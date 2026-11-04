@@ -1,0 +1,222 @@
+import assert from 'node:assert/strict';
+import { once } from 'node:events';
+import { execFileSync } from 'node:child_process';
+import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { createChatServer } from '../src/chat/server.mjs';
+import { createFeature } from '../src/workflow.mjs';
+import { setPm } from '../src/chat/team.mjs';
+import { readWorktrees } from '../src/worktrees.mjs';
+
+const modulePath = process.env.WAX_PLAYWRIGHT_MODULE || process.argv[2];
+if (!modulePath) throw new Error('설치된 Playwright index.mjs 경로를 첫 인수로 지정하세요.');
+const { chromium } = await import(pathToFileURL(resolve(modulePath)).href);
+const root = await mkdtemp(join(tmpdir(), 'wax-worktrees-browser-'));
+const screenshots = process.env.WAX_SCREENSHOT_DIR;
+const exists = (path) => lstat(path).then(() => true, () => false);
+let server, browser;
+try {
+  const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  git('init', '-q');
+  git('config', 'core.autocrlf', 'false');
+  await writeFile(join(root, '.gitignore'), '.wax/\n.setup-done\n');
+  await writeFile(join(root, 'shared.txt'), 'line\n');
+  await mkdir(join(root, 'docs', 'wax'), { recursive: true });
+  await mkdir(join(root, 'scripts'));
+  await writeFile(join(root, 'scripts', 'setup.mjs'), 'import { mkdirSync, writeFileSync } from "node:fs";\nwriteFileSync(".setup-done", String(process.env.PORT));\nmkdirSync("vendor", { recursive: true });\nwriteFileSync("vendor/lib.js", "export default 1;\\n");\n');
+  await writeFile(join(root, 'docs', 'wax', 'worktree.json'), `${JSON.stringify({ setup: [process.execPath, 'scripts/setup.mjs'], portEnv: 'PORT' }, null, 2)}\n`);
+  git('add', '-A'); git('-c', 'user.name=Wax Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'fixture');
+  for (const id of ['header-copy', 'footer-copy']) await createFeature(root, { id, title: `Edit shared.txt (${id})` });
+  await setPm(root, { author: '대표', kind: 'human' });
+
+  const started = [];
+  let release;
+  const both = new Promise((done) => { release = done; });
+  const executeWorker = async (dir, input) => {
+    const feature = input.prompt.match(/(?:작업|Task): ([a-z0-9-]+)/)[1];
+    started.push({ feature, cwd: input.cwd, env: input.env });
+    if (started.length === 2) release();
+    await Promise.race([both, new Promise((done) => setTimeout(done, 5000))]);
+    await writeFile(join(input.cwd, 'shared.txt'), `line\nedited by ${feature}\n`);
+    return { message: JSON.stringify({ outcome: 'blocked', report: `edited shared.txt in ${feature}` }) };
+  };
+  const requestTools = async () => [{ id: 'claude', label: 'Claude Code', installed: true, approval: 'dashboard' }];
+  server = createChatServer({ root, env: { WAX_TOOL_NEWS: 'off', WAX_CHAT_USER: '대표' }, intervalMs: 50, executeWorker, executeJudge: async () => { throw new Error('no judgment'); }, requestTools });
+  await server.startWatching(); server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  const url = `http://127.0.0.1:${server.address().port}`;
+  browser = await chromium.launch({ headless: true, executablePath: process.env.WAX_CHROMIUM_EXECUTABLE || process.argv[3] });
+  const context = await browser.newContext({ locale: 'en-US', viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
+  await context.addInitScript(() => localStorage.setItem('wax.language', 'en'));
+  const page = await context.newPage();
+  const errors = []; page.on('pageerror', (error) => errors.push(error.message));
+  const fits = async (label) => assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), true, `${label}: no horizontal scroll at 390px`);
+  const noKorean = async (locator, label) => assert.doesNotMatch((await locator.innerText()).replaceAll('대표', ''), /[가-힣]/, `${label}: English screen`);
+
+  await page.goto(`${url}/manage?lang=en`);
+  const panel = page.locator('#pm-loop-panel');
+  await panel.locator('button.pm-new').click();
+  const form = panel.locator('form.pm-form');
+  const field = form.locator('.pm-worktrees-field');
+  await field.waitFor();
+  assert.match(await field.innerText(), /Isolated branch per worker \(creates a git branch and worktree\)/);
+  assert.equal(await field.locator('input[name="worktrees"]').isChecked(), false, 'unchecked by default');
+  await noKorean(field, 'start screen checkbox');
+  await fits('new goal form');
+  await form.locator('input[name="title"]').fill('Two edits to shared.txt');
+  for (const id of ['header-copy', 'footer-copy']) await form.locator(`input[name="feature"][value="${id}"]`).check();
+  await field.locator('input[name="worktrees"]').check();
+  await form.locator('button[type="submit"]').click();
+  const goal = panel.locator('.pm-goal').first();
+  await goal.waitFor();
+  const goalId = await goal.getAttribute('data-goal');
+
+  const section = goal.locator('.pm-worktrees');
+  await section.waitFor();
+  assert.equal(await section.getAttribute('data-worktrees'), 'on');
+  assert.equal(await section.locator('.pm-worktrees-toggle input').isDisabled(), false);
+  assert.deepEqual(await section.locator('.pm-worktree-env label').evaluateAll((nodes) => nodes.map((node) => node.dataset.name)), ['.env', '.env.local']);
+  assert.equal(await section.locator('.pm-worktree-setup').getAttribute('data-state'), 'pending');
+  assert.match(await section.innerText(), /Setup script[\s\S]*Needs approval/);
+  await noKorean(section, 'goal screen worktree section');
+  await fits('goal screen worktree section');
+
+  await section.locator('.pm-worktree-review-open').click();
+  const review = section.locator('.pm-worktree-review');
+  await review.waitFor();
+  const reviewText = await review.innerText();
+  assert.match(reviewText, /Setup script approval[\s\S]*docs\/wax\/worktree\.json/);
+  assert.match(reviewText, /"portEnv": "PORT"/);
+  assert.match(reviewText, /1 repository files named in the arguments \(included in the hash\)/);
+  assert.match(reviewText, /sha256 [a-f0-9]{64}/);
+  assert.match(reviewText, /5-minute cap/);
+  assert.match(reviewText, /The hash covers only worktree\.json, the files named in the arguments and, for npm, pnpm, yarn, bun or npx commands, package\.json and the lock files/);
+  await review.locator('.pm-worktree-ref[data-path="scripts/setup.mjs"] summary').click();
+  assert.match(await review.locator('.pm-worktree-ref[data-path="scripts/setup.mjs"] pre').textContent(), /writeFileSync\("\.setup-done"/);
+  await noKorean(review, 'setup approval screen');
+  await fits('setup approval screen');
+  if (screenshots) await review.screenshot({ path: join(screenshots, 'worktree-setup-approval-390-en.png') });
+  await review.locator('.pm-worktree-approve').click();
+  await section.locator('.pm-worktree-setup[data-state="approved"]').waitFor();
+  await section.locator('.pm-worktree-review', { hasText: /Last approved by (CEO|대표) at/ }).waitFor();
+  await section.locator('.pm-worktree-review-close').click();
+
+  await goal.locator('.pm-card[data-kind="confirm-plan"] button.primary').click();
+  const startCards = goal.locator('.pm-card[data-kind="start-worker"]');
+  await page.waitForFunction(() => document.querySelectorAll('#pm-loop-panel .pm-card[data-kind="start-worker"]').length === 2);
+  for (let i = 0; i < 2; i++) {
+    await page.waitForFunction(() => document.querySelector('#pm-loop-panel .pm-card[data-kind="start-worker"] button.primary:not([disabled])'));
+    await startCards.first().locator('button.primary').click();
+    await page.waitForFunction((left) => document.querySelectorAll('#pm-loop-panel .pm-card[data-kind="start-worker"]').length === left, 1 - i);
+  }
+  for (let i = 0; i < 200 && (started.length < 2 || (await readWorktrees(root)).filter((entry) => entry.setup?.outcome === 'ok').length < 2 || !(await page.locator('#pm-loop-panel .pm-worker').count() === 0)); i++) await new Promise((done) => setTimeout(done, 50));
+  assert.equal(started.length, 2);
+  const entries = await readWorktrees(root);
+  assert.deepEqual(entries.map((entry) => [entry.feature, entry.state, entry.setup?.outcome]).sort(), [['footer-copy', 'active', 'ok'], ['header-copy', 'active', 'ok']]);
+  assert.notEqual(entries[0].port, entries[1].port);
+  for (const entry of entries) {
+    assert.equal(started.find((item) => item.feature === entry.feature).cwd, entry.path, 'the worker ran in its own worktree');
+    assert.equal(await readFile(join(entry.path, '.setup-done'), 'utf8'), String(entry.port), 'the approved setup ran once in the worktree with PORT');
+    assert.equal(await readFile(join(entry.path, 'shared.txt'), 'utf8'), `line\nedited by ${entry.feature}\n`);
+  }
+  assert.equal(await readFile(join(root, 'shared.txt'), 'utf8'), 'line\n', 'the project working tree is untouched');
+  assert.equal(await exists(join(root, '.setup-done')), false);
+
+  await page.reload();
+  const listed = page.locator(`#pm-loop-panel .pm-goal[data-goal="${goalId}"] .pm-worktree-list li`);
+  await page.waitForFunction((id) => document.querySelectorAll(`#pm-loop-panel .pm-goal[data-goal="${id}"] .pm-worktree-list li`).length === 2, goalId);
+  const listText = await listed.allInnerTexts();
+  assert.ok(listText.every((text) => /wax\/goal-[a-f0-9]{8}\/(header|footer)-copy-[12][\s\S]*port 410\d\d[\s\S]*setup done[\s\S]*active/.test(text)), listText.join('\n'));
+  assert.equal(await page.locator(`#pm-loop-panel .pm-goal[data-goal="${goalId}"] .pm-worktrees-toggle input`).isDisabled(), true, 'locked once workers started');
+  await noKorean(page.locator(`#pm-loop-panel .pm-goal[data-goal="${goalId}"] .pm-worktrees`), 'worktree list');
+  await fits('worktree list');
+  if (screenshots) await page.locator(`#pm-loop-panel .pm-goal[data-goal="${goalId}"] .pm-worktrees`).screenshot({ path: join(screenshots, 'worktrees-goal-390-en.png') });
+
+  for (const [feature, otherFeature] of [['header-copy', 'footer-copy'], ['footer-copy', 'header-copy']]) {
+    await page.goto(`${url}/manage?feature=${feature}&lang=en`);
+    const run = page.locator('#trace-panel .trace-run[data-run^="pw-"]').first();
+    await run.waitFor();
+    assert.deepEqual(await run.locator('.trace-run-file').evaluateAll((nodes) => nodes.map((node) => node.dataset.path)), ['shared.txt']);
+    assert.doesNotMatch(await run.innerText(), /other workers? ran in the same folder/i);
+    await run.locator('.trace-run-file[data-path="shared.txt"] .trace-run-toggle').click();
+    const diff = run.locator('.trace-run-file[data-path="shared.txt"] .trace-run-diff');
+    await diff.waitFor();
+    const text = await diff.textContent();
+    assert.match(text, new RegExp(`\\+edited by ${feature}`));
+    assert.doesNotMatch(text, new RegExp(otherFeature));
+    await fits(`run diff ${feature}`);
+  }
+  const head = git('rev-parse', 'HEAD').trim();
+  const byFeature = Object.fromEntries(entries.map((entry) => [entry.feature, entry]));
+  await page.goto(`${url}/manage?lang=en`);
+  const box = page.locator(`#pm-loop-panel .pm-goal[data-goal="${goalId}"] .pm-worktrees`);
+  const item = (feature) => box.locator(`.pm-worktree-list li[data-worktree="${byFeature[feature].id}"]`);
+  await item('header-copy').locator('.pm-worktree-summary').waitFor();
+  assert.match(await item('header-copy').locator('.pm-worktree-summary').innerText(), /1 files changed · 0 commits · 1 uncommitted files/);
+  await item('header-copy').locator('.pm-worktree-import-open').click();
+  const preview = item('header-copy').locator('.pm-worktree-import');
+  await preview.waitFor();
+  assert.equal(await preview.getAttribute('data-ready'), 'yes');
+  assert.deepEqual(await preview.locator('.pm-worktree-files li').evaluateAll((nodes) => nodes.map((node) => [node.dataset.path, node.dataset.action])), [['shared.txt', 'modify']]);
+  assert.match(await preview.innerText(), /1 files to import, 0 skipped[\s\S]*uncommitted changes/);
+  assert.deepEqual(await preview.locator('.pm-worktree-excluded li').evaluateAll((nodes) => nodes.map((node) => [node.dataset.path, node.dataset.reason, node.innerText])), [['vendor', 'setupOutput', 'vendor 1 files']]);
+  assert.match(await preview.locator('.pm-worktree-excluded').innerText(), /1 files the setup script made and nobody changed since are left out/);
+  await noKorean(preview, 'import preview');
+  await fits('import preview');
+  if (screenshots) await preview.screenshot({ path: join(screenshots, 'worktree-import-preview-390-en.png') });
+  await preview.locator('.pm-worktree-import-confirm').click();
+  const done = item('header-copy').locator('.pm-worktree-import-result');
+  await done.waitFor();
+  assert.match(await done.innerText(), /Imported 1 files \(0 skipped, 0 failed\)[\s\S]*im-[a-f0-9]{8}/);
+  assert.equal(await readFile(join(root, 'shared.txt'), 'utf8'), 'line\nedited by header-copy\n', 'the project has the change');
+  assert.equal(await exists(join(root, 'vendor')), false, 'setup output was left out of the import');
+  assert.equal(git('rev-parse', 'HEAD').trim(), head, 'nothing was committed');
+  assert.match(git('status', '--porcelain'), /^ M shared\.txt$/m, 'left as an uncommitted change');
+  await page.waitForFunction((id) => document.querySelector(`#pm-loop-panel li[data-worktree="${id}"]`)?.dataset.state === 'imported', byFeature['header-copy'].id);
+
+  await item('footer-copy').locator('.pm-worktree-import-open').click();
+  const conflict = item('footer-copy').locator('.pm-worktree-import');
+  await conflict.waitFor();
+  assert.equal(await conflict.getAttribute('data-ready'), 'no');
+  assert.deepEqual(await conflict.locator('.pm-worktree-conflicts li').evaluateAll((nodes) => nodes.map((node) => node.dataset.path)), ['shared.txt']);
+  assert.match(await conflict.innerText(), /1 files conflict with the project, so nothing will be imported/);
+  assert.equal(await conflict.locator('.pm-worktree-files').count(), 0);
+  assert.equal(await conflict.locator('.pm-worktree-import-confirm').isDisabled(), true);
+  await noKorean(conflict, 'conflict preview');
+  await fits('conflict preview');
+  if (screenshots) await conflict.screenshot({ path: join(screenshots, 'worktree-import-conflict-390-en.png') });
+  await conflict.locator('.pm-worktree-cancel').click();
+  await item('footer-copy').locator('.pm-worktree-discard-open').click();
+  await item('footer-copy').locator('.pm-worktree-confirm').waitFor();
+  await noKorean(item('footer-copy').locator('.pm-worktree-confirm'), 'discard confirm');
+  await item('footer-copy').locator('.pm-worktree-discard').click();
+  await page.waitForFunction((id) => document.querySelector(`#pm-loop-panel li[data-worktree="${id}"]`)?.dataset.state === 'discarded', byFeature['footer-copy'].id);
+  assert.equal(await readFile(join(root, 'shared.txt'), 'utf8'), 'line\nedited by header-copy\n');
+
+  const branches = git('for-each-ref', '--format=%(refname)', 'refs/heads/wax/').trim().split('\n');
+  assert.equal(branches.length, 2);
+  await box.locator('.pm-worktree-cleanup-open').click();
+  await box.locator('.pm-worktree-cleanup').click();
+  const cleaned = box.locator('.pm-worktree-cleanup-result');
+  await cleaned.waitFor();
+  assert.match(await cleaned.innerText(), /Cleaned up 2 \(0 failed or skipped, 0 active kept\)/);
+  await noKorean(box, 'after cleanup');
+  await fits('after cleanup');
+  for (const entry of entries) assert.equal(await exists(entry.path), false, 'worktree folder removed');
+  assert.deepEqual(git('for-each-ref', '--format=%(refname)', 'refs/heads/wax/').trim().split('\n'), branches, 'branches kept');
+  assert.deepEqual((await readWorktrees(root)).map((entry) => entry.state), ['removed', 'removed']);
+  assert.equal(await readFile(join(root, 'shared.txt'), 'utf8'), 'line\nedited by header-copy\n');
+
+  await page.goto(`${url}/manage?feature=header-copy&lang=en`);
+  const imported = page.locator('#trace-panel .trace-run[data-run^="im-"]').first();
+  await imported.waitFor();
+  assert.match(await imported.innerText(), /Import locally[\s\S]*Imported worktree[\s\S]*shared\.txt/);
+  assert.equal(await imported.locator('.trace-restore-open').innerText(), 'Undo this import');
+  await fits('run trace import');
+  assert.deepEqual(errors, []);
+  console.log('PASS browser: isolated branch checkbox (default off) → setup script approval screen → two fake workers on different tasks edit the same file in separate worktrees → each run diff shows only its own change, project tree untouched → import one (preview leaves out the setup output with its reason → confirm → uncommitted change in the project) → the other shows the conflict and is refused → discard → cleanup (folders gone, branches kept), 390px English.');
+} finally {
+  await browser?.close(); await server?.shutdown();
+  await rm(root, { recursive: true, force: true });
+}
