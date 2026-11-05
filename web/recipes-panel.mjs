@@ -3,8 +3,10 @@ import { api, clear, el } from './dom.mjs';
 import { phaseName } from './thread-model.mjs';
 import { allowFields, allowKindLabel } from './goal-allow.mjs';
 import { worktreeField } from './worktrees.mjs';
+import { redGreenField } from './red-green-panel.mjs';
+import { approachField } from './approach-panel.mjs';
 
-const BUDGETS = [['phaseRuns', t('pmLoop.budgetLabel.phaseRuns')], ['workers', t('pmLoop.budgetLabel.workers')], ['hours', t('pmLoop.budgetLabel.hours')], ['iterations', t('pmLoop.budgetLabel.iterations')], ['failures', t('pmLoop.budgetLabel.failures')], ['autoPerHour', t('pmLoop.budgetLabel.autoPerHour')]];
+const BUDGETS = [['phaseRuns', t('pmLoop.budgetLabel.phaseRuns')], ['workers', t('pmLoop.budgetLabel.workers')], ['hours', t('pmLoop.budgetLabel.hours')], ['iterations', t('pmLoop.budgetLabel.iterations')], ['failures', t('pmLoop.budgetLabel.failures')], ['autoPerHour', t('pmLoop.budgetLabel.autoPerHour')], ['rootCauseTries', t('pmLoop.budgetLabel.rootCauseTries')], ['costUsd', t('pmLoop.budgetLabel.costUsd')]];
 const SOURCE_LABELS = { builtin: t('recipes.source.builtin'), local: t('recipes.source.local'), shared: t('recipes.source.shared') };
 const APPROVAL_LABELS = { approved: t('recipes.approval.approved'), pending: t('recipes.approval.pending'), changed: t('recipes.approval.changed'),
   rejected: t('recipes.approval.rejected'), retired: t('recipes.approval.retired') };
@@ -62,8 +64,9 @@ export function startEditor(entry, filled, { phases, toolOptions = [], defaults 
   });
   const workers = Object.fromEntries(phases.map((phase) => [phase, toolSelect(`worker-${phase}`, filled.workers[phase] ?? null, toolOptions, t('recipes.defaultOrder'))]));
   const judge = toolSelect('recipe-judge-tool', filled.judgeTool, toolOptions, t('recipes.defaultOrder'));
-  const budgets = el('div', { class: 'trigger-grid pm-budgets' }, BUDGETS.map(([name, label]) => field(label,
-    el('input', { type: 'number', name, min: name === 'iterations' ? '0' : '1', value: String(filled.budgets?.[name] ?? defaults[name] ?? '') }))));
+  const budgets = el('div', { class: 'trigger-grid pm-budgets' }, BUDGETS.map(([name, label]) => field(label, name === 'costUsd'
+    ? el('input', { type: 'text', inputmode: 'decimal', autocomplete: 'off', name, placeholder: '5.00', value: String(filled.budgets?.[name] ?? '') })
+    : el('input', { type: 'number', name, min: name === 'iterations' ? '0' : '1', value: String(filled.budgets?.[name] ?? defaults[name] ?? '') }))));
   const notes = Object.entries(filled.notes ?? {});
   const node = el('div', { class: 'pm-recipe-values' },
     field(t('pmLoop.field.title'), title),
@@ -82,13 +85,16 @@ export function startEditor(entry, filled, { phases, toolOptions = [], defaults 
     tasks: tasks.map((item) => item.read()),
     workers: Object.fromEntries(Object.entries(workers).filter(([, select]) => select.value).map(([phase, select]) => [phase, select.value])),
     judgeTool: judge.value || null,
-    budgets: Object.fromEntries([...budgets.querySelectorAll('input[type="number"]')].map((input) => [input.name, input.value === '' ? undefined : Number(input.value)])),
+    budgets: Object.fromEntries([...budgets.querySelectorAll('input[name]')].map((input) => {
+      const value = input.value.trim();
+      return [input.name, input.name === 'costUsd' ? (value === '' ? null : value) : value === '' ? undefined : Number(value)];
+    })),
   });
   return { node, read };
 }
 
 export function mountRecipes({ token, onCreated = () => {}, showError = () => {} }) {
-  let data = null, busy = false, picked = null, filled = null, editor = null, editing = null, from = null, allowBox = null, worktreeBox = null, origin = null;
+  let data = null, busy = false, picked = null, filled = null, editor = null, editing = null, from = null, allowBox = null, worktreeBox = null, redGreenBox = null, approachBox = null, origin = null;
   const list = el('ul', { class: 'note-list pm-recipe-list' });
   const errorBox = el('p', { class: 'error', role: 'alert', hidden: true });
   const notice = el('p', { class: 'kind pm-recipe-notice', role: 'status', hidden: true });
@@ -156,7 +162,7 @@ export function mountRecipes({ token, onCreated = () => {}, showError = () => {}
     startForm.hidden = false;
     input.focus();
   }
-  function closeStart() { startForm.hidden = true; picked = null; filled = null; editor = null; allowBox = null; worktreeBox = null; origin = null; clear(values); }
+  function closeStart() { startForm.hidden = true; picked = null; filled = null; editor = null; allowBox = null; worktreeBox = null; redGreenBox = null; approachBox = null; origin = null; clear(values); }
   async function fill() {
     if (!picked) return;
     fail(null);
@@ -168,7 +174,9 @@ export function mountRecipes({ token, onCreated = () => {}, showError = () => {}
       const checks = (await api('/api/manual/checks').catch(() => null))?.checks ?? [];
       allowBox = allowFields({ suggested: filled.allow ?? [], checks });
       worktreeBox = worktreeField();
-      clear(values).append(editor.node, allowBox.node, worktreeBox.node);
+      redGreenBox = redGreenField();
+      approachBox = approachField();
+      clear(values).append(editor.node, allowBox.node, worktreeBox.node, redGreenBox.node, approachBox.node);
       create.disabled = false;
     } catch (error) { fail(error); }
   }
@@ -177,7 +185,7 @@ export function mountRecipes({ token, onCreated = () => {}, showError = () => {}
     busy = true; create.disabled = true; fail(null);
     try {
       const ref = { id: picked.id, hash: filled.hash, input: filled.input, slug: filled.slug, ...(detailsField.hidden || !details.value.trim() ? {} : { details: details.value }) };
-      const goal = await api('/api/pm-loop', { method: 'POST', token: token(), body: { recipe: ref, ...editor.read(), allow: allowBox?.read() ?? { kinds: [] }, worktrees: worktreeBox?.read() ?? false, ...(origin ? { origin } : {}) } });
+      const goal = await api('/api/pm-loop', { method: 'POST', token: token(), body: { recipe: ref, ...editor.read(), allow: allowBox?.read() ?? { kinds: [] }, worktrees: worktreeBox?.read() ?? false, redGreen: redGreenBox?.read() ?? false, ...(approachBox?.read() ? { approach: approachBox.read() } : {}), ...(origin ? { origin } : {}) } });
       closeStart();
       close();
       await onCreated(goal);

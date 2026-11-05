@@ -4,7 +4,9 @@ import { readFile } from 'node:fs/promises';
 import { basename, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { LABELS, PHASES, WaxError, createFeature, getFeature } from '../workflow.mjs';
+import { LABELS, PHASES, WaxError, createFeature, getFeature, updateFeature } from '../workflow.mjs';
+import { overrideEffect, rulingsForScreen, rulingSummary } from '../rulings.mjs';
+import { approachForScreen } from '../approach.mjs';
 import { listChannels, postMessage, readMessages, resolveTarget } from './channels.mjs';
 import { AWAY_AFTER_MS, listPresence, markPresenceSeen, withDashboardUser, reserveDashboardUser, storedDashboardUser } from './presence.mjs';
 import { listBoard, postNote, readReport } from './board.mjs';
@@ -36,11 +38,15 @@ import { buildRunTrace } from '../run-trace.mjs';
 import { CAPTURE_IMAGE_TYPES, captureImageFile } from '../capture.mjs';
 import { detectProjectType } from '../project-detect.mjs';
 import { retryTool, setToolDisabled } from './tool-health.mjs';
-import { DEFAULT_BUDGETS, cleanupGoalWorktrees, createGoal, createPmLoop, discardGoalWorktree, dismissSuggestion, executeSuggestion, goalOverview, importWorktree, normalizeBudgets, pmLoopOverview, previewRunRestore, previewWorktreeImport, readGoal, restoreRun, resumeGoal, reviewRepeat, setJudgeTool, setMode, setWorktrees, stopGoal } from './pm-loop.mjs';
+import { decideRepeatDefault, repeatDefaultView, repeatReviewDetail } from './pm-review-list.mjs';
+import { DEFAULT_BUDGETS, humanAuthor, allowReviewRun, cleanupGoalWorktrees, fetchReviewPr, readReviewPr, cleanupIntegratedWorktree, createGoal, createPmLoop, discardGoalWorktree, dismissSuggestion, executeSuggestion, goalOverview, importWorktree, normalizeBudgets, pmLoopOverview, previewRunRestore, previewWorktreeImport, readGoal, restoreRun, resumeGoal, reviewRepeat, setJudgeTool, setMode, setRedGreen, setWorktrees, startWorktreeChecks, stopGoal, stopWorktreeChecks, worktreeChecksStatus } from './pm-loop.mjs';
 import { decideSetup, setupReview } from '../worktree-setup.mjs';
+import { createBoardCache, worktreeBoard, worktreeRow } from '../worktree-board.mjs';
+import { projectReader } from '../git-read.mjs';
 import { decideManual, manualChecks, manualReview } from '../manual.mjs';
 import { runFileDiff } from '../snapshots.mjs';
 import { approvalRepeatNote } from './stuck-check.mjs';
+import { diagnose, diagnoseCite } from '../diagnose.mjs';
 import { workerForbidden } from '../worker-commands.mjs';
 import { decideShared, deleteRecipe, exportRecipe, fillRecipe, getRecipe, listRecipes, recipeDraft, saveRecipe, sharedReview, usesDetails } from '../recipes.mjs';
 import { acceptProposal, createTriggerScheduler, deleteTrigger, dismissProposal, listProposals, saveTrigger, setTriggerEnabled, triggerOverview } from './triggers.mjs';
@@ -146,6 +152,8 @@ export function createChatServer({ root, env = process.env, intervalMs = 1000, e
   };
 
   const previewCache = createPreviewCache();
+  const boardCache = createBoardCache();
+  const toolLabel = (id) => { if (!id) return null; try { return agentTool(id).label; } catch { return String(id); } };
   const json = (res, status, value) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(value)); };
 
   const server = createServer(async (req, res) => {
@@ -280,6 +288,17 @@ export function createChatServer({ root, env = process.env, intervalMs = 1000, e
         json(res, 200, await buildRunTrace(root, traceRoute[1], { language: url.searchParams.get('lang') === 'en' ? 'en' : 'ko' }));
         return;
       }
+      const rulingsRoute = pathname.match(/^\/api\/features\/([a-z0-9-]+)\/rulings$/);
+      if (req.method === 'GET' && rulingsRoute) {
+        const feature = await getFeature(root, rulingsRoute[1]);
+        const summary = rulingSummary(feature);
+        json(res, 200, { id: feature.id, title: feature.title, phase: feature.phase, iteration: feature.iteration, revision: feature.revision, archived: Boolean(feature.archivedAt),
+          effect: overrideEffect(feature), summary: summary ? { total: summary.total, unacknowledged: summary.unacknowledged, flagged: summary.flagged } : { total: 0, unacknowledged: 0, flagged: 0 },
+          rulings: rulingsForScreen(feature) });
+        return;
+      }
+      const approachRoute = pathname.match(/^\/api\/features\/([a-z0-9-]+)\/approach$/);
+      if (req.method === 'GET' && approachRoute) { json(res, 200, approachForScreen(await getFeature(root, approachRoute[1]))); return; }
       const snapshotDiffRoute = pathname.match(/^\/api\/snapshots\/((?:pw|rs|im)-[a-f0-9]{8})\/diff$/);
       if (req.method === 'GET' && snapshotDiffRoute) { json(res, 200, await runFileDiff(root, snapshotDiffRoute[1], url.searchParams.get('path') ?? '')); return; }
       const proofRoute = pathname.match(/^\/api\/features\/([^/]+)\/proofs\/([^/]+)$/);
@@ -308,11 +327,20 @@ export function createChatServer({ root, env = process.env, intervalMs = 1000, e
       if (req.method === 'GET' && pathname === '/api/proposals') { json(res, 200, { proposals: await listProposals(root, { all: url.searchParams.get('all') === '1' }) }); return; }
       if (req.method === 'GET' && pathname === '/api/pm-loop') {
         const view = await pmLoopOverview(root, { user, ...await pmOptions() });
-        json(res, 200, { ...view, goals: view.goals.map((goal) => ({ ...goal, allow: pmLoop.allow.view(goal.id) })) });
+        json(res, 200, { ...view, repeatDefault: await repeatDefaultView(root, view), goals: view.goals.map((goal) => ({ ...goal, allow: pmLoop.allow.view(goal.id) })) });
         return;
       }
+      const pmReviewDetailRoute = pathname.match(/^\/api\/pm-loop\/(goal-[a-f0-9]{8})\/reviews\/(pd-[a-z0-9-]{1,40})$/);
+      if (req.method === 'GET' && pmReviewDetailRoute) { json(res, 200, await repeatReviewDetail(root, pmReviewDetailRoute[1], pmReviewDetailRoute[2])); return; }
       const pmGoalRoute = pathname.match(/^\/api\/pm-loop\/(goal-[a-f0-9]{8})$/);
       if (req.method === 'GET' && pmGoalRoute) { const goal = await goalOverview(root, pmGoalRoute[1], { user, ...await pmOptions() }); json(res, 200, { ...goal, allow: pmLoop.allow.view(goal.id) }); return; }
+      const diagnoseRoute = pathname.match(/^\/api\/diagnose\/(goal-[a-f0-9]{8}|[a-z0-9][a-z0-9-]{0,63})(\/cite)?$/);
+      if (req.method === 'GET' && diagnoseRoute) {
+        if (!diagnoseRoute[2]) { json(res, 200, await diagnose(root, diagnoseRoute[1])); return; }
+        const q = url.searchParams;
+        json(res, 200, await diagnoseCite(root, diagnoseRoute[1], { file: q.get('file') ?? '', line: q.get('line') ?? '', pointer: q.get('pointer') || null }));
+        return;
+      }
       if (req.method === 'GET' && pathname === '/api/recipes') {
         const tools = await pmLoop.tools().catch(() => []);
         json(res, 200, { ...await listRecipes(root), phases: PHASES, tools, toolOptions: tools.map((id) => ({ id, label: agentTool(id).label })), defaults: DEFAULT_BUDGETS });
@@ -327,6 +355,27 @@ export function createChatServer({ root, env = process.env, intervalMs = 1000, e
       }
       const recipeSharedRoute = pathname.match(/^\/api\/recipes\/([a-z0-9][a-z0-9-]{0,63})\/shared$/);
       if (req.method === 'GET' && recipeSharedRoute) { json(res, 200, await sharedReview(root, recipeSharedRoute[1])); return; }
+      if (req.method === 'GET' && pathname === '/api/worktree-board') {
+        const goal = url.searchParams.get('goal') || null;
+        const offset = Number(url.searchParams.get('offset') ?? 0);
+        if ((goal && !/^goal-[a-f0-9]{8}$/.test(goal)) || !Number.isInteger(offset) || offset < 0 || offset > 1000) throw new WaxError(t('errors.worktreeBoard.query'), 400);
+        const board = await worktreeBoard(root, { reader: projectReader(root), cache: boardCache, goal, all: url.searchParams.get('all') === '1', offset, tiers: 1 });
+        for (const row of board.rows) {
+          if (row.activity?.tool) row.activity.toolLabel = toolLabel(row.activity.tool);
+          if (row.lastRun?.tool) row.lastRun.toolLabel = toolLabel(row.lastRun.tool);
+        }
+        json(res, 200, board);
+        return;
+      }
+      const boardRowRoute = pathname.match(/^\/api\/worktree-board\/(goal-[a-f0-9]{8}-[1-9][0-9]{0,3})$/);
+      if (req.method === 'GET' && boardRowRoute) {
+        const tier = { 2: 2, 3: 3 }[url.searchParams.get('tier')];
+        if (!tier) throw new WaxError(t('errors.worktreeBoard.query'), 400);
+        const row = await worktreeRow(root, boardRowRoute[1], { tier, reader: projectReader(root), cache: boardCache });
+        if (!row) throw new WaxError(t('errors.worktreeBoard.notFound', boardRowRoute[1]), 404);
+        json(res, 200, row);
+        return;
+      }
       if (req.method === 'GET' && pathname === '/api/worktree-setup') { json(res, 200, await setupReview(root)); return; }
       if (req.method === 'GET' && pathname === '/api/manual') { json(res, 200, await manualReview(root)); return; }
       if (req.method === 'GET' && pathname === '/api/manual/checks') { json(res, 200, { checks: await manualChecks(root) }); return; }
@@ -372,6 +421,12 @@ export function createChatServer({ root, env = process.env, intervalMs = 1000, e
         const markdown = await readReport(root, boardRoute[1], Number(boardRoute[3]));
         res.writeHead(200, { 'content-type': 'text/markdown; charset=utf-8' });
         res.end(markdown);
+        return;
+      }
+
+      const checksStatusRoute = pathname.match(/^\/api\/pm-loop\/(goal-[a-f0-9]{8})\/worktrees\/(goal-[a-f0-9]{8}-[1-9][0-9]{0,3})\/checks$/);
+      if (req.method === 'GET' && checksStatusRoute) {
+        json(res, 200, await worktreeChecksStatus(root, checksStatusRoute[1], checksStatusRoute[2], { testCommand: pmLoop.allow.testFor(checksStatusRoute[1]) }));
         return;
       }
 
@@ -458,7 +513,8 @@ export function createChatServer({ root, env = process.env, intervalMs = 1000, e
       if (req.method === 'POST' && pathname === '/api/pm-loop') {
         const data = await readJson(req, 64_000);
         const allow = parseAllow(data.allow);
-        const goal = await createGoal(root, { title: data.title, features: data.features, create: data.create, budgets: data.budgets, judgeTool: data.judgeTool, worktrees: data.worktrees === true,
+        const goal = await createGoal(root, { title: data.title, features: data.features, create: data.create, budgets: data.budgets, judgeTool: data.judgeTool, worktrees: data.worktrees === true, redGreen: data.redGreen === true,
+          ...(data.approach !== undefined ? { approach: data.approach } : {}),
           ...(data.recipe ? { recipe: data.recipe, tasks: data.tasks, workers: data.workers, ...(data.origin ? { origin: data.origin } : {}) } : {}) }, { author: user });
         const allowView = allow.kinds.length || allow.test ? await pmLoop.allow.set(goal.id, allow, user) : pmLoop.allow.view(goal.id);
         pmLoop.poke();
@@ -478,6 +534,14 @@ export function createChatServer({ root, env = process.env, intervalMs = 1000, e
         json(res, 200, { goal: pmAllowRoute[1], allow: view });
         return;
       }
+      const pmRedGreenRoute = pathname.match(/^\/api\/pm-loop\/(goal-[a-f0-9]{8})\/red-green$/);
+      if (req.method === 'POST' && pmRedGreenRoute) {
+        const data = await readJson(req, 200);
+        const result = await setRedGreen(root, pmRedGreenRoute[1], { author: user, on: data.on });
+        pmLoop.poke();
+        json(res, 200, result);
+        return;
+      }
       const pmWorktreeRoute = pathname.match(/^\/api\/pm-loop\/(goal-[a-f0-9]{8})\/worktrees$/);
       if (req.method === 'POST' && pmWorktreeRoute) {
         const data = await readJson(req, 2000);
@@ -490,11 +554,46 @@ export function createChatServer({ root, env = process.env, intervalMs = 1000, e
       if (req.method === 'POST' && pmImportRoute) {
         const data = await readJson(req, 2000);
         const [, id, worktree, action] = pmImportRoute;
-        if (action === 'import-preview') { json(res, 200, await previewWorktreeImport(root, id, worktree, { author: user })); return; }
-        const result = action === 'import' ? await importWorktree(root, id, worktree, { author: user, fingerprint: data.fingerprint, ...(pmClock ? { now: pmClock } : {}) })
+        if (action === 'import-preview') { json(res, 200, await previewWorktreeImport(root, id, worktree, { author: user, testCommand: pmLoop.allow.testFor(id) })); return; }
+        const result = action === 'import' ? await importWorktree(root, id, worktree, { author: user, fingerprint: data.fingerprint, testCommand: pmLoop.allow.testFor(id), ...(pmClock ? { now: pmClock } : {}) })
           : await discardGoalWorktree(root, id, worktree, { author: user, ...(pmClock ? { now: pmClock } : {}) });
         pmLoop.poke();
         broadcast('pm', { goal: id });
+        json(res, 200, result);
+        return;
+      }
+      const pmChecksRoute = pathname.match(/^\/api\/pm-loop\/(goal-[a-f0-9]{8})\/worktrees\/(goal-[a-f0-9]{8}-[1-9][0-9]{0,3})\/checks(\/stop)?$/);
+      if (req.method === 'POST' && pmChecksRoute) {
+        const [, id, worktree, stop] = pmChecksRoute;
+        await readJson(req, 200);
+        if (stop) {
+          const record = await stopWorktreeChecks(root, id, worktree, { author: user });
+          broadcast('pm', { goal: id });
+          json(res, 200, record);
+          return;
+        }
+        const result = await startWorktreeChecks(root, id, worktree, { author: user, testCommand: pmLoop.allow.testFor(id), ...(pmClock ? { now: pmClock } : {}),
+          onEnd: () => { pmLoop.poke(); broadcast('pm', { goal: id }); } });
+        broadcast('pm', { goal: id });
+        json(res, 202, { ...result.started, key: result.key });
+        return;
+      }
+      const pmReviewPrRoute = pathname.match(/^\/api\/pm-loop\/(goal-[a-f0-9]{8})\/review-pr(\/fetch)?$/);
+      if (req.method === 'POST' && pmReviewPrRoute) {
+        const data = await readJson(req, 1000);
+        const [, id, fetchStep] = pmReviewPrRoute;
+        if (!fetchStep) { json(res, 200, await readReviewPr(root, id, { author: user, number: data.number, ...(gh ? { gh } : {}) })); return; }
+        const result = await fetchReviewPr(root, id, { author: user, feature: data.feature, number: data.number, head: data.head, ...(gh ? { gh } : {}), ...(pmClock ? { now: pmClock } : {}) });
+        pmLoop.poke();
+        broadcast('pm', { goal: id });
+        json(res, 200, result);
+        return;
+      }
+      const pmAllowRunRoute = pathname.match(/^\/api\/pm-loop\/(goal-[a-f0-9]{8})\/worktrees\/(goal-[a-f0-9]{8}-[1-9][0-9]{0,3})\/allow-run$/);
+      if (req.method === 'POST' && pmAllowRunRoute) {
+        const data = await readJson(req, 1000);
+        const result = await allowReviewRun(root, pmAllowRunRoute[1], pmAllowRunRoute[2], { author: user, head: data.head, hash: data.hash ?? null, ...(pmClock ? { now: pmClock } : {}) });
+        broadcast('pm', { goal: pmAllowRunRoute[1] });
         json(res, 200, result);
         return;
       }
@@ -504,6 +603,43 @@ export function createChatServer({ root, env = process.env, intervalMs = 1000, e
         const result = await cleanupGoalWorktrees(root, pmCleanupRoute[1], { author: user, ...(pmClock ? { now: pmClock } : {}) });
         pmLoop.poke();
         broadcast('pm', { goal: pmCleanupRoute[1] });
+        json(res, 200, result);
+        return;
+      }
+      const rulingMarkRoute = pathname.match(/^\/api\/features\/([a-z0-9-]+)\/rulings\/(R-[1-9][0-9]{0,2})$/);
+      if (req.method === 'POST' && rulingMarkRoute) {
+        const data = await readJson(req, 4000);
+        const who = humanAuthor(user);
+        if (!['acknowledge', 'override'].includes(data.action)) throw new WaxError(t('errors.rulings.markAction'), 400);
+        if (!Number.isSafeInteger(data.revision)) throw new WaxError(t('errors.rulings.markRevision'), 400);
+        const feature = await updateFeature(root, rulingMarkRoute[1], 'ruling-mark', { ruling: rulingMarkRoute[2], mark: data.action, note: data.note, author: who, revision: data.revision });
+        const ruling = feature.rulings.find((item) => item.id === rulingMarkRoute[2]);
+        pmLoop.poke();
+        json(res, 200, { id: feature.id, revision: feature.revision, phase: feature.phase, iteration: feature.iteration, ruling,
+          ...(ruling.marked?.defect ? { defect: feature.defects.find((item) => item.id === ruling.marked.defect) } : {}) });
+        return;
+      }
+      const approachPickRoute = pathname.match(/^\/api\/features\/([a-z0-9-]+)\/approach\/(pick|again)$/);
+      if (req.method === 'POST' && approachPickRoute) {
+        const data = await readJson(req, 4000);
+        const who = humanAuthor(user);
+        if (!Number.isSafeInteger(data.revision)) throw new WaxError(t('errors.rulings.markRevision'), 400);
+        const pick = approachPickRoute[2] === 'pick';
+        if (pick && (!Number.isSafeInteger(data.index) || data.index < 0)) throw new WaxError(t('errors.approach.pickIndex'), 400);
+        const input = pick ? { number: data.index + 1, ...(data.reason !== undefined ? { reason: data.reason } : {}) } : { note: data.note };
+        const feature = await updateFeature(root, approachPickRoute[1], `approach-${approachPickRoute[2]}`, { approach: input, author: who, pickVia: 'dashboard', revision: data.revision });
+        pmLoop.poke();
+        json(res, 200, approachForScreen(feature));
+        return;
+      }
+      const pmCleanupIntegratedRoute = pathname.match(/^\/api\/pm-loop\/(goal-[a-f0-9]{8})\/worktrees\/(goal-[a-f0-9]{8}-[1-9][0-9]{0,3})\/cleanup-integrated$/);
+      if (req.method === 'POST' && pmCleanupIntegratedRoute) {
+        const data = await readJson(req, 1000);
+        const [, id, worktree] = pmCleanupIntegratedRoute;
+        const result = await cleanupIntegratedWorktree(root, id, worktree, { author: user, fingerprint: data.fingerprint,
+          recheck: (dir, name) => worktreeRow(dir, name, { tier: 3, reader: projectReader(root) }), ...(pmClock ? { now: pmClock } : {}) });
+        pmLoop.poke();
+        broadcast('pm', { goal: id });
         json(res, 200, result);
         return;
       }
@@ -548,6 +684,11 @@ export function createChatServer({ root, env = process.env, intervalMs = 1000, e
       if (req.method === 'POST' && pmReviewRoute) {
         const data = await readJson(req, 4000);
         json(res, 200, await reviewRepeat(root, pmReviewRoute[1], { author: user, target: data.target, verdict: data.verdict, note: data.note }));
+        return;
+      }
+      if (req.method === 'POST' && pathname === '/api/pm-loop/repeat-default') {
+        const data = await readJson(req, 4000);
+        json(res, 200, await decideRepeatDefault(root, { author: user, outcome: data.outcome, note: data.note }));
         return;
       }
       const snapshotRoute = pathname.match(/^\/api\/snapshots\/((?:pw|rs|im)-[a-f0-9]{8})\/(preview|restore)$/);

@@ -1,5 +1,5 @@
 import { t } from '../web/messages-catalog.mjs';
-import { spawn as nodeSpawn, spawnSync } from 'node:child_process';
+import { spawn as nodeSpawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { lstat, readFile, realpath } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
@@ -9,13 +9,15 @@ import { withLock } from './chat/lock.mjs';
 import { appendRecord, makeId, readRecords } from './chat/store.mjs';
 import * as v from './chat/validate.mjs';
 import { ENV_NAME, PORT_ENV } from './worktrees.mjs';
+import { COPY_LIMITS, copyPathShape, copyStatus } from './worktree-copy.mjs';
+import { killTree, runTaskkill } from './process-tree.mjs';
 
 export const SETUP_FILE = 'docs/wax/worktree.json';
-export const SETUP_LIMITS = { file: 64 * 1024, args: 50, arg: 1000, refs: 20, refBytes: 1024 * 1024, packageBytes: 32 * 1024 * 1024, env: 10, timeoutMs: 5 * 60_000, output: 4000, text: 64 * 1024 };
+export const SETUP_LIMITS = { file: 64 * 1024, args: 50, arg: 1000, refs: 20, refBytes: 1024 * 1024, packageBytes: 32 * 1024 * 1024, env: 10, checks: 5, timeoutMs: 5 * 60_000, output: 4000, text: 64 * 1024 };
 export const PACKAGE_MANAGERS = ['npm', 'pnpm', 'yarn', 'bun', 'npx'];
 export const PACKAGE_FILES = ['package.json', 'package-lock.json', 'npm-shrinkwrap.json', 'pnpm-lock.yaml', 'yarn.lock', 'bun.lockb', 'bun.lock'];
 export const packageManager = (argv0) => PACKAGE_MANAGERS.includes(String(argv0 ?? '').split(/[\\/]/).at(-1).replace(/\.(?:cmd|exe|bat|ps1)$/i, '').toLowerCase());
-const KEYS = ['setup', 'env', 'portEnv'];
+const KEYS = ['setup', 'env', 'portEnv', 'copy', 'checks'];
 const HIDDEN = /[\0\p{Cc}\p{Cf}]/u;
 const MACHINE = new Set(['pm-loop', 'auto']);
 const fail = (id, status = 400, ...values) => new WaxError(t(id, ...values), status);
@@ -33,25 +35,41 @@ const missing = (error) => error?.code === 'ENOENT' || error?.code === 'ENOTDIR'
 class Invalid extends Error {}
 const invalid = (id, ...values) => { throw new Invalid(t(id, ...values)); };
 
+const goodArg = (arg) => typeof arg === 'string' && arg && arg.length <= SETUP_LIMITS.arg && !HIDDEN.test(arg);
+
 export function parseSetupConfig(text) {
   let value;
   try { value = JSON.parse(text); } catch { invalid('worktrees.setup.invalidJson'); }
   if (!value || typeof value !== 'object' || Array.isArray(value)) invalid('worktrees.setup.notObject');
   for (const key of Object.keys(value)) if (!KEYS.includes(key)) invalid('worktrees.setup.extraKey', JSON.stringify(key.slice(0, 40)));
-  const { setup, env = [], portEnv = null } = value;
-  if (!Array.isArray(setup) || !setup.length || setup.length > SETUP_LIMITS.args) invalid('worktrees.setup.setupShape', SETUP_LIMITS.args);
-  setup.forEach((arg, index) => {
-    if (typeof arg !== 'string' || !arg || arg.length > SETUP_LIMITS.arg || HIDDEN.test(arg)) invalid('worktrees.setup.argShape', index, SETUP_LIMITS.arg);
-  });
+  const { setup = null, env = [], portEnv = null, copy = null, checks = null } = value;
+  if (setup === null && copy === null && checks === null) invalid('worktrees.setup.nothing');
+  if (setup !== null) {
+    if (!Array.isArray(setup) || !setup.length || setup.length > SETUP_LIMITS.args) invalid('worktrees.setup.setupShape', SETUP_LIMITS.args);
+    setup.forEach((arg, index) => { if (!goodArg(arg)) invalid('worktrees.setup.argShape', index, SETUP_LIMITS.arg); });
+  }
+  if (copy !== null) {
+    if (!Array.isArray(copy) || !copy.length || copy.length > COPY_LIMITS.entries) invalid('worktrees.setup.copyShape', COPY_LIMITS.entries);
+    copy.forEach((path, index) => { if (!copyPathShape(path)) invalid('worktrees.setup.copyPathShape', index, COPY_LIMITS.path, COPY_LIMITS.segments); });
+  }
+  if (checks !== null) {
+    if (!Array.isArray(checks) || !checks.length || checks.length > SETUP_LIMITS.checks) invalid('worktrees.setup.checksShape', SETUP_LIMITS.checks, SETUP_LIMITS.args);
+    checks.forEach((argv, index) => {
+      if (!Array.isArray(argv) || !argv.length || argv.length > SETUP_LIMITS.args) invalid('worktrees.setup.checksShape', SETUP_LIMITS.checks, SETUP_LIMITS.args);
+      argv.forEach((arg, at) => { if (!goodArg(arg)) invalid('worktrees.setup.checkArgShape', index, at, SETUP_LIMITS.arg); });
+    });
+  }
   if (!Array.isArray(env) || env.length > SETUP_LIMITS.env || !env.every((name) => typeof name === 'string' && ENV_NAME.test(name))) invalid('worktrees.setup.envShape', SETUP_LIMITS.env);
   if (portEnv !== null && !(typeof portEnv === 'string' && PORT_ENV.test(portEnv))) invalid('worktrees.setup.portEnvShape');
-  return { setup: [...setup], env: [...new Set(env)], portEnv };
+  return { setup: setup ? [...setup] : null, env: [...new Set(env)], portEnv, copy: copy ? [...new Set(copy)] : [], checks: checks ? checks.map((argv) => [...argv]) : [] };
 }
 
-async function referencedFiles(dir, argv) {
+export const configCommands = (config) => [...(config.setup ? [config.setup] : []), ...config.checks];
+
+async function referencedFiles(dir, commands) {
   const found = new Map();
   const packages = new Set();
-  if (packageManager(argv[0])) {
+  if (commands.some((argv) => packageManager(argv[0]))) {
     for (const name of PACKAGE_FILES) {
       const full = join(dir, name);
       let info;
@@ -63,7 +81,7 @@ async function referencedFiles(dir, argv) {
       packages.add(name);
     }
   }
-  for (const arg of argv) {
+  for (const arg of commands.flat()) {
     const candidates = [arg];
     const flag = arg.match(/^--?[A-Za-z0-9][A-Za-z0-9_-]*=(.+)$/);
     if (flag) candidates.push(flag[1]);
@@ -107,7 +125,7 @@ export async function readSetup(dir) {
   const text = bytes.toString('utf8');
   try {
     const config = parseSetupConfig(text);
-    const refs = await referencedFiles(dir, config.setup);
+    const refs = await referencedFiles(dir, configCommands(config));
     return { state: 'found', config, text, refs, hash: setupHash(bytes, refs) };
   } catch (error) {
     if (error instanceof Invalid) return { state: 'invalid', reason: error.message, text };
@@ -134,19 +152,29 @@ export function setupState(found, decisions = []) {
   return last.hash === found.hash ? 'approved' : 'changed';
 }
 
+const NPM_CI = new Set(['ci', 'clean-install', 'ic', 'install-clean']);
+export function npmCiWipes(config) {
+  const setup = config?.setup;
+  if (!setup || !/^npm$/i.test(String(setup[0]).split(/[\\/]/).at(-1).replace(/\.(?:cmd|exe|bat|ps1)$/i, ''))) return false;
+  return NPM_CI.has(setup.slice(1).find((arg) => !arg.startsWith('-'))) && (config.copy ?? []).some((path) => path.split('/').at(-1).toLowerCase() === 'node_modules');
+}
+
 const preview = (bytes) => {
   if (bytes.length > SETUP_LIMITS.text || bytes.includes(0)) return null;
   return bytes.toString('utf8');
 };
 
-export async function setupReview(root) {
+export async function setupReview(root, { platform = process.platform } = {}) {
   const real = await realpath(root);
   const found = await readSetup(real);
   const decisions = await setupDecisions(root);
   const last = decisions.at(-1) ?? null;
   return { file: SETUP_FILE, state: setupState(found, decisions), ...(found.reason ? { reason: found.reason } : {}), ...(found.text !== undefined ? { text: found.text.slice(0, SETUP_LIMITS.text) } : {}),
     ...(found.state === 'found' ? { hash: found.hash, config: found.config, refs: found.refs.map((ref) => ({ path: ref.path, size: ref.bytes.length, text: preview(ref.bytes), ...(ref.package ? { package: true } : {}) })),
-      packageManager: packageManager(found.config.setup[0]) } : {}),
+      packageManager: configCommands(found.config).some((argv) => packageManager(argv[0])),
+      ...(found.config.copy.length ? { copy: await copyStatus(real, found.config.copy).catch(() => found.config.copy.map((path) => ({ path, state: 'unknown' }))) } : {}),
+      ...(npmCiWipes(found.config) ? { npmCiCopy: true } : {}),
+      ...(found.config.copy.length && platform === 'win32' ? { copyUnsupported: true } : {}) } : {}),
     approved: last ? { hash: last.hash, by: last.by ?? null, at: last.at ?? null, files: last.files ?? [] } : null,
     limits: { timeoutMinutes: SETUP_LIMITS.timeoutMs / 60_000, output: SETUP_LIMITS.output } };
 }
@@ -172,18 +200,7 @@ export async function recordSetupRun(root, run, now = Date.now()) {
 
 const tail = (text, max = SETUP_LIMITS.output) => { const chars = Array.from(String(text)); return chars.length > max ? chars.slice(-max).join('') : chars.join(''); };
 
-const runTaskkill = (args) => {
-  const result = spawnSync('taskkill', args, { windowsHide: true, stdio: 'ignore', timeout: 5000 });
-  if (result.error) throw result.error;
-};
-
-export function killSetupTree(child, { platform = process.platform, taskkill = runTaskkill } = {}) {
-  if (child?.pid) {
-    if (platform === 'win32') { try { taskkill(['/pid', String(child.pid), '/T', '/F']); return; } catch {   } }
-    else { try { process.kill(-child.pid, 'SIGKILL'); return; } catch {   } }
-  }
-  try { child?.kill('SIGKILL'); } catch {   }
-}
+export const killSetupTree = (child, options = {}) => killTree(child, options);
 
 export function runSetup(cwd, argv, { env = {}, timeoutMs = SETUP_LIMITS.timeoutMs, spawn = nodeSpawn, timers = { set: setTimeout, clear: clearTimeout }, now = Date.now, signal = null,
   platform = process.platform, taskkill = runTaskkill } = {}) {

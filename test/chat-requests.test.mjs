@@ -329,6 +329,16 @@ test('a concurrent workflow edit cannot be overwritten or reported as completed'
   assert.match((await runner.list())[0].detail, /다른 세션/);
 });
 
+test('a ruling recorded during a stage (DISCIPLINE.md 3) is harmless like attached evidence: the stage still completes', async (t) => {
+  const { root, runner } = await runnerFor(t, { before: async (root, input, f) => {
+    if (f.phase === 'design') await updateFeature(root, f.id, 'ruling', { ruling: { what: '이름을 total로', why: '짧게', cost: '이름 바꾸기' }, author: 'wax-worker-claude' });
+  } });
+  const r = await runner.submit({ author: '사장', body: '결정 기록', mode: 'sm' }); await runner.settled();
+  const [done] = await runner.list();
+  assert.equal(done.status, 'completed', done.detail);
+  assert.deepEqual((await getFeature(root, r.id)).rulings.map((item) => [item.id, item.phase]), [['R-1', 'design']]);
+});
+
 test('follow-up delivery is idempotent and completed work keeps its previous iteration', async (t) => {
   const { root, runner, calls } = await runnerFor(t);
   const r = await runner.submit({ author: '사장', body: '화면을 만들어줘' }); await runner.settled();

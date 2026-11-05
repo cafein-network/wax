@@ -9,15 +9,23 @@ import { captureLabelText, listCaptures } from './capture.mjs';
 import { compareCaptures, compareLines, hasComparison } from './visual-compare.mjs';
 import { usageLines } from './tool-usage.mjs';
 import { agentTool } from './agent-tools.mjs';
+import { unmention } from './mention.mjs';
+import { rulingTableLines } from './rulings.mjs';
+import { approachSummary } from './approach.mjs';
+import { approachLine, approachOthersLine } from '../web/approach-text.mjs';
+import { pairChangeText, pairWarnings, redGreenDefectLines, redGreenLine, redGreenWarningLines, redGreenWarningText } from '../web/red-green-text.mjs';
+import { stepProgress } from './plan-progress.mjs';
+import { planStepsLine, stepStateText } from '../web/plan-steps-text.mjs';
+import { returnStageLines, reviewStagesLine, reviewStagesWarningLines } from '../web/review-stages-text.mjs';
+import { returnStages } from './review-stages.mjs';
 
-export const PR_BODY_LIMITS = { report: 6000, inline: 200, detail: 300, proofs: 20, files: 5, compare: 8, body: 60_000 };
+export const PR_BODY_LIMITS = { report: 6000, inline: 200, detail: 300, proofs: 20, files: 5, compare: 8, redGreen: 5, rulings: 10, steps: 10, body: 60_000 };
 
 const INVISIBLE = /[\s\p{Cc}\p{Cf}]+/gu;
 const HIDDEN = /[\p{Cc}\p{Cf}](?<![\n\t])/gu;
 const chars = (text) => Array.from(text);
 const cut = (text, limit) => { const all = chars(text); return all.length > limit ? `${all.slice(0, limit - 1).join('')}…` : text; };
-const MENTION = /(^|[^\p{L}\p{N}_`/@.+-])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,38})(?:\/[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_])?)?)/gu;
-export const unmention = (text) => text.replace(MENTION, (_, before, name) => `${before}\`@${name}\``);
+export { unmention };
 
 export function inline(value, limit = PR_BODY_LIMITS.inline) {
   const text = cut(String(value ?? '').replace(INVISIBLE, ' ').trim(), limit);
@@ -104,8 +112,14 @@ export async function buildPrBody(root, id, { language = cliText().language, obs
     if (!feature.completed.review) { missing.push('review'); push('', say('prBody.reviewPending')); }
     if (feature.completed.review?.acWaiver) push('', say('prBody.acWaiver', inline(feature.completed.review.acWaiver, PR_BODY_LIMITS.detail)));
   }
+  push(...reviewStageLines(feature, { say }));
 
   push('', ...await qualityGlance(root, feature, { say, short }));
+
+  const approach = approachSummary(feature);
+  if (approach) push('', `## ${say('approach.heading')}`, '', approachLine(approach, say, (value) => inline(value)), ...(approachOthersLine(approach, say, (value) => inline(value)) ? ['', approachOthersLine(approach, say, (value) => inline(value))] : []));
+  const rulings = rulingTableLines(feature, { say, inline, phaseName: (phase) => phaseName(phase, language), limit: PR_BODY_LIMITS.rulings });
+  if (rulings.length) push('', `## ${say('rulings.table.heading')}`, '', ...rulings);
 
   push(...await workerLines(root, feature, { say, language }));
 
@@ -116,6 +130,8 @@ export async function buildPrBody(root, id, { language = cliText().language, obs
   const outcome = (proof) => (proof.timedOut ? say('prBody.timedOut') : proof.exitCode === 0 ? say('prBody.passed') : say('prBody.failed'));
   const author = (proof) => (proof.author ? `, ${say('prBody.by', code(proof.author, 45))}` : '');
   if (!tests.length && !commits.length) { missing.push('proofs'); push(say('prBody.noProofs')); }
+  push(...redGreenLines(feature, { say, describe }));
+  push(...planStepLines(feature, { say, describe, limit: PR_BODY_LIMITS.steps }));
   if (tests.length) {
     push(`### ${say('prBody.tests')}`, '');
     for (const proof of tests.slice(-PR_BODY_LIMITS.proofs)) {
@@ -186,6 +202,47 @@ export async function buildPrBody(root, id, { language = cliText().language, obs
   let body = `${lines.join('\n').replace(/\n{3,}/g, '\n\n')}\n`;
   if (chars(body).length > PR_BODY_LIMITS.body) body = `${cut(body, PR_BODY_LIMITS.body - 200)}\n\n${say('prBody.bodyTruncated')}\n`;
   return { id, title: feature.title, language, body, missing, stale };
+}
+
+export function reviewStageLines(feature, { say }) {
+  const stages = feature.completed?.review?.stages;
+  const returned = returnStageLines(returnStages(feature).filter((item) => item.stage), say);
+  if (!stages && !returned.length) return [];
+  return ['', `### ${say('reviewStages.title')}`, '', ...(stages ? [`- ${reviewStagesLine(stages, say)}`, ...reviewStagesWarningLines(stages, say).map((line) => `- ${line}`)] : []),
+    ...returned.map((line) => `- ${line}`)];
+}
+
+export function redGreenLines(feature, { say, describe }) {
+  const record = feature.completed?.implement?.redGreen;
+  if (!record) return [];
+  const lines = [`- ${redGreenLine(record, say)}`];
+  if (record.pairs.length) {
+    lines.push('', `| ${say('prBody.redGreenCheck')} | ${say('redGreen.red')} | ${say('redGreen.green')} | ${say('prBody.redGreenChanged')} | ${say('prBody.redGreenWarnings')} |`, '| --- | --- | --- | --- | --- |');
+    for (const pair of record.pairs.slice(0, PR_BODY_LIMITS.redGreen)) {
+      const warnings = pairWarnings(pair).filter((item) => item !== 'treeUnknown').map((item) => redGreenWarningText(item, say));
+      lines.push(`| ${code(pair.check, 64, true)}${pair.defect ? ` (${pair.defect})` : ''} | ${describe(pair.red, true)} | ${describe(pair.green, true)} | ${inline(pairChangeText(pair, say), 80)} | ${warnings.length ? inline(warnings.join(' '), 200) : '-'} |`);
+    }
+    if (record.pairs.length > PR_BODY_LIMITS.redGreen) lines.push('', say('prBody.moreRedGreen', record.pairs.length - PR_BODY_LIMITS.redGreen));
+  } else for (const line of redGreenWarningLines(record, say)) lines.push(`- ${line}`);
+  const defects = redGreenDefectLines(record, say);
+  if (defects.length) lines.push('', `- ${defects.join(' · ')}`);
+  if (record.waiver) lines.push('', say('prBody.redGreenWaiver'), '', `> ${inline(record.waiver, PR_BODY_LIMITS.detail)}`);
+  lines.push('');
+  return lines;
+}
+
+export function planStepLines(feature, { say, describe, limit = PR_BODY_LIMITS.steps }) {
+  const progress = stepProgress(feature);
+  if (!progress) return [];
+  const lines = [`- ${planStepsLine(progress, say)}`, '', `| ${say('planSteps.column.step')} | ${say('planSteps.column.check')} | ${say('planSteps.column.progress')} |`, '| --- | --- | --- |'];
+  for (const row of progress.steps.slice(0, limit)) {
+    const check = row.check ? code(row.check, 120, true) : '-';
+    const state = inline(stepStateText(row, say, row.none ? cut(row.none, 120) : null), 200);
+    lines.push(`| ${row.id}${row.title ? ` ${inline(row.title, 120)}` : ''} | ${check} | ${state}${row.proof ? ` (${describe(row.proof, true)})` : ''} |`);
+  }
+  if (progress.steps.length > limit) lines.push('', say('planSteps.more', progress.steps.length - limit));
+  lines.push('');
+  return lines;
 }
 
 export async function qualityGlance(root, feature, { say, short = (proofId) => code(String(proofId).slice(0, 8)) }) {

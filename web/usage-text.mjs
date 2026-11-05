@@ -11,9 +11,23 @@ export function toolUsageText(entry, say = t) {
   return `${entry?.label ?? entry?.tool ?? '-'} ${parts.join(' · ')}`;
 }
 
+export const dollars = (value) => (typeof value === 'number' && Number.isFinite(value) ? value.toFixed(2) : '0.00');
+
+export function costTotalText(summary, say = t) {
+  if (typeof summary?.costUsd !== 'number') return null;
+  return summary.costUnknown ? say('usage.costTotalUnknown', dollars(summary.costUsd), summary.costUnknown) : say('usage.costTotal', dollars(summary.costUsd));
+}
+
+export function costLimitText(usage, limit, say = t) {
+  const known = typeof usage?.costUsd === 'number', unknown = usage?.costUnknown ?? 0;
+  const used = known || !unknown ? `$${dollars(known ? usage.costUsd : 0)}` : say('usage.costUnknownRuns', unknown);
+  return [say('usage.costLimit', used, dollars(limit)), known && unknown ? say('usage.costUnknownRuns', unknown) : null, say('usage.costNote')].filter(Boolean).join(' · ');
+}
+
 export function usageLines(summary, say = t) {
   if (!summary?.runs) return [];
-  return [...(summary.tools ?? []).map((entry) => toolUsageText(entry, say)),
+  const cost = costTotalText(summary, say);
+  return [...(summary.tools ?? []).map((entry) => toolUsageText(entry, say)), ...(cost ? [cost] : []),
     ...(summary.unreported ? [say('usage.unreported', summary.unreported)] : []),
     ...(summary.missing ? [say('usage.missing', summary.missing)] : [])];
 }

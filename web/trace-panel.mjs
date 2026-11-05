@@ -2,6 +2,9 @@ import { t } from './messages-catalog.mjs';
 import { dateLocale, el } from './dom.mjs';
 import { formatDuration } from './dashboard-model.mjs';
 import { usageLines } from './usage-text.mjs';
+import { redGreenDefectLines, redGreenLine, redGreenWarningLines } from './red-green-text.mjs';
+import { planStepsLine, stepStateText } from './plan-steps-text.mjs';
+import { reviewStagesLine, reviewStagesWarningLines, stageName } from './review-stages-text.mjs';
 const PM_OUTCOME = { executed: 'trace.pmExecuted', dismissed: 'trace.pmDismissed', launched: 'trace.pmLaunched', exited: 'trace.pmExited', timeout: 'trace.pmTimeout', failed: 'trace.pmFailed', stopped: 'trace.pmStopped', stuck: 'trace.pmStuck', warned: 'trace.pmRepeatWarned', restored: 'trace.pmRestored' };
 const JUDGE_OUTCOME = { requested: 'trace.pmRequested', proposed: 'trace.pmProposed', rejected: 'trace.pmRejected', failed: 'trace.judgeFailed', timeout: 'trace.judgeTimeout', stopped: 'trace.judgeStopped' };
 const pmOutcome = (decision) => (decision.kind === 'judgment' ? JUDGE_OUTCOME[decision.outcome] : PM_OUTCOME[decision.outcome]) ?? 'trace.pmDismissed';
@@ -28,7 +31,9 @@ function proofItem(proof) {
   const changed = proof.changed?.state === 'changed' ? t('dashboard.traceProofChanged', proof.changed.count)
     : proof.changed?.state === 'unchanged' ? t('trace.proofFresh') : proof.changed ? t('trace.proofUnknown') : null;
   const passed = proof.kind === 'git' || (proof.exitCode === 0 && !proof.timedOut);
-  return el('li', { class: `trace-proof ${passed ? 'proof-pass' : 'proof-fail'}` },
+  return el('li', { class: `trace-proof ${passed ? 'proof-pass' : 'proof-fail'}`, ...(proof.redGreen ? { dataset: { redGreen: proof.redGreen } } : {}) },
+    proof.redGreen ? el('span', { class: `badge red-green-mark red-green-${proof.redGreen}`, text: t(proof.redGreen === 'red' ? 'redGreen.red' : 'redGreen.green') }) : null,
+    proof.redGreen ? ' ' : null,
     label ? el('code', { translate: 'no', text: label }) : el('code', { translate: 'no', text: proof.command }),
     el('span', { class: 'kind' }, ` · ${result}`, proof.linked ? ` · ${t('trace.linked')}` : '', changed ? ` · ${changed}` : ''),
     proof.changed?.files?.length ? el('div', { class: 'trace-paths' }, proof.changed.files.map((file) => raw(file, 'code'))) : null);
@@ -201,6 +206,18 @@ function visitItem(visit, index, phaseLabel, actions) {
   const pm = visit.pm?.length ? el('ul', { class: 'trace-notes trace-pm' }, visit.pm.map((decision) => el('li', {},
     el('span', { class: 'badge', text: t('dashboard.tracePm') }), ' ', el('span', { class: 'kind', text: stamp(decision.at) }), ' ',
     t(pmOutcome(decision)), ' · ', raw(decision.kind), ' · ', raw(decision.by), decision.to ? [' → ', raw(decision.to)] : '', ' · ', decision.reason))) : null;
+  const redGreen = visit.redGreen ? el('section', { class: `trace-red-green red-green-state-${visit.redGreen.state}` }, el('h4', { text: t('qualityReport.redGreen') }),
+    el('p', { class: 'red-green-line', text: redGreenLine(visit.redGreen) }),
+    [...redGreenWarningLines(visit.redGreen), ...redGreenDefectLines(visit.redGreen)].length
+      ? el('ul', { class: 'trace-notes red-green-notes' }, [...redGreenWarningLines(visit.redGreen), ...redGreenDefectLines(visit.redGreen)].map((line) => el('li', { class: 'kind', text: line }))) : null,
+    visit.redGreen.waiver ? el('p', { class: 'kind' }, `${t('redGreen.waiverLabel')} `, raw(visit.redGreen.waiver)) : null) : null;
+  const STEP_CLASS = { passed: 'ac-pass', failed: 'ac-fail', otherCommand: 'ac-fail', pending: 'ac-pending', noCheck: 'ac-unverified' };
+  const steps = visit.steps ? el('section', { class: 'trace-steps' }, el('h4', { text: t('planSteps.title') }),
+    el('p', { class: 'plan-steps-line', text: planStepsLine(visit.steps) }),
+    el('ul', { class: 'trace-ac trace-step-list' }, visit.steps.steps.map((item) => el('li', { class: STEP_CLASS[item.state] ?? 'ac-pending', dataset: { step: item.id, state: item.state } },
+      el('strong', { translate: 'no', text: item.id }), item.title ? [' ', raw(item.title)] : '', ' ',
+      el('span', { class: 'badge', text: stepStateText(item, t, item.none) }),
+      item.check ? el('div', { class: 'kind' }, raw(item.check, 'code')) : null)))) : null;
   const proofs = visit.proofs.length ? el('section', {}, el('h4', { text: t('dashboard.evidence') }), el('ul', { class: 'trace-proofs' }, visit.proofs.map(proofItem))) : null;
   const captures = visit.captures?.length ? el('section', {}, el('h4', { text: t('prBody.captures') }),
     el('ul', { class: 'trace-captures' }, visit.captures.map((capture) => el('li', {}, raw(capture.check, 'code'),
@@ -211,6 +228,12 @@ function visitItem(visit, index, phaseLabel, actions) {
       el('strong', { translate: 'no', text: item.id }), ' ', el('span', { class: 'badge', text: t(AC[item.status] ?? 'prBody.acPending') }),
       item.detail ? el('div', { class: 'kind', translate: 'no', text: item.detail }) : null))),
     visit.acWaiver ? el('p', { class: 'kind' }, `${t('dashboard.traceAcWaiver')} `, raw(visit.acWaiver)) : null) : null;
+  const stages = visit.stages ? el('section', { class: 'trace-review-stages' }, el('h4', { text: t('reviewStages.title') }),
+    el('p', { class: 'review-stages-line', text: reviewStagesLine(visit.stages) }),
+    reviewStagesWarningLines(visit.stages).length ? el('ul', { class: 'trace-notes' }, reviewStagesWarningLines(visit.stages).map((line) => el('li', { class: 'kind', text: line }))) : null,
+    visit.stages.checks?.length ? el('ul', { class: 'trace-ac' }, visit.stages.checks.map((item) => el('li', { class: `ac-${item.status}`, dataset: { stage: item.stage, item: item.id } },
+      el('span', { class: 'kind', text: `${stageName(item.stage)} ` }), el('strong', { translate: 'no', text: item.id }), ' ', el('span', { class: 'badge', text: t(item.status === 'pass' ? 'qualityReport.pass' : 'qualityReport.unverified') }),
+      item.detail ? el('div', { class: 'kind', translate: 'no', text: item.detail }) : null))) : null) : null;
   const defects = visit.defects?.length ? el('section', {}, el('h4', { text: t('trace.defects') }),
     el('ul', { class: 'trace-ac' }, visit.defects.map((item) => el('li', { class: `ac-${item.status === 'resolved' ? 'pass' : item.status === 'open' ? 'unverified' : 'pending'}` },
       el('strong', { translate: 'no', text: item.id }), item.title ? [' ', raw(item.title)] : '', ' ', el('span', { class: 'badge', text: t(DEFECT[item.status] ?? 'qualityReport.pending') }),
@@ -228,7 +251,7 @@ function visitItem(visit, index, phaseLabel, actions) {
         el('span', { class: 'kind', text: ` ${t('trace.iteration', visit.iteration)}` }),
         el('span', { class: 'badge', text: t(OUTCOMES[visit.outcome] ?? 'trace.outcomeOpen') }),
         el('span', { class: 'kind trace-span', text: span(visit) })),
-      el('div', { class: 'trace-body' }, facts, notes, pm, proofs, captures, visit.compare ? compareBlock(visit.compare) : null, acceptance, defects, logged, files, runs)));
+      el('div', { class: 'trace-body' }, facts, notes, pm, redGreen, steps, proofs, captures, visit.compare ? compareBlock(visit.compare) : null, acceptance, stages, defects, logged, files, runs)));
 }
 
 function freshnessLine(freshness, phaseLabel) {

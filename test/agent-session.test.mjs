@@ -56,6 +56,8 @@ createInterface({ input:process.stdin }).on('line', (line) => {
     if (config.resume) assert.equal(m.method,'session/load');
     assert.deepEqual(m.params.mcpServers, config.mcp ?? []);
     // GitHub Copilot CLI 1.0.97: the session's available commands arrive before the session/new response.
+    // JSON-RPC 오류 응답(Gemini CLI "연결 요청 실패"의 모양): stderr 안내 뒤 오류 응답.
+    if (config.rpcError) { process.stderr.write('gemini: failed to load settings\\n'); emit({jsonrpc:'2.0',id:m.id,error:config.rpcError}); return; }
     if (config.earlyUpdate) emit({jsonrpc:'2.0',method:'session/update',params:{sessionId:'session-1',update:{sessionUpdate:'available_commands_update',availableCommands:[{name:'add-dir'}]}}});
     emit({jsonrpc:'2.0',id:m.id,result:{sessionId:'session-1'}});
   } else if (m.method === 'session/prompt') {
@@ -241,4 +243,20 @@ test('usage: ACP tools (Gemini CLI, GitHub Copilot CLI) and a Claude Code line w
     const { root, options } = await setup(t, { tool });
     assert.equal((await runAgentSession(root, options)).usage, null, tool);
   }
+});
+
+test('ACP: a JSON-RPC error response is kept on the failure as toolOutput.rpcError; the shown message stays the wax sentence', async (t) => {
+  for (const tool of ['gemini', 'copilot']) {
+    const { root, options } = await setup(t, { tool, rpcError: { code: -32603, message: 'Internal error: settings.json is invalid', data: { stack: 'x' } } });
+    const error = await runAgentSession(root, options).then(() => null, (failure) => failure);
+    assert.ok(error, tool);
+    assert.doesNotMatch(error.message, /Internal error/, 'the tool text is not put into the shown message');
+    assert.deepEqual(error.toolOutput.rpcError, { code: -32603, message: 'Internal error: settings.json is invalid' }, tool);
+    assert.match(error.toolOutput.stderr, /failed to load settings/);
+  }
+  const { root, options } = await setup(t, { tool: 'gemini', rpcError: { code: 'x', message: 7 } });
+  const error = await runAgentSession(root, options).then(() => null, (failure) => failure);
+  assert.deepEqual(error.toolOutput.rpcError, { code: null, message: '7' }, 'odd shapes are normalised');
+  const ok = await setup(t, { tool: 'gemini' });
+  await runAgentSession(ok.root, ok.options);
 });

@@ -4,22 +4,28 @@ import { openDefects } from './defects.mjs';
 import { evidenceFreshness, freshnessText } from './freshness.mjs';
 import { cliText } from './cli-locale.mjs';
 import { compareCaptures, compareLines, hasComparison } from './visual-compare.mjs';
-import { code, inline } from './pr-body.mjs';
+import { code, inline, planStepLines } from './pr-body.mjs';
 import { qualityRequirements } from '../web/project-types.mjs';
 import { approvedManual } from './manual.mjs';
 import { changeImpact } from './impact.mjs';
 import { changeText, dependencyChanges } from './deps.mjs';
+import { rulingTableLines } from './rulings.mjs';
+import { approachSummary } from './approach.mjs';
+import { approachLine, approachOthersLine } from '../web/approach-text.mjs';
+import { pairChangeText, pairWarnings, redGreenDefectLines, redGreenLine, redGreenWarningLines, redGreenWarningText } from '../web/red-green-text.mjs';
+import { returnStageLines, reviewStagesLine, reviewStagesWarningLines, stageName } from '../web/review-stages-text.mjs';
+import { returnStages } from './review-stages.mjs';
 
-export const QUALITY_REPORT_LIMITS = { detail: 300, tests: 30, compare: 8 };
+export const QUALITY_REPORT_LIMITS = { detail: 300, tests: 30, compare: 8, redGreen: 20, steps: 30, stages: 30 };
 
 export const CHARACTERISTICS = [
-  { id: 'functional', label: 'qualityReport.c.functional', prefixes: ['func-'] },
+  { id: 'functional', label: 'qualityReport.c.functional', prefixes: ['func-'], review: ['q-tests'] },
   { id: 'performance', label: 'qualityReport.c.performance', prefixes: ['perf-'] },
   { id: 'compatibility', label: 'qualityReport.c.compatibility', prefixes: ['compat-'] },
   { id: 'usability', label: 'qualityReport.c.usability', prefixes: ['ux-', 'a11y-'] },
   { id: 'reliability', label: 'qualityReport.c.reliability', prefixes: ['rel-'] },
-  { id: 'security', label: 'qualityReport.c.security', prefixes: ['sec-'] },
-  { id: 'maintainability', label: 'qualityReport.c.maintainability', prefixes: ['maint-'] },
+  { id: 'security', label: 'qualityReport.c.security', prefixes: ['sec-'], review: ['q-security'] },
+  { id: 'maintainability', label: 'qualityReport.c.maintainability', prefixes: ['maint-'], review: ['q-structure', 'q-simplicity'] },
   { id: 'portability', label: 'qualityReport.c.portability', prefixes: ['port-'] },
 ];
 const KIND_CHARACTERISTIC = { runtime: 'functional', integration: 'functional', visual: 'usability', preview: 'usability' };
@@ -41,6 +47,10 @@ export function characteristicEvidence(feature) {
       const target = KIND_CHARACTERISTIC[kind] ?? null;
       if (target) add(target, check.status, { kind: 'check', ref: check.id, phase });
     }
+  }
+  for (const item of feature.completed.review?.stages?.checks ?? []) {
+    const target = item.stage === 'quality' && CHARACTERISTICS.find(({ review }) => review?.includes(item.id));
+    if (target) add(target.id, item.status, { kind: 'review', ref: item.id, phase: 'review' });
   }
   for (const phase of ['implement', 'review']) {
     const scan = feature.completed[phase]?.secretScan;
@@ -113,6 +123,21 @@ export async function buildQualityReport(root, id, { language = cliText().langua
     for (const item of trace) push(`| ${item.id} | ${say(STATUS_KEY[item.status])} | ${item.proofIds.map(describe).join('; ') || '-'}${item.detail ? ` — ${inline(item.detail, QUALITY_REPORT_LIMITS.detail)}` : ''} |`);
   }
 
+  const stages = feature.completed.review?.stages ?? null;
+  const returned = returnStageLines(returnStages(feature).filter((item) => item.stage), say);
+  push('', `## ${say('reviewStages.title')}`, '', say('reviewStages.rule'), '');
+  if (!stages) push(say('reviewStages.none'));
+  else {
+    push(reviewStagesLine(stages, say), '');
+    for (const line of reviewStagesWarningLines(stages, say)) push(`- ${line}`);
+    const items = [...stages.checks.filter((item) => item.stage === 'spec'), ...stages.checks.filter((item) => item.stage === 'quality')].slice(0, QUALITY_REPORT_LIMITS.stages);
+    if (items.length) {
+      push('', `| ${say('reviewStages.column.stage')} | ${say('reviewStages.column.item')} | ${say('qualityReport.statusColumn')} | ${say('qualityReport.evidenceColumn')} |`, '| --- | --- | --- | --- |');
+      for (const item of items) push(`| ${stageName(item.stage, say)} | ${code(item.id, 64, true)} | ${say(STATUS_KEY[item.status] ?? STATUS_KEY.unverified)} | ${(item.proofIds ?? []).map(describe).join('; ') || '-'}${item.detail ? ` — ${inline(item.detail, QUALITY_REPORT_LIMITS.detail)}` : ''} |`);
+    }
+  }
+  if (returned.length) push('', ...returned.map((line) => `- ${line}`));
+
   push('', `## ${say('qualityReport.defects')}`, '');
   const defects = feature.defects ?? [];
   const defectSummary = { total: defects.length, open: openDefects(feature).length };
@@ -124,6 +149,15 @@ export async function buildQualityReport(root, id, { language = cliText().langua
       push(`| ${item.id} | ${inline(item.title)}${item.ac ? ` (${item.ac})` : ''}${item.detail ? ` — ${inline(item.detail, QUALITY_REPORT_LIMITS.detail)}` : ''} | ${say(item.status === 'open' ? 'qualityReport.defectOpen' : 'qualityReport.defectResolved')} | ${item.foundIteration} | ${item.resolvedIteration ?? '-'} | ${(item.proofIds ?? []).map(describe).join('; ') || '-'} |`);
     }
   }
+
+  const approach = approachSummary(feature);
+  if (approach) {
+    const clean = (value) => inline(value, QUALITY_REPORT_LIMITS.detail);
+    push('', `## ${say('approach.heading')}`, '', approachLine(approach, say, clean), ...(approachOthersLine(approach, say, clean) ? ['', approachOthersLine(approach, say, clean)] : []));
+  }
+
+  const rulingLines = rulingTableLines(feature, { say, inline, phaseName: (phase) => phaseName(phase, language) });
+  push('', `## ${say('rulings.table.heading')}`, '', ...(rulingLines.length ? rulingLines : [say('rulings.table.none')]));
 
   push('', `## ${say('qualityReport.tests')}`, '');
   const tests = proofs.filter((proof) => proof.kind === 'test').sort((a, b) => a.at.localeCompare(b.at));
@@ -144,6 +178,27 @@ export async function buildQualityReport(root, id, { language = cliText().langua
     }
     if (tests.length > QUALITY_REPORT_LIMITS.tests) push(say('prBody.moreProofs', tests.length - QUALITY_REPORT_LIMITS.tests));
   }
+
+  const redGreen = feature.completed.implement?.redGreen ?? null;
+  push('', `## ${say('qualityReport.redGreen')}`, '', say('qualityReport.redGreenRule'), '');
+  if (feature.discipline?.redGreen === 'enforce') push(say('redGreen.required'), '');
+  if (!redGreen) push(say('qualityReport.redGreenNone'));
+  else {
+    push(redGreenLine(redGreen, say), '');
+    for (const pair of redGreen.pairs.slice(0, QUALITY_REPORT_LIMITS.redGreen)) {
+      const red = proofs.find((item) => item.id === pair.red);
+      const failed = pair.tests?.failed?.length ? `, ${say('qualityReport.redGreenFailed', pair.tests.failed.map((name) => inline(name, 200)).join('; '))}` : '';
+      const notes = [pairChangeText(pair, say), ...pairWarnings(pair).filter((item) => item !== 'treeUnknown').map((item) => redGreenWarningText(item, say)), ...(pair.defect ? [say('redGreen.defectOf', pair.defect)] : []), ...(pair.step ? [say('redGreen.stepOf', pair.step)] : [])];
+      push(`- ${code(pair.check, 80)}: ${say('redGreen.red')} ${describe(pair.red)}${red ? ` ${code(red.at, 40)}` : ''}${failed} → ${say('redGreen.green')} ${describe(pair.green)}; ${notes.join('; ')}`);
+    }
+    if (redGreen.pairs.length > QUALITY_REPORT_LIMITS.redGreen) push(say('qualityReport.more', redGreen.pairs.length - QUALITY_REPORT_LIMITS.redGreen));
+    for (const line of redGreen.pairs.length ? [] : redGreenWarningLines(redGreen, say)) push(`- ${line}`);
+    for (const line of redGreenDefectLines(redGreen, say)) push(`- ${line}`);
+    if (redGreen.waiver) push(`- ${say('qualityReport.redGreenWaiver', inline(redGreen.waiver, QUALITY_REPORT_LIMITS.detail))}`);
+  }
+
+  const stepLines = planStepLines(feature, { say, describe: (proofId) => describe(proofId), limit: QUALITY_REPORT_LIMITS.steps });
+  if (stepLines.length) push('', `## ${say('planSteps.title')}`, '', say('planSteps.rule'), '', ...stepLines);
 
   const compare = await compareCaptures(root, feature.id, { handoffs: false }).catch(() => null);
   if (hasComparison(compare)) push('', `## ${say('prBody.compare')}`, '', ...compareLines(compare, say, QUALITY_REPORT_LIMITS.compare));
@@ -174,6 +229,7 @@ export async function buildQualityReport(root, id, { language = cliText().langua
 
   const waivers = [
     ...PHASES.filter((phase) => feature.completed[phase]?.waiver).map((phase) => say('qualityReport.proofWaiver', phaseName(phase, language), inline(feature.completed[phase].waiver, QUALITY_REPORT_LIMITS.detail))),
+    ...(feature.completed.implement?.redGreen?.waiver ? [say('qualityReport.redGreenWaiver', inline(feature.completed.implement.redGreen.waiver, QUALITY_REPORT_LIMITS.detail))] : []),
     ...(feature.completed.review?.acWaiver ? [say('qualityReport.acWaiver', inline(feature.completed.review.acWaiver, QUALITY_REPORT_LIMITS.detail))] : []),
     ...(feature.completed.review?.defectWaiver ? [say('qualityReport.defectWaiver', inline(feature.completed.review.defectWaiver, QUALITY_REPORT_LIMITS.detail))] : []),
   ];
@@ -186,5 +242,5 @@ export async function buildQualityReport(root, id, { language = cliText().langua
   push('', '---', say('qualityReport.footer'));
   const body = `${lines.join('\n').replace(/\n{3,}/g, '\n\n')}\n`;
   return { id, title: feature.title, language, body,
-    summary: { deps: deps?.state === 'changed' ? { packages: deps.manifests.reduce((sum, manifest) => sum + manifest.changes.length, 0), lockfiles: deps.lockfiles.length, audited: Boolean(deps.audit), passed: deps.audit?.passed ?? null } : null, impact: impact?.state === 'ok' ? { changed: impact.changed, related: impact.related.length, notRun: impact.related.filter((item) => !item.run).length } : null, manualChecks: manualChecks.map(({ check, proofId }) => ({ check, proven: Boolean(proofId) })), characteristics: characteristics.map(({ id: key, pass, fail }) => ({ id: key, pass, fail })), acceptance, defects: defectSummary, tests: testSummary } };
+    summary: { rulings: { total: (feature.rulings ?? []).length, unacknowledged: (feature.rulings ?? []).filter((item) => item.status === 'open').length }, redGreen: redGreen ? { state: redGreen.state, pairs: redGreen.pairs.length, warnings: redGreen.warnings.length } : null, deps: deps?.state === 'changed' ? { packages: deps.manifests.reduce((sum, manifest) => sum + manifest.changes.length, 0), lockfiles: deps.lockfiles.length, audited: Boolean(deps.audit), passed: deps.audit?.passed ?? null } : null, impact: impact?.state === 'ok' ? { changed: impact.changed, related: impact.related.length, notRun: impact.related.filter((item) => !item.run).length } : null, manualChecks: manualChecks.map(({ check, proofId }) => ({ check, proven: Boolean(proofId) })), characteristics: characteristics.map(({ id: key, pass, fail }) => ({ id: key, pass, fail })), acceptance, defects: defectSummary, tests: testSummary } };
 }

@@ -85,6 +85,13 @@ class ReleaseTests(unittest.TestCase):
         for name in ('scripts/ci-scope.mjs', 'test/ci-scope.test.mjs', '.gitea/workflows/ci.yml'):
             self.assertNotIn(name, release.FILES)
 
+    def test_pressure_eval_never_ships(self):
+        names = ['scripts/pressure-eval.mjs', 'scripts/pressure-judge.mjs', 'scripts/pressure-edits.mjs', 'test/pressure-eval.test.mjs', 'test/pressure-eval-run.test.mjs',
+                 'test/pressure-eval-edits.test.mjs', 'test/pressure-eval-ledger.test.mjs',
+                 *(path.relative_to(ROOT).as_posix() for path in (ROOT / 'test' / 'eval').rglob('*') if path.is_file())]
+        for name in names:
+            self.assertNotIn(name, release.FILES)
+
     @slow
     def test_reproducible_archive_extracts_and_runs_without_install(self):
         with tempfile.TemporaryDirectory(prefix='wax release ') as temp:

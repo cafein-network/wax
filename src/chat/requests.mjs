@@ -30,7 +30,7 @@ const modeOf = (mode = 'sm') => {
   return mode;
 };
 const replanned = () => Object.assign(new WaxError(t('errors.chat.requests.anotherSessionChangedThe')), { newRequest: true });
-const HARMLESS = new Set(['attach-evidence', 'edit', 'archive-feature', 'restore']);
+const HARMLESS = new Set(['attach-evidence', 'ruling', 'edit', 'archive-feature', 'restore', 'discipline']);
 function workflowState(workflow, feature) {
   const tracked = Number.isInteger(workflow.historyLength);
   const moves = tracked ? feature.history.slice(workflow.historyLength).filter((event) => !HARMLESS.has(event.action)) : [];
@@ -266,7 +266,7 @@ export function createRequestRunner({ root, execute = runAgentSession, notify = 
             break;
           }
           const latest = await getFeature(root, id);
-          if (latest.phase !== phase || latest.iteration !== feature.iteration || latest.archivedAt || latest.history.slice(feature.history.length).some((event) => event.action !== 'attach-evidence')) throw new WaxError(t('errors.chat.requests.anotherSessionChangedTheTask'));
+          if (latest.phase !== phase || latest.iteration !== feature.iteration || latest.archivedAt || latest.history.slice(feature.history.length).some((event) => !['attach-evidence', 'ruling'].includes(event.action))) throw new WaxError(t('errors.chat.requests.anotherSessionChangedTheTask'));
           if (typeof reply.document !== 'string' || !reply.document.trim() || reply.document.length > 100000 || typeof reply.evidence !== 'string' || !reply.evidence.trim() || reply.evidence.length > 5000 || !Array.isArray(reply.proofIds)) throw new WaxError(t('errors.chat.requests.stoppedBecauseTheStage'));
           const quality = await assessQuality(root, latest, reply.checks, reply.proofIds);
           if (!quality.ok) {

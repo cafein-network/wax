@@ -34,9 +34,13 @@
           <header><h2 id="trace-heading">실행 기록</h2><code class="kind" id="trace-feature" translate="no"></code><span class="kind" id="trace-summary"></span></header>
           <p class="kind">단계 방문마다 언제, 어느 도구로, 무엇을 근거로, 무엇을 바꾸며 지나갔는지 보여 줍니다. 읽기 전용이며 AI를 부르지 않습니다. 사용량은 headless 작업자에서 도구가 알린 값만 보여 주고, 대화형 세션의 토큰·비용은 단계 방문과 맞출 기록이 없어 보여 주지 않습니다.</p>
           <div class="row"><button type="button" id="trace-download">Markdown 내려받기</button><button type="button" id="trace-close">닫기</button></div>
+          <div id="trace-diagnose"></div>
+          <div id="trace-approach"></div>
+          <div id="trace-rulings"></div>
           <div id="trace-body" aria-live="polite"></div>
         </section>
 
+        <section class="panel worktree-board-panel" id="worktree-board-panel" aria-labelledby="worktree-board-heading"></section>
         <section class="panel pm-loop-panel" id="pm-loop-panel" aria-labelledby="pm-loop-heading"></section>
 
         <section class="panel office-panel" aria-labelledby="office-heading">
@@ -145,6 +149,7 @@
   <script type="module" src="/dashboard.mjs"></script>
   <script type="module" src="/approvals.mjs"></script>
   <script type="module" src="/triggers-panel.mjs"></script>
+  <script type="module" src="/worktree-board.mjs"></script>
   <script type="module" src="/pm-loop-panel.mjs"></script>
   <script type="module" src="/notify.mjs"></script>
 </body>

@@ -6,7 +6,8 @@ export function validProof(proof) {
   if (!proof || !/^[a-f0-9-]{36}$/.test(proof.id) || !phases.includes(proof.phase) || !Number.isSafeInteger(proof.iteration) || proof.iteration < 0 ||
       typeof proof.at !== 'string' || !Number.isFinite(Date.parse(proof.at)) ||
       (proof.author !== undefined && (typeof proof.author !== 'string' || !AUTHOR.test(proof.author))) || !validTree(proof.tree) ||
-      (proof.worktree !== undefined && (proof.kind !== 'test' || !validWorktreeTag(proof.worktree)))) return false;
+      (proof.worktree !== undefined && (proof.kind !== 'test' || !validWorktreeTag(proof.worktree))) ||
+      (proof.step !== undefined && (proof.kind !== 'test' || typeof proof.step !== 'string' || !/^S-[1-9][0-9]?$/.test(proof.step)))) return false;
   if (proof.kind === 'git') return /^[a-f0-9]{40,64}$/.test(proof.commit) && Array.isArray(proof.files) && proof.files.length <= 1000 && proof.files.every((file) => typeof file === 'string' && file.length <= 4096);
   if (proof.verification !== undefined || proof.checks !== undefined) {
     if (!['static', 'runtime', 'integration', 'visual'].includes(proof.verification) || !Array.isArray(proof.checks) || proof.checks.length > 20 || !proof.checks.every(id => typeof id === 'string' && /^[a-z][a-z0-9-]{0,63}$/.test(id))) return false;

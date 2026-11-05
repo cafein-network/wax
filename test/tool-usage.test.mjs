@@ -91,6 +91,7 @@ test('sums: per tool, unreported runs (usage null) and old records (no usage fie
   assert.deepEqual(usageLines(summary, say), [
     'Claude Code 입력 4 · 출력 8 · 캐시 읽기 22768 · 캐시 쓰기 20600 · 추론 0 · 비용 $0.1695296 · 차례 2 · 실행 2번',
     'Antigravity CLI 입력 11131 · 출력 495 · 캐시 읽기 0 · 추론 33 · 토큰 합계 11626 · 차례 1 · 실행 1번',
+    '도구가 알린 비용 $0.17(4번은 알 수 없음, 실제 청구와 다를 수 있음)',
     '사용량을 알리지 않은 실행 2번', '사용량 기록 없음(옛 기록) 1번']);
   assert.deepEqual(usageLines(sumUsage([]), say), []);
   assert.match(usageLines(summary, cliText('en').say)[0], /^Claude Code Input 4 · Output 8 .*Cost \$0\.1695296 · Turns 2 · Runs 2$/);
@@ -208,7 +209,7 @@ test('engine: each worker end record keeps the usage its tool reported (null whe
   const status = await featureStatus(root, 'f1');
   assert.deepEqual([status.usage.runs, status.usage.tokens, status.usage.tools[0].costUsd], [2, 21690, 0.0847648]);
   const pr = await buildPrBody(root, 'f1', { language: 'ko' });
-  assert.match(pr.body, /## 사용량\(도구가 알린 값\)\n\n- Claude Code 입력 2 · 출력 4 · 캐시 읽기 11384 · 캐시 쓰기 10300 · 추론 0 · 비용 \$0\.0847648 · 차례 1 · 실행 1번\n- 사용량을 알리지 않은 실행 1번/);
+  assert.match(pr.body, /## 사용량\(도구가 알린 값\)\n\n- Claude Code 입력 2 · 출력 4 · 캐시 읽기 11384 · 캐시 쓰기 10300 · 추론 0 · 비용 \$0\.0847648 · 차례 1 · 실행 1번\n- 도구가 알린 비용 \$0\.08\(1번은 알 수 없음, 실제 청구와 다를 수 있음\)\n- 사용량을 알리지 않은 실행 1번/);
   assert.doesNotMatch(prompts.join('\n'), /unreportedRuns/);
   const goalRecord = { id: g.id, title: '사용량', budgets: DEFAULT_BUDGETS };
   const report = workerPrompt({ root, goal: goalRecord, feature: await getFeature(root, 'f1'), task: { id: 't-1', phase: 'report', note: '' }, author: 'wax-worker-claude', usage: await featureUsage(root, 'f1') });

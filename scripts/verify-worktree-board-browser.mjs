@@ -1,0 +1,174 @@
+import assert from 'node:assert/strict';
+import { once } from 'node:events';
+import { execFileSync } from 'node:child_process';
+import { createServer } from 'node:http';
+import { lstat, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { createChatServer } from '../src/chat/server.mjs';
+import { createFeature } from '../src/workflow.mjs';
+import { setPm } from '../src/chat/team.mjs';
+import { createGoal, readGoal } from '../src/chat/pm-loop.mjs';
+import { prepareWorktree } from '../src/worktree-make.mjs';
+import { appendWorktree } from '../src/worktrees.mjs';
+
+const modulePath = process.env.WAX_PLAYWRIGHT_MODULE || process.argv[2];
+if (!modulePath) throw new Error('설치된 Playwright index.mjs 경로를 첫 인수로 지정하세요.');
+const { chromium } = await import(pathToFileURL(resolve(modulePath)).href);
+const root = await mkdtemp(join(tmpdir(), 'wax-worktree-board-browser-'));
+const screenshots = process.env.WAX_SCREENSHOT_DIR;
+let server, browser, dev;
+try {
+  const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  const commit = (cwd, message) => { git(cwd, 'add', '-A'); git(cwd, '-c', 'user.name=Wax Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', message); };
+  git(root, 'init', '-q', '-b', 'main');
+  git(root, 'config', 'core.autocrlf', 'false');
+  await writeFile(join(root, '.gitignore'), '.wax/\n');
+  await writeFile(join(root, 'shared.txt'), 'line\n');
+  commit(root, 'fixture');
+  for (const id of ['header-copy', 'footer-copy']) await createFeature(root, { id, title: `Edit (${id})` });
+  await setPm(root, { author: '대표', kind: 'human' });
+  const goal = await createGoal(root, { title: 'Board check', features: ['header-copy', 'footer-copy'], worktrees: true }, { author: '대표' });
+  const one = (await prepareWorktree(root, await readGoal(root, goal.id), 'header-copy')).entry;
+  const two = (await prepareWorktree(root, await readGoal(root, goal.id), 'footer-copy')).entry;
+  await appendWorktree(root, { ...two, setup: { hash: null, outcome: 'none', copy: { state: 'ok', method: 'clone', ms: 5, entries: [{ path: 'node_modules', outcome: 'cloned', files: 3 }] } }, at: undefined });
+  await writeFile(join(one.path, 'shared.txt'), 'line\nheader\n');
+  await writeFile(join(root, 'shared.txt'), 'line\nheader\n');
+  commit(root, 'Import header-copy');
+  await writeFile(join(two.path, 'footer.txt'), 'a\nb\n');
+  commit(two.path, '<img src=x onerror=alert(1)> footer');
+  await writeFile(join(two.path, 'more.txt'), 'c\n');
+  dev = createServer((req, res) => res.end('dev'));
+  dev.listen(two.port, '127.0.0.1'); await once(dev, 'listening');
+  const head = git(root, 'rev-parse', 'HEAD');
+  for (let n = 3; n <= 53; n++) {
+    await appendWorktree(root, { id: `${goal.id}-${n}`, goal: goal.id, feature: 'header-copy', branch: `wax/${goal.id}/header-copy-${n}`, path: join(root, '.wax', 'worktrees', `${goal.id}-${n}`),
+      base: head, port: null, env: [], setup: null, state: n === 3 ? 'removed' : 'active', by: '대표' });
+  }
+
+  const requestTools = async () => [{ id: 'claude', label: 'Claude Code', installed: true, approval: 'dashboard' }];
+  server = createChatServer({ root, env: { WAX_TOOL_NEWS: 'off', WAX_CHAT_USER: '대표' }, intervalMs: 50, executeWorker: async () => { throw new Error('no worker'); }, executeJudge: async () => { throw new Error('no judgment'); }, requestTools });
+  await server.startWatching(); server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  const url = `http://127.0.0.1:${server.address().port}`;
+  browser = await chromium.launch({ headless: true, executablePath: process.env.WAX_CHROMIUM_EXECUTABLE || process.argv[3] });
+  const context = await browser.newContext({ locale: 'en-US', viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
+  await context.addInitScript(() => localStorage.setItem('wax.language', 'en'));
+  const page = await context.newPage();
+  const errors = []; page.on('pageerror', (error) => errors.push(error.message));
+  const dialogs = []; page.on('dialog', (dialog) => { dialogs.push(dialog.message()); void dialog.dismiss(); });
+  const fits = async (label) => assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), true, `${label}: no horizontal scroll at 390px`);
+  const noKorean = async (locator, label) => assert.doesNotMatch((await locator.innerText()).replaceAll('대표', ''), /[가-힣]/, `${label}: English screen`);
+  let hold = true, rowCalls = 0;
+  await page.route(/\/api\/worktree-board\/goal-[a-f0-9]{8}-\d+\?tier=[23]$/, async (route) => {
+    rowCalls++;
+    while (hold) await new Promise((done) => setTimeout(done, 50));
+    await route.continue();
+  });
+
+  await page.goto(`${url}/manage?lang=en`);
+  const panel = page.locator('#worktree-board-panel');
+  await panel.locator('tr[data-worktree]').first().waitFor();
+  assert.ok(await page.evaluate(() => {
+    const board = document.getElementById('worktree-board-panel'), pm = document.getElementById('pm-loop-panel');
+    return Boolean(board.compareDocumentPosition(pm) & Node.DOCUMENT_POSITION_FOLLOWING);
+  }), 'the board sits above the PM loop');
+  assert.match(await panel.locator('h2').innerText(), /^Worktrees$/);
+  assert.equal(await panel.locator('tr[data-worktree]').count(), 52, 'removed rows are hidden');
+  const rowOne = panel.locator(`tr[data-worktree="${one.id}"]`), rowTwo = panel.locator(`tr[data-worktree="${two.id}"]`);
+  assert.equal(await rowOne.getAttribute('data-tier'), '0', 'beyond the first 50 rows: record cells only');
+  assert.match(await rowOne.locator('td[data-cell="goal"]').innerText(), /Board check · header-copy/);
+  assert.match(await rowOne.locator('td[data-cell="activity"]').innerText(), /Idle/);
+  assert.match(await panel.locator('.wt-more-text').innerText(), /2 more rows without git cells/);
+  await noKorean(panel, 'worktree board');
+  assert.deepEqual(await rowOne.locator('td').evaluateAll((cells) => cells.slice(0, 3).map((cell) => getComputedStyle(cell, '::before').content)), ['"Status"', '"Activity"', '"Goal · Task"']);
+  await fits('worktree board');
+
+  await panel.locator('button.wt-more').click();
+  await rowTwo.locator('td[data-cell="uncommitted"]', { hasText: '1 uncommitted files' }).waitFor();
+  assert.match(await rowTwo.locator('td[data-cell="ahead"]').innerText(), /1 commits ahead/);
+  assert.equal(await rowTwo.locator('td[data-cell="setup"]').innerText(), 'no setup script · 1 copied');
+  assert.match(await rowTwo.locator('td[data-cell="baseMoved"]').innerText(), /main moved 1 commits since/);
+  assert.equal(await rowTwo.locator('td[data-cell="lines"]').innerText(), '…', 'lines are filled later');
+  assert.equal(await rowTwo.locator('.wt-judge').getAttribute('data-judge'), 'pending');
+  assert.equal(await panel.locator('button.wt-more').isHidden(), true);
+  assert.equal(await rowTwo.locator('td[data-cell="lastCommit"]').innerText(), '<img src=x onerror=alert(1)> footer');
+  assert.equal(await panel.locator('img').count(), 0, 'the subject is not parsed as HTML');
+  const link = rowTwo.locator('a.wt-port-link');
+  assert.deepEqual(await link.evaluate((node) => [node.getAttribute('href'), node.target, node.rel, node.textContent]), [`http://127.0.0.1:${two.port}`, '_blank', 'noopener noreferrer', String(two.port)]);
+  assert.equal(await rowTwo.locator('.wt-port-up').innerText(), 'On');
+  assert.match(await rowOne.locator('td[data-cell="port"]').innerText(), new RegExp(`${one.port}\\s*Off`));
+  if (screenshots) await panel.screenshot({ path: join(screenshots, 'worktree-board-skeleton-390-en.png') });
+
+  hold = false;
+  await rowOne.locator('.wt-judge[data-judge="integrated"]').waitFor();
+  assert.match(await rowOne.locator('.wt-judge').innerText(), /^Already in main \(safe to clean up\)/);
+  await rowTwo.locator('.wt-judge[data-judge="not"]').waitFor();
+  assert.equal(await rowTwo.locator('.wt-judge').innerText(), 'Not in main yet');
+  await rowTwo.locator('td[data-cell="lines"]', { hasText: 'Lines +3 −0' }).waitFor();
+  assert.equal(await rowOne.locator('td[data-cell="lines"]').innerText(), 'Lines +1 −0');
+  assert.equal(rowCalls, 4, 'two calls per filled row (tier 2 and 3), only for rows with git cells');
+  assert.equal(await panel.locator('button').filter({ hasText: /Import|Discard/ }).count(), 0, 'no import or discard buttons in the table');
+  assert.equal(await rowOne.locator('button.wt-cleanup').innerText(), 'Clean up', 'the row already in main gets Clean up');
+  assert.equal(await panel.locator('button.wt-cleanup').count(), 1, 'only that row');
+  await noKorean(panel, 'filled worktree board');
+  await fits('filled worktree board');
+  if (screenshots) await panel.screenshot({ path: join(screenshots, 'worktree-board-filled-390-en.png') });
+
+  await panel.locator('input.wt-show-removed').check();
+  await panel.locator(`tr[data-worktree="${goal.id}-3"][data-state="removed"]`).waitFor();
+  assert.equal(await panel.locator(`tr[data-worktree="${goal.id}-3"] td[data-cell="state"]`).innerText(), 'removed');
+  await fits('show removed');
+
+  const goalBox = page.locator(`#pm-loop-panel .pm-goal[data-goal="${goal.id}"] .pm-worktrees .wt-goal-board`);
+  await goalBox.waitFor({ state: 'attached' });
+  await goalBox.scrollIntoViewIfNeeded();
+  await goalBox.locator('tr[data-worktree]').first().waitFor();
+  await goalBox.locator('button.wt-more').click();
+  await goalBox.locator(`tr[data-worktree="${one.id}"] .wt-judge[data-judge="integrated"]`).waitFor();
+  await noKorean(goalBox, 'goal screen worktree board');
+  await fits('goal screen worktree board');
+
+  await panel.locator('input.wt-show-removed').uncheck();
+  await panel.locator('button.wt-more:not([hidden])').click();
+  await rowOne.locator('button.wt-cleanup').waitFor();
+  await rowOne.locator('button.wt-cleanup').click();
+  const confirmBox = panel.locator('.wt-cleanup-confirm-box');
+  await confirmBox.waitFor();
+  assert.equal(await confirmBox.getAttribute('data-worktree'), one.id);
+  assert.match(await confirmBox.innerText(), /Clean up this worktree\?/);
+  assert.match(await confirmBox.locator('code').innerText(), new RegExp(`/\\.wax/worktrees/${one.id}$`));
+  assert.match(await confirmBox.innerText(), /Already in main \(safe to clean up\)/);
+  assert.match(await confirmBox.innerText(), /Ignored files such as node_modules\/ and everything else in this folder are deleted\. The branch is kept\./);
+  await noKorean(confirmBox, 'cleanup confirm');
+  await fits('cleanup confirm');
+  if (screenshots) await panel.screenshot({ path: join(screenshots, 'worktree-board-cleanup-390-en.png') });
+  await writeFile(join(one.path, 'late.txt'), 'changed after the look\n');
+  await confirmBox.locator('button.wt-cleanup-confirm').click();
+  await confirmBox.locator('.error[role="alert"]').waitFor();
+  assert.match(await confirmBox.locator('.error').innerText(), /changed since you looked/);
+  assert.ok(await lstat(one.path).then(() => true, () => false), 'nothing was deleted');
+  await rm(join(one.path, 'late.txt'));
+  await confirmBox.locator('button.wt-cleanup-cancel').click();
+  assert.equal(await panel.locator('.wt-cleanup-box').isHidden(), true);
+  await panel.locator('button.wt-refresh').click();
+  await panel.locator('button.wt-more:not([hidden])').click();
+  await rowOne.locator('button.wt-cleanup').waitFor();
+  await rowOne.locator('button.wt-cleanup').click();
+  await panel.locator('.wt-cleanup-confirm-box button.wt-cleanup-confirm').click();
+  await panel.locator('.wt-cleanup-done').waitFor();
+  assert.match(await panel.locator('.wt-cleanup-done').innerText(), new RegExp(`Cleaned up worktree ${one.id}\\. The branch is kept`));
+  assert.equal(await panel.locator('.wt-cleanup-box code').innerText(), `git branch -D ${one.branch}`);
+  await rowOne.waitFor({ state: 'detached' });
+  assert.equal(await lstat(one.path).then(() => true, () => false), false, 'the folder is gone');
+  assert.ok(git(root, 'rev-parse', '--verify', '-q', `refs/heads/${one.branch}`), 'the branch is kept');
+  await noKorean(panel, 'after cleanup');
+  await fits('after cleanup');
+  assert.deepEqual(errors, []);
+  assert.deepEqual(dialogs, [], 'nothing from the repository ran as script');
+  console.log('PASS browser: worktree board above the PM loop and in the goal screen → record cells first, line counts and the check filled per row afterwards (delayed responses) → an imported-and-committed worktree reads Already in main, the other Not in main yet with line counts → dev server link 127.0.0.1 with a numeric port in a new window (On for a running fake server) → commit subjects as text only → Show more fills the next rows → Show removed → Clean up only on the row already in main, a change after the look is refused (409) and nothing is deleted, confirming again removes the folder and the row and shows the branch delete command, 390px English.');
+} finally {
+  await browser?.close(); await server?.shutdown();
+  await new Promise((done) => (dev ? dev.close(done) : done()));
+  await rm(root, { recursive: true, force: true });
+}

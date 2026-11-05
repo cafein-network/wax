@@ -4,6 +4,7 @@ import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep, win
 import { PHASES, WaxError } from './workflow.mjs';
 
 export const ALLOW_KINDS = ['wax', 'test', 'write', 'read'];
+const STEP = /^S-[1-9][0-9]?$/;
 export const ALLOW_LIMITS = { test: 500, command: 4000, evidence: 2000, offers: 500 };
 const HIDDEN = /[\p{Cc}\p{Cf}]/u;
 const META = /[;&|<>$`\\(){}[\]*?~!#^\n\r\t]/;
@@ -258,6 +259,18 @@ async function matchWax(command, ctx) {
     const values = options(rest.slice(1), ['project']);
     return Boolean(values) && project(values);
   }
+  if (sub === 'ruling') {
+    if (rest[0] !== ctx.feature) return false;
+    const values = options(rest.slice(1), ['phase', 'author', 'file', 'project']);
+    if (!values || values.phase !== ctx.phase || values.author !== ctx.author || !values.file) return false;
+    return await project(values) && inTmp(ctx.root, values.file, base);
+  }
+  if (sub === 'approach') {
+    if (ctx.phase !== 'design' || rest[0] !== ctx.feature || rest[1] !== '--propose') return false;
+    const values = options(rest.slice(2), ['file', 'author', 'project']);
+    if (!values?.file || (values.author !== undefined && values.author !== ctx.author)) return false;
+    return await project(values) && inTmp(ctx.root, values.file, base);
+  }
   if (sub !== 'save' && sub !== 'complete') return false;
   if (rest[0] !== ctx.phase || rest[1] !== ctx.feature) return false;
   if (sub === 'save') {
@@ -278,6 +291,11 @@ async function matchWax(command, ctx) {
 async function matchTest(command, ctx) {
   const test = ctx.test;
   if (!test) return false;
+  const untrusted = Array.isArray(ctx.untrusted) ? ctx.untrusted : [];
+  if (untrusted.length) {
+    if (ctx.cwd && untrusted.includes(ctx.cwd)) return false;
+    ctx = { ...ctx, worktrees: (Array.isArray(ctx.worktrees) ? ctx.worktrees : []).filter((path) => !untrusted.includes(path)) };
+  }
   const line = command.trim();
   if (!shellWords(test)) return false;
   const at = line.indexOf(' -- ');
@@ -287,8 +305,9 @@ async function matchTest(command, ctx) {
   const lead = all && leadingProject(all);
   const args = lead?.args;
   if (!args || args[0] !== 'test' || args[1] !== ctx.feature) return false;
-  const values = options(args.slice(2), ['revision', 'author', 'project', 'worktree']);
+  const values = options(args.slice(2), ['revision', 'author', 'project', 'worktree', 'step']);
   if (!values || (values.revision && !REVISION.test(values.revision)) || (values.author && values.author !== ctx.author)) return false;
+  if (values.step !== undefined && (ctx.phase !== 'implement' || !STEP.test(values.step))) return false;
   if (lead.project !== undefined && values.project !== undefined) return false;
   const project = lead.project ?? values.project;
   if (project !== undefined && !await sameProject(project, ctx)) return false;

@@ -34,7 +34,7 @@ When the feature already exists (not one you create in step 1 below), read wax_c
 This command performs the plan (기획) phase.
 1. Parse the first argument as a feature ID. If it does not exist, create it with CLI start <id> --title <title> --description <request>. If the user supplied a natural-language request without an ID, choose a short valid English slug.
 2. Read CLI status <id>. If the current phase is not plan, explain the actual next phase and stop. Do not skip gates.
-3. Read CLI prompt plan <id> and follow its phase instructions.
+3. Read CLI prompt plan <id> and follow its phase instructions. Split it into S-N steps (files, exact check command, done, AC). "Steps later": each needs its check now, or check: none(<reason>).
 4. Write the phase document under docs/wax/<id>/plan.md without overwriting unrelated documents. Save it with CLI save plan <id> --file <path>.
 5. If the phase requirements are satisfied, run CLI complete plan <id> --evidence <concrete summary and document path> --author <name>. Leave the phase open if a required decision or verification is missing.
 

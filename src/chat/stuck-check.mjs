@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { t } from '../../web/messages-catalog.mjs';
 import { WaxError } from '../workflow.mjs';
-import { validTree } from '../freshness.mjs';
+import { treeKey } from '../freshness.mjs';
 
 export const STUCK_CHECK = ['warn', 'stop', 'off'];
 export const REPEAT_LIMITS = { tail: 2000, max: 2000, pollMs: 5000 };
@@ -48,10 +48,7 @@ export function normalizeTestOutput(output, { roots = [], tmp = [tmpdir()] } = {
   return text.slice(-REPEAT_LIMITS.tail);
 }
 
-export function treeKey(tree) {
-  if (!tree || tree.unknown !== undefined || !validTree(tree)) return null;
-  return [tree.head, Object.entries(tree.files).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))];
-}
+export { treeKey };
 
 export function testRepeatKey(proof, options = {}) {
   if (proof?.kind !== 'test' || proof.exitCode === 0) return null;

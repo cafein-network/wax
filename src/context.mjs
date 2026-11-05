@@ -8,6 +8,7 @@ import { createTreeObserver, evidenceFreshness, freshnessText } from './freshnes
 import { AC_LABELS, acceptanceTrace, describeProof } from './acceptance.mjs';
 import { DEFECT_LABELS } from './defects.mjs';
 import { MANUAL_FILE, readManual } from './manual.mjs';
+import { stepProgress } from './plan-progress.mjs';
 
 export const DEFAULT_CONTEXT_BUDGET = 3000;
 const length = (text) => Array.from(text).length;
@@ -108,6 +109,13 @@ export async function buildContext(root, id, { budget = DEFAULT_CONTEXT_BUDGET }
   const manual = !manualEntry?.exists ? [] : manualEntry.usable && manualEntry.approval.state === 'approved'
     ? [`- 승인됨, 해시 ${manualEntry.hash.slice(0, 12)}: 단계 지시문(CLI prompt, PM 루프 작업자)에 인용됨; ${MANUAL_FILE}`]
     : [`- 지시문에 넣지 않음(${manualEntry.usable ? MANUAL_STATE[manualEntry.approval.state] ?? manualEntry.approval.state : quote(manualEntry.reason ?? '쓸 수 없음', 120)}). 대시보드에서 사람이 승인해야 들어갑니다; ${MANUAL_FILE}`];
+  const STEP_STATE = { failed: '검사 실패', pending: '아직 검사 안 함', otherCommand: '단계 검사와 다른 명령', noCheck: '검사 없음' };
+  const progress = stepProgress(feature);
+  const left = progress ? progress.steps.filter((row) => row.state !== 'passed') : [];
+  const steps = !progress ? [] : [
+    `- 검사 통과 ${progress.done}/${progress.checked}개(빨강→초록 ${progress.redGreen}), 검사 없음 ${progress.noCheck}개, 남은 단계 ${left.length}개; ${source}#/artifacts/plan`,
+    ...left.slice(0, 3).map((row) => `- ${row.id} ${quote(row.title || '-', 100)}: ${STEP_STATE[row.state]}, 검사 ${row.check ? quote(row.check, 160) : `없음(${quote(row.none ?? '-', 80)})`}; ${source}#/artifacts/plan`),
+  ];
   const wiki = (await pagesFor(root, id)).map((page) => `- ${quote(page.title, 100)}; ${page.path} (wax wiki show ${page.slug})`);
   const rules = (await approvedRules(root)).slice(-RULE_LIMITS.prompt).reverse().map((rule) => `- ${quote(rule.body)}; .wax/chat/rules.jsonl#${rule.id}`);
   const groups = [
@@ -116,6 +124,7 @@ export async function buildContext(root, id, { budget = DEFAULT_CONTEXT_BUDGET }
     { name: '위키', title: '이 작업을 인용한 위키 페이지 · 근거가 달린 정리, 지금 코드에서 다시 확인', items: wiki },
     { name: '미해결 질문', title: '미해결 질문 · 답변이나 결정이 연결되지 않은 노트', items: questions },
     { name: '결정', title: '결정 기록 · 유효성 재확인 필요', items: decisions },
+    { name: '계획 단계', title: '계획 단계 · 기획의 S-N과 이 주기 구현 근거, 남은 단계 첫 3개', items: steps },
     { name: '수용 기준', title: '수용 기준 추적표 · 기획의 AC → 검토 상태 → 근거', items: acceptance },
     { name: '결함', title: '결함 기록 · 검토에서 찾은 결함과 재검증 상태', items: defects },
     { name: '근거', title: '실행 근거 · 현재 코드의 통과 보장 아님', items: proofLines },

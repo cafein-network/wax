@@ -5,7 +5,12 @@ import { phaseName } from './thread-model.mjs';
 import { mountRecipes } from './recipes-panel.mjs';
 import { allowFields, allowView } from './goal-allow.mjs';
 import { worktreeField, worktreeView } from './worktrees.mjs';
-import { usageLines } from './usage-text.mjs';
+import { redGreenField, redGreenView } from './red-green-panel.mjs';
+import { approachController, approachField, approachView, cardData } from './approach-panel.mjs';
+import { mountWorktreeBoard } from './worktree-board.mjs';
+import { mountDiagnose } from './diagnose-panel.mjs';
+import { costLimitText, usageLines } from './usage-text.mjs';
+import { createReviewList, repeatDefaultView, verdictHint, verdictText } from './pm-review-list.mjs';
 
 export const KIND_LABELS = {
   'confirm-plan': t('pmLoop.kind.confirmPlan'), assign: t('pmLoop.kind.assign'), renotify: t('pmLoop.kind.renotify'), reclaim: t('pmLoop.kind.reclaim'),
@@ -14,7 +19,7 @@ export const KIND_LABELS = {
   'ask-reviewer': t('pmLoop.kind.askReviewer'), 'start-worker': t('pmLoop.kind.startWorker'), 'self-review': t('pmLoop.kind.selfReview'),
   judge: t('pmLoop.kind.judge'), 'judge-proposal': t('pmLoop.kind.judgeProposal'), 'judge-failed': t('pmLoop.kind.judgeFailed'), wait: t('pmLoop.kind.wait'), worker: t('pmLoop.kind.worker'), 'wait-capacity': t('pmLoop.kind.waitCapacity'), held: t('pmLoop.kind.held'),
   finished: t('pmLoop.kind.finished'), missing: t('pmLoop.kind.missing'), archived: t('pmLoop.kind.archived'), stopped: t('pmLoop.kind.stopped'), planned: t('pmLoop.kind.planned'),
-  restore: t('pmLoop.kind.restore'),
+  restore: t('pmLoop.kind.restore'), 'approach-doubt': t('pmLoop.kind.approachDoubt'), 'pick-approach': t('pmLoop.kind.pickApproach'),
 };
 export const STATE_LABELS = { planning: t('pmLoop.state.planning'), running: t('pmLoop.state.running'), 'waiting-human': t('pmLoop.state.waitingHuman'), done: t('pmLoop.state.done'), stopped: t('pmLoop.state.stopped') };
 const OUTCOME_LABELS = { executed: t('pmLoop.outcome.executed'), dismissed: t('pmLoop.outcome.dismissed'), failed: t('pmLoop.outcome.failed'), created: t('pmLoop.outcome.created'),
@@ -24,11 +29,13 @@ const OUTCOME_LABELS = { executed: t('pmLoop.outcome.executed'), dismissed: t('p
   reused: t('pmLoop.outcome.reused'), 'setup-failed': t('pmLoop.outcome.setupFailed'), 'setup-timeout': t('pmLoop.outcome.setupTimeout'), 'setup-stopped': t('pmLoop.outcome.setupStopped') };
 const JUDGMENT_LABELS = { plan: t('pmLoop.judge.plan'), block: t('pmLoop.judge.block'), report: t('pmLoop.judge.report') };
 const BLOCK_ACTIONS = [['retry', t('pmLoop.judge.actionRetry')], ['reassign', t('pmLoop.judge.actionReassign')], ['ask', t('pmLoop.judge.actionAsk')], ['iterate', t('pmLoop.judge.actionIterate')]];
-const BUDGETS = [['phaseRuns', t('pmLoop.budgetLabel.phaseRuns')], ['workers', t('pmLoop.budgetLabel.workers')], ['hours', t('pmLoop.budgetLabel.hours')], ['iterations', t('pmLoop.budgetLabel.iterations')], ['failures', t('pmLoop.budgetLabel.failures')], ['autoPerHour', t('pmLoop.budgetLabel.autoPerHour')], ['idleMinutes', t('pmLoop.budgetLabel.idleMinutes')], ['repeats', t('pmLoop.budgetLabel.repeats')], ['tokens', t('pmLoop.budgetLabel.tokens')]];
+const BUDGETS = [['phaseRuns', t('pmLoop.budgetLabel.phaseRuns')], ['workers', t('pmLoop.budgetLabel.workers')], ['hours', t('pmLoop.budgetLabel.hours')], ['iterations', t('pmLoop.budgetLabel.iterations')], ['failures', t('pmLoop.budgetLabel.failures')], ['autoPerHour', t('pmLoop.budgetLabel.autoPerHour')], ['idleMinutes', t('pmLoop.budgetLabel.idleMinutes')], ['repeats', t('pmLoop.budgetLabel.repeats')], ['rootCauseTries', t('pmLoop.budgetLabel.rootCauseTries')], ['tokens', t('pmLoop.budgetLabel.tokens')], ['costUsd', t('pmLoop.budgetLabel.costUsd')]];
 const BUDGET_MIN = { iterations: '0', idleMinutes: '0', repeats: '2', tokens: '1000' };
-const OPTIONAL_BUDGETS = new Set(['tokens']);
+const OPTIONAL_BUDGETS = new Set(['tokens', 'costUsd']);
+const TEXT_BUDGETS = new Set(['costUsd']);
 const phaseLabel = (phase) => (phase ? phaseName(phase) : '-');
 const raw = (text, tag = 'span') => el(tag, { translate: 'no', text });
+const CHECK_POLL_MS = 3000;
 
 export function elapsedLabel(ms) {
   const seconds = Math.max(0, Math.floor((Number.isFinite(ms) ? ms : 0) / 1000));
@@ -40,6 +47,7 @@ function executeLabel(card, tool) {
   if (card.kind === 'start-worker' || card.kind === 'self-review') return t('pmLoop.action.startWorker', card.options?.find((item) => item.id === tool)?.label ?? tool);
   if (card.kind === 'judge' || card.kind === 'judge-retry') return t('pmLoop.action.judge', card.label ?? '-');
   if (card.kind === 'auto-retry') return t('pmLoop.action.autoRetry');
+  if (card.kind === 'approach-doubt') return t('pmLoop.rootCause.more');
   if (card.kind === 'judge-proposal') return card.judgment === 'plan' ? t('pmLoop.action.acceptPlan') : card.judgment === 'report' ? t('pmLoop.action.acceptReport') : t('pmLoop.action.acceptBlock');
   return { 'confirm-plan': t('pmLoop.action.confirm'), renotify: t('pmLoop.action.renotify'), reclaim: t('pmLoop.action.reclaim'), blocked: t('pmLoop.action.reclaim'),
     'pr-body': t('pmLoop.action.prBody'), 'await-pr': t('pmLoop.action.awaitPr') }[card.kind];
@@ -89,7 +97,28 @@ export function proposalEditor(card, drafts = new Map(), { busy = false } = {}) 
   return { node: el('div', { class: 'pm-proposal' }, field(t('pmLoop.judge.fieldReport'), report)), read: () => value };
 }
 
-export function pmCard(card, decide, { busy = false, choices = new Map(), drafts = new Map() } = {}) {
+export function rootCauseLine(item, { withChange = false } = {}) {
+  if (!item || typeof item !== 'object') return el('span', {});
+  if (item.missing) return el('span', { class: 'pm-root-cause-missing', text: t('pmLoop.rootCause.missing') });
+  const result = { fixed: t('pmLoop.rootCause.fixed'), 'not-fixed': t('pmLoop.rootCause.notFixed') }[item.result] ?? t('pmLoop.rootCause.unknown');
+  return el('span', { class: 'pm-root-cause-hypothesis' }, t('pmLoop.rootCause.hypothesisLabel'), ' ', raw(item.hypothesis ?? ''), ' · ', el('span', { text: result }),
+    item.reproduced === false ? [' · ', t('pmLoop.rootCause.notReproduced')] : null,
+    withChange && item.change ? [' · ', t('pmLoop.rootCause.changeLabel'), ' ', raw(item.change)] : null);
+}
+
+function doubtBox(card) {
+  return el('div', { class: 'pm-root-cause' },
+    card.command ? el('p', { class: 'kind' }, t('pmLoop.rootCause.command'), ' ', el('code', { translate: 'no', text: card.command })) : null,
+    card.hypotheses?.length ? el('h4', { text: t('pmLoop.rootCause.hypotheses') }) : null,
+    card.hypotheses?.length ? el('ol', { class: 'pm-hypotheses' }, card.hypotheses.map((item) => el('li', { dataset: { attempt: String(item.attempt ?? ''), result: item.missing ? 'missing' : item.result ?? '' } },
+      rootCauseLine(item, { withChange: true })))) : null,
+    el('p', { class: 'kind', text: t('pmLoop.rootCause.back') }),
+    el('p', { class: 'kind', text: t('pmLoop.rootCause.moreHint') }));
+}
+
+export function pmCard(card, decide, { busy = false, choices = new Map(), drafts = new Map(), stop = null, approach = null } = {}) {
+  const doubt = card.kind === 'approach-doubt';
+  const picking = card.kind === 'pick-approach';
   const detail = (card.kind === 'judge' ? null : card.warning) ?? card.note ?? card.file ?? null;
   const self = card.kind === 'self-review';
   const launch = (card.kind === 'start-worker' || self) && card.executable;
@@ -109,7 +138,8 @@ export function pmCard(card, decide, { busy = false, choices = new Map(), drafts
       card.judgment ? el('span', { class: 'badge pm-judgment', text: JUDGMENT_LABELS[card.judgment] ?? card.judgment }) : null,
       card.feature ? el('strong', { translate: 'no', text: card.feature }) : null,
       card.phase ? el('span', { class: 'kind', text: phaseLabel(card.phase) }) : null,
-      card.human ? el('span', { class: 'badge pm-human-badge', text: t('pmLoop.humanDecision') }) : null),
+      card.human ? el('span', { class: 'badge pm-human-badge', text: t('pmLoop.humanDecision') }) : null,
+      card.rootCause ? el('span', { class: 'badge pm-root-cause-badge', text: t('pmLoop.rootCause.mode', card.rootCause.attempt) }) : null),
     el('p', { text: card.reason }),
     detail ? el('pre', { class: 'pm-detail', translate: 'no', text: detail }) : null,
     card.judged ? el('p', { class: 'kind pm-judged', text: card.judged }) : null,
@@ -118,6 +148,8 @@ export function pmCard(card, decide, { busy = false, choices = new Map(), drafts
     card.healthNote ? el('p', { class: 'kind pm-health-note', text: card.healthNote }) : null,
     card.toolWarning && !editor ? el('p', { class: 'error pm-tool-warning', role: 'note', text: card.toolWarning }) : null,
     self ? selfReviewBox(card) : null,
+    doubt ? doubtBox(card) : null,
+    picking && approach ? approach(card) : null,
     editor && card.proposal.reason ? el('p', { class: 'kind pm-ai-reason' }, t('pmLoop.judge.aiReason'), ' ', raw(card.proposal.reason)) : null,
     editor?.node ?? null,
     editor ? el('p', { class: 'kind', text: t('pmLoop.judge.edited') }) : null,
@@ -129,7 +161,8 @@ export function pmCard(card, decide, { busy = false, choices = new Map(), drafts
     toolWarning,
     el('div', { class: 'row proposal-actions' },
       execute,
-      card.kind === 'confirm-plan' ? null : el('button', { type: 'button', disabled: busy, text: card.executable ? t('pmLoop.action.dismiss') : t('pmLoop.action.acknowledge'), onclick: () => { drafts.delete(card.key); decide(card, 'dismiss'); } })));
+      doubt && stop ? el('button', { type: 'button', class: 'pm-doubt-stop', disabled: busy, text: t('pmLoop.action.stop'), onclick: () => stop() }) : null,
+      card.kind === 'confirm-plan' || doubt || picking ? null : el('button', { type: 'button', disabled: busy, text: card.executable ? t('pmLoop.action.dismiss') : t('pmLoop.action.acknowledge'), onclick: () => { drafts.delete(card.key); decide(card, 'dismiss'); } })));
 }
 
 function selfReviewBox(card) {
@@ -185,29 +218,38 @@ function featureRow(feature) {
       el('span', { class: 'badge', text: feature.phase === 'done' ? t('pmLoop.state.done') : phaseLabel(feature.phase) }),
       feature.ac ? el('span', { class: 'kind', text: t('pmLoop.acCount', feature.ac) }) : null),
     el('p', { class: 'kind' }, t('pmLoop.assignee'), ' ', feature.assignee ? raw(`${feature.assignee.to} · ${feature.assignee.task}`) : '-'),
+    feature.rulings ? el('p', { class: 'kind pm-rulings', dataset: { unacknowledged: String(feature.rulings.unacknowledged) } }, t('rulings.summary', feature.rulings.total, feature.rulings.unacknowledged),
+      feature.rulings.flagged ? ` · ${t('rulings.flag')}` : null, ' ', el('a', { class: 'link', href: `/manage?feature=${encodeURIComponent(feature.id)}` }, t('rulings.goal.open'))) : null,
     el('p', { class: 'kind' }, t('pmLoop.next'), ' ', el('span', { class: 'badge', text: KIND_LABELS[next.kind] ?? next.kind }), ' ', next.reason));
 }
 
 function budgetInputs(goal) {
   return el('div', { class: 'trigger-grid pm-budgets' }, BUDGETS.map(([name, label]) => el('label', { class: 'trigger-field' }, el('span', { text: label }),
-    el('input', { type: 'number', name, min: BUDGET_MIN[name] ?? '1', value: String(goal?.budgets?.[name] ?? '') }))));
+    TEXT_BUDGETS.has(name) ? el('input', { type: 'text', inputmode: 'decimal', autocomplete: 'off', name, placeholder: '5.00', value: String(goal?.budgets?.[name] ?? '') })
+      : el('input', { type: 'number', name, min: BUDGET_MIN[name] ?? '1', value: String(goal?.budgets?.[name] ?? '') }))));
 }
-const readBudgets = (box) => Object.fromEntries([...box.querySelectorAll('input[type="number"]')].map((input) => [input.name, input.value === '' ? (OPTIONAL_BUDGETS.has(input.name) ? null : undefined) : Number(input.value)]));
+const readBudgets = (box) => Object.fromEntries([...box.querySelectorAll('input[name]')].map((input) => {
+  const value = input.value.trim();
+  return [input.name, value === '' ? (OPTIONAL_BUDGETS.has(input.name) ? null : undefined) : TEXT_BUDGETS.has(input.name) ? value : Number(value)];
+}));
 
 function usageView(goal) {
   const lines = usageLines(goal.usage);
-  const limit = goal.budget?.limits?.tokens;
+  const limit = goal.budget?.limits?.tokens, cost = goal.budget?.limits?.costUsd;
   return el('div', { class: 'kind pm-usage', dataset: { tokens: String(goal.budget?.usage?.tokens ?? 0), unreported: String(goal.usage?.unreported ?? 0) } },
     lines.length ? el('p', {}, el('span', { text: t('usage.heading') }), ': ', ...lines.flatMap((line, i) => [i ? el('br') : null, el('span', { text: line })]))
       : el('p', { text: t('pmLoop.usageLine', t('pmLoop.usageNone')) }),
-    Number.isSafeInteger(limit) ? el('p', { class: 'pm-tokens', text: t('pmLoop.tokensLine', goal.budget.usage.tokens ?? 0, limit) }) : null);
+    Number.isSafeInteger(limit) ? el('p', { class: 'pm-tokens', text: t('pmLoop.tokensLine', goal.budget.usage.tokens ?? 0, limit) }) : null,
+    typeof cost === 'number' ? el('p', { class: 'pm-cost', dataset: { cost: String(goal.budget.usage.costUsd ?? ''), unknown: String(goal.budget.usage.costUnknown ?? 0) },
+      text: costLimitText(goal.budget.usage, cost) }) : null);
 }
 
 function workerRow(goal, worker, { act, busy }) {
   return el('li', { class: 'pm-worker', dataset: { worker: worker.id, tool: worker.tool, ...(worker.repeat ? { repeat: String(worker.repeat.count) } : {}) } },
     el('div', { class: 'agent-head' }, el('span', { class: 'badge', text: worker.label }), el('strong', { translate: 'no', text: worker.feature }),
       el('span', { class: 'kind', text: phaseLabel(worker.phase) }), raw(`${worker.to} · ${worker.task}`),
-      worker.repeat ? el('span', { class: 'badge pm-repeat-badge', text: t('pmLoop.repeat.row', worker.repeat.count) }) : null),
+      worker.repeat ? el('span', { class: 'badge pm-repeat-badge', text: t('pmLoop.repeat.row', worker.repeat.count) }) : null,
+      worker.rootCause ? el('span', { class: 'badge pm-root-cause-badge', text: t('pmLoop.rootCause.mode', worker.rootCause.attempt ?? '-') }) : null),
     worker.repeat ? el('p', { class: 'kind pm-repeat', role: 'status', text: worker.repeat.reason }) : null,
     el('div', { class: 'row proposal-actions' },
       el('span', { class: 'kind pm-elapsed', dataset: { started: worker.startedAt }, text: worker.alive ? t('pmLoop.workers.elapsed', elapsedLabel(worker.elapsedMs)) : t('pmLoop.workers.lost') }),
@@ -288,7 +330,6 @@ export function reviewView(goal, { review, busy, opened = null, changing = new S
   const items = goal.repeatReviews ?? [];
   if (!items.length) return null;
   const summary = goal.repeatReview ?? { total: items.length, unrated: items.filter((item) => !item.review).length };
-  const verdictText = (verdict) => (verdict === 'right' ? t('pmLoop.review.right') : t('pmLoop.review.wrong'));
   const row = (item) => {
     const ended = item.subject === 'repeat-stuck' || Boolean(item.facts?.end);
     const facts = [
@@ -296,11 +337,11 @@ export function reviewView(goal, { review, busy, opened = null, changing = new S
       ended ? (item.facts?.completed ? t('pmLoop.review.factCompleted') : t('pmLoop.review.factNotCompleted')) : null,
       item.facts?.passedAfter === true ? t('pmLoop.review.factPassed') : item.facts?.passedAfter === false && ended ? t('pmLoop.review.factNotPassed') : null,
     ].filter(Boolean);
-    const note = el('input', { type: 'text', name: 'review-note', maxlength: '300', placeholder: t('pmLoop.review.note'), translate: 'no', value: notes.get(item.target) ?? '',
+    const note = el('input', { type: 'text', name: 'review-note', maxlength: '300', placeholder: t('pmLoop.review.note'), value: notes.get(item.target) ?? '',
       oninput: (event) => notes.set(item.target, event.target.value) });
     const ask = !item.review || changing.has(item.target);
     const buttons = ended && ask ? el('div', { class: 'row pm-review-buttons' },
-      ['right', 'wrong'].map((verdict) => el('button', { type: 'button', class: `pm-review-${verdict}`, disabled: busy, title: verdict === 'right' ? t('pmLoop.review.rightHint') : t('pmLoop.review.wrongHint'), text: verdictText(verdict),
+      ['right', 'wrong', 'unsure'].map((verdict) => el('button', { type: 'button', class: `pm-review-${verdict}`, disabled: busy, title: verdictHint(verdict), text: verdictText(verdict),
         onclick: () => review(goal, item, verdict, notes.get(item.target) ?? '') })), note) : null;
     return el('li', { class: 'pm-review', dataset: { target: item.target, subject: item.subject, verdict: item.review?.verdict ?? 'none' } },
       el('span', { class: 'kind', text: `${timeLabel(item.at)} · ` }),
@@ -323,18 +364,21 @@ export function reviewView(goal, { review, busy, opened = null, changing = new S
     el('ul', { class: 'note-list' }, [...items].reverse().map(row)));
 }
 
-export function reviewSummaryView(summary, unrated = []) {
+export function reviewSummaryView(summary, unrated = [], { list = null, card = null, cardOptions = {} } = {}) {
   if (!summary?.total) return null;
   const { criterion } = summary;
-  return el('section', { class: 'pm-review-summary', 'aria-label': t('pmLoop.review.title'), dataset: { right: String(summary.right), wrong: String(summary.wrong), unrated: String(summary.unrated) } },
-    el('p', { class: 'kind', text: t('pmLoop.review.summary', summary.right, summary.wrong, summary.unrated) }),
+  const text = summary.unsure ? t('pmLoop.review.summaryUnsure', summary.right, summary.wrong, summary.unsure, summary.unrated) : t('pmLoop.review.summary', summary.right, summary.wrong, summary.unrated);
+  return el('section', { class: 'pm-review-summary', 'aria-label': t('pmLoop.review.title'), dataset: { right: String(summary.right), wrong: String(summary.wrong), unsure: String(summary.unsure ?? 0), unrated: String(summary.unrated) } },
+    list ? el('p', { class: 'kind' }, el('button', { type: 'button', class: 'link pm-review-open', 'aria-expanded': String(list.open), title: t('pmLoop.reviewList.openHint'), text, onclick: () => list.toggle() }))
+      : el('p', { class: 'kind', text }),
     el('p', { class: 'kind pm-review-criterion', dataset: { met: String(Boolean(criterion?.met)) },
       text: criterion?.met ? t('pmLoop.review.criterionMet', summary.rated, summary.wrong, criterion.rated, criterion.wrong) : t('pmLoop.review.criterionNot', criterion?.rated ?? 10, criterion?.wrong ?? 0, summary.rated, summary.wrong) }),
     unrated.length ? el('p', { class: 'kind pm-review-unrated' }, `${t('pmLoop.review.unratedList')} `,
-      ...unrated.slice(0, 5).flatMap((item, index) => [index ? ', ' : '', el('a', { href: `#${item.goal}`, translate: 'no', text: `${item.title} · ${item.feature ?? '-'} · ${timeLabel(item.at)}` })])) : null);
+      ...unrated.slice(0, 5).flatMap((item, index) => [index ? ', ' : '', el('a', { href: `#${item.goal}`, translate: 'no', text: `${item.title} · ${item.feature ?? '-'} · ${timeLabel(item.at)}` })])) : null,
+    repeatDefaultView(card, cardOptions));
 }
 
-export function goalView(goal, { decide, act, busy, choices, drafts, toolOptions, opened = null, toRecipe = null, allowOff = null, allowOn = null, review = null, changing, notes, worktrees = null }) {
+export function goalView(goal, { decide, act, busy, choices, drafts, toolOptions, opened = null, toRecipe = null, allowOff = null, allowOn = null, review = null, changing, notes, worktrees = null, redGreen = null, diagnose = null, approach = null }) {
   const usage = goal.budget.usage, limits = goal.budget.limits;
   const budgets = budgetInputs(goal);
   const stopped = goal.state === 'stopped';
@@ -345,6 +389,7 @@ export function goalView(goal, { decide, act, busy, choices, drafts, toolOptions
       finished && toRecipe ? el('button', { type: 'button', class: 'pm-save-recipe', disabled: busy, text: t('recipes.saveFromGoal'), onclick: () => toRecipe(goal) }) : null,
       stopped ? null : el('button', { type: 'button', class: 'pm-stop', disabled: busy, text: t('pmLoop.action.stop'), onclick: () => act(goal, 'stop') })),
     stopped && goal.stoppedReason ? el('p', { class: 'error', role: 'status', text: goal.stoppedReason }) : null,
+    diagnose ? diagnose(goal) : null,
     recipeLine(goal.recipe),
     originLine(goal.origin),
     el('p', { class: 'kind pm-budget' }, t('pmLoop.budgetLine', usage.phaseRuns, limits.phaseRuns, usage.workers, limits.workers, usage.hours, limits.hours, usage.iterations, limits.iterations, usage.failures, limits.failures)),
@@ -353,21 +398,23 @@ export function goalView(goal, { decide, act, busy, choices, drafts, toolOptions
     modeView(goal, { act, busy }),
     allowView(goal, { busy, off: (item) => (allowOff ?? (() => {}))(item), on: (item, value) => (allowOn ?? (() => {}))(item, value) }),
     worktreeView(goal, { busy, ...(worktrees ?? {}), review: worktrees?.reviews?.get(goal.id) ?? null }),
+    redGreenView(goal, { busy, set: redGreen ?? (() => {}) }),
     goal.workers?.length ? el('section', { class: 'pm-workers', 'aria-label': t('pmLoop.workers.title') }, el('h4', { text: t('pmLoop.workers.title') }),
       el('ul', { class: 'note-list' }, goal.workers.map((worker) => workerRow(goal, worker, { act, busy })))) : null,
     goal.judgments?.length ? el('section', { class: 'pm-workers pm-judgments', 'aria-label': t('pmLoop.judge.running') }, el('h4', { text: t('pmLoop.judge.running') }),
       el('ul', { class: 'note-list' }, goal.judgments.map((run) => judgmentRow(goal, run, { act, busy })))) : null,
     review ? reviewView(goal, { review, busy, opened, changing, notes }) : null,
     el('details', { class: 'pm-resume', open: stopped || undefined }, el('summary', { text: stopped ? t('pmLoop.resumeTitle') : t('pmLoop.budgetTitle') }),
-      el('p', { class: 'kind', text: t('pmLoop.budgetHint') }), budgets, el('p', { class: 'kind pm-tokens-hint', text: t('pmLoop.tokensHint') }), judgeToolPicker(goal, { act, busy, toolOptions }),
+      el('p', { class: 'kind', text: t('pmLoop.budgetHint') }), budgets, el('p', { class: 'kind pm-tokens-hint', text: t('pmLoop.tokensHint') }), el('p', { class: 'kind pm-cost-hint', text: t('pmLoop.costHint') }), judgeToolPicker(goal, { act, busy, toolOptions }),
       stopped ? el('button', { type: 'button', class: 'primary pm-resume-button', disabled: busy, text: t('pmLoop.action.resume'), onclick: () => act(goal, 'resume', { budgets: readBudgets(budgets) }) }) : null),
-    goal.suggestions.length ? el('div', { class: 'proposal-list pm-cards' }, goal.suggestions.map((card) => pmCard({ ...card, goal: goal.id }, (item, action, extra) => decide(goal, item, action, extra), { busy, choices, drafts }))) : null,
+    goal.suggestions.length ? el('div', { class: 'proposal-list pm-cards' }, goal.suggestions.map((card) => pmCard({ ...card, goal: goal.id }, (item, action, extra) => decide(goal, item, action, extra), { busy, choices, drafts, stop: () => act(goal, 'stop'), approach }))) : null,
     el('ul', { class: 'note-list pm-features' }, goal.features.map(featureRow)),
     goal.decisions.length ? el('details', { class: 'pm-decisions', ...keptOpen(opened, `${goal.id}:decisions`) }, el('summary', { text: t('pmLoop.decisions', goal.decisions.length) }),
       el('ul', {}, goal.decisions.map((item) => el('li', {}, el('span', { class: 'kind', text: `${timeLabel(item.at)} · ` }),
         item.kind && item.kind !== 'goal' ? `${recordKind(item)} · ` : '', OUTCOME_LABELS[item.outcome] ?? item.outcome,
         item.feature ? el('span', { class: 'kind' }, ' · ', raw(item.feature)) : null, item.by ? el('span', { class: 'kind' }, ' · ', byLabel(item)) : null,
-        item.reason ? el('span', { class: 'kind' }, ' · ', item.reason) : null)))) : null);
+        item.reason ? el('span', { class: 'kind' }, ' · ', item.reason) : null,
+        item.rootCause ? el('span', { class: 'kind pm-root-cause-line', dataset: { attempt: String(item.rootCause.attempt ?? '') } }, ' · ', t('pmLoop.rootCause.attempt', item.rootCause.attempt ?? '-'), ' ', rootCauseLine(item.rootCause)) : null)))) : null);
 }
 
 export function mountPmLoop(container) {
@@ -379,6 +426,7 @@ export function mountPmLoop(container) {
   const notes = new Map();
   const count = el('span', { class: 'kind' });
   const reviewBox = el('div', { class: 'pm-review-summary-box' });
+  const reviewListSlot = el('div', { class: 'pm-review-list-slot' });
   const errorBox = el('p', { class: 'error', role: 'alert', hidden: true });
   const pmHint = el('div', { class: 'pm-hint', hidden: true });
   const list = el('div', { class: 'pm-goals' });
@@ -391,16 +439,44 @@ export function mountPmLoop(container) {
   const allowSlot = el('div', { class: 'pm-allow-slot' }, allowBox.node);
   let worktreeBox = worktreeField();
   const worktreeSlot = el('div', { class: 'pm-worktrees-slot' }, worktreeBox.node);
+  let redGreenBox = redGreenField();
+  const redGreenSlot = el('div', { class: 'pm-red-green-slot' }, redGreenBox.node);
+  let approachBox = approachField();
+  const approachSlot = el('div', { class: 'pm-approach-slot' }, approachBox.node);
+  const approachCtls = new Map();
+  const approachOf = (card) => {
+    const ctl = approachCtls.get(card.feature) ?? approachController((path, body) => api(path, { method: 'POST', token: config.token, body }));
+    approachCtls.set(card.feature, ctl);
+    const data = cardData(card);
+    return approachView(data, { card: true, state: ctl.state, actions: ctl.actions(data, (reload) => (reload ? void refresh() : render())) });
+  };
   const setupReviews = new Map();
   const imports = new Map();
+  const prReviews = new Map();
+  const goalBoards = new Map();
+  const boardOf = (goal) => {
+    if (!goalBoards.has(goal.id)) {
+      const holder = el('div', { class: 'wt-goal-board' });
+      goalBoards.set(goal.id, { holder, view: mountWorktreeBoard(holder, { goal: goal.id, heading: false, hideEmpty: false }) });
+    }
+    return goalBoards.get(goal.id).holder;
+  };
+  const diagnoses = new Map();
+  const diagnoseOf = (goal) => {
+    if (!diagnoses.has(goal.id)) diagnoses.set(goal.id, mountDiagnose(goal.id));
+    return diagnoses.get(goal.id).node;
+  };
+  const boardRefresh = (goal) => { void goalBoards.get(goal.id)?.view.refresh(); };
   const form = el('form', { class: 'pm-form', hidden: true },
     el('h3', { text: t('pmLoop.newTitle') }),
     el('label', { class: 'trigger-field' }, el('span', { text: t('pmLoop.field.title') }), title),
     el('fieldset', { class: 'pm-pick-box' }, el('legend', { text: t('pmLoop.pickFeatures') }), picks),
     el('label', { class: 'trigger-field' }, el('span', { text: t('pmLoop.newFeatures') }), fresh, el('small', { class: 'kind', text: t('pmLoop.newFeaturesHint') })),
-    el('details', {}, el('summary', { text: t('pmLoop.budgetTitle') }), budgets, el('p', { class: 'kind pm-tokens-hint', text: t('pmLoop.tokensHint') })),
+    el('details', {}, el('summary', { text: t('pmLoop.budgetTitle') }), budgets, el('p', { class: 'kind pm-tokens-hint', text: t('pmLoop.tokensHint') }), el('p', { class: 'kind pm-cost-hint', text: t('pmLoop.costHint') })),
     allowSlot,
     worktreeSlot,
+    redGreenSlot,
+    approachSlot,
     el('p', { class: 'kind', text: t('pmLoop.planningHint') }),
     el('div', { class: 'row' }, el('button', { type: 'submit', class: 'primary', text: t('pmLoop.create') }), el('button', { type: 'button', text: t('pmLoop.cancel'), onclick: () => closeForm() })));
   const newButton = el('button', { type: 'button', class: 'new-trigger pm-new', text: t('pmLoop.new'), onclick: () => openForm() });
@@ -408,7 +484,7 @@ export function mountPmLoop(container) {
     onCreated: async (goal) => { await refresh(); document.getElementById(goal.id)?.scrollIntoView({ block: 'nearest' }); } });
   const recipeButton = el('button', { type: 'button', class: 'new-trigger pm-recipe-open', text: t('recipes.open'), onclick: () => { closeForm(); recipes.toggle(); } });
   container.append(el('header', {}, el('h2', { id: 'pm-loop-heading', text: t('pmLoop.title') }), count),
-    el('p', { class: 'kind', text: t('pmLoop.intro') }), pmHint, errorBox, healthBox, reviewBox, el('div', { class: 'row pm-start-buttons' }, newButton, recipeButton), form, recipes.node, list);
+    el('p', { class: 'kind', text: t('pmLoop.intro') }), pmHint, errorBox, healthBox, reviewBox, reviewListSlot, el('div', { class: 'row pm-start-buttons' }, newButton, recipeButton), form, recipes.node, list);
   const fromProposal = new URLSearchParams(location.search).get('proposal');
   if (/^proposal-[a-f0-9-]{36}$/.test(fromProposal ?? '')) void recipes.startFromProposal(fromProposal).then(() => recipes.node.scrollIntoView?.({ block: 'nearest' }));
 
@@ -424,6 +500,8 @@ export function mountPmLoop(container) {
     const checks = (await api('/api/manual/checks').catch(() => null))?.checks ?? [];
     allowBox = allowFields({ checks }); clear(allowSlot).append(allowBox.node);
     worktreeBox = worktreeField(); clear(worktreeSlot).append(worktreeBox.node);
+    redGreenBox = redGreenField(); clear(redGreenSlot).append(redGreenBox.node);
+    approachBox = approachField(); clear(approachSlot).append(approachBox.node);
     form.hidden = false; newButton.hidden = true; title.focus();
   }
   function closeForm() { form.hidden = true; newButton.hidden = false; form.reset(); }
@@ -432,20 +510,25 @@ export function mountPmLoop(container) {
     const button = form.querySelector('button[type="submit"]');
     button.disabled = true; showError(null);
     const create = fresh.value.split('\n').map((line) => line.trim()).filter(Boolean).map((line) => { const [id, ...rest] = line.split(/\s+/); return { id, title: rest.join(' ') || id }; });
-    const body = { title: title.value, features: [...picks.querySelectorAll('input[name="feature"]:checked')].map((input) => input.value), create, budgets: readBudgets(budgets), allow: allowBox.read(), worktrees: worktreeBox.read() };
+    const body = { title: title.value, features: [...picks.querySelectorAll('input[name="feature"]:checked')].map((input) => input.value), create, budgets: readBudgets(budgets), allow: allowBox.read(), worktrees: worktreeBox.read(), redGreen: redGreenBox.read(), ...(approachBox.read() ? { approach: approachBox.read() } : {}) };
     try { const goal = await api('/api/pm-loop', { method: 'POST', token: config.token, body }); closeForm(); await refresh(); document.getElementById(goal.id)?.scrollIntoView({ block: 'nearest' }); }
     catch (error) { showError(error); }
     finally { button.disabled = false; }
   });
 
   async function send(path, body) {
-    if (busy) return;
+    if (busy) return false;
     busy = true; showError(null); render();
-    try { await api(path, { method: 'POST', token: config.token, body }); }
+    let ok = false;
+    try { await api(path, { method: 'POST', token: config.token, body }); ok = true; }
     catch (error) { showError(error); }
     finally { busy = false; }
     await refresh();
+    return ok;
   }
+  const reviewList = createReviewList({ send, rerender: () => render() });
+  const cardNotes = new Map();
+  const decideDefault = async (outcome, note) => { if (await send('/api/pm-loop/repeat-default', { outcome, ...(note.trim() ? { note } : {}) })) { cardNotes.clear(); render(); } };
   const decide = (goal, card, action, extra = {}) => send(`/api/pm-loop/${goal.id}/${action}`, { key: card.key, ...(action === 'execute' ? extra : {}) });
   const act = (goal, action, extra = {}) => send(`/api/pm-loop/${goal.id}/${action}`, extra);
   const review = async (goal, item, verdict, note) => {
@@ -466,32 +549,104 @@ export function mountPmLoop(container) {
     finally { busy = false; }
     return result;
   }
+  const checkPolls = new Map();
+  const stopPoll = (id) => { clearTimeout(checkPolls.get(id)); checkPolls.delete(id); };
+  async function reloadPreview(goal, entry) {
+    stopPoll(entry.id);
+    try {
+      const preview = await api(`/api/pm-loop/${goal.id}/worktrees/${entry.id}/import-preview`, { method: 'POST', token: config.token, body: {} });
+      imports.set(entry.id, { preview });
+      if (preview.checks?.running) pollChecks(goal, entry);
+    } catch (error) { imports.set(entry.id, { ...(imports.get(entry.id) ?? {}), error: error.message }); }
+    render();
+    void refresh();
+  }
+  function pollChecks(goal, entry) {
+    stopPoll(entry.id);
+    checkPolls.set(entry.id, setTimeout(async () => {
+      checkPolls.delete(entry.id);
+      const open = imports.get(entry.id);
+      if (!open?.preview) return;
+      let status;
+      try { status = await api(`/api/pm-loop/${goal.id}/worktrees/${entry.id}/checks`); }
+      catch (error) { if (imports.get(entry.id) === open) { imports.set(entry.id, { ...open, error: error.message }); render(); } return; }
+      if (imports.get(entry.id) !== open) return;
+      if (status.running) { imports.set(entry.id, { preview: open.preview, live: status.running }); render(); pollChecks(goal, entry); return; }
+      await reloadPreview(goal, entry);
+    }, CHECK_POLL_MS));
+  }
   const worktrees = {
     imports,
     preview: async (goal, entry) => {
       const preview = await importCall(entry.id, `/api/pm-loop/${goal.id}/worktrees/${entry.id}/import-preview`, {});
-      if (preview) imports.set(entry.id, { preview });
+      if (preview) {
+        imports.set(entry.id, { preview });
+        if (preview.checks?.running) pollChecks(goal, entry);
+      }
       render();
+    },
+    runChecks: async (goal, entry) => {
+      const open = imports.get(entry.id);
+      const started = await importCall(entry.id, `/api/pm-loop/${goal.id}/worktrees/${entry.id}/checks`, {}, { preview: open?.preview });
+      if (started && open?.preview) { imports.set(entry.id, { preview: open.preview, live: started }); pollChecks(goal, entry); }
+      render();
+    },
+    stopChecks: async (goal, entry) => {
+      const open = imports.get(entry.id);
+      const record = await importCall(entry.id, `/api/pm-loop/${goal.id}/worktrees/${entry.id}/checks/stop`, {}, { preview: open?.preview, live: open?.live });
+      if (record) await reloadPreview(goal, entry);
+      else render();
     },
     confirm: async (goal, entry, preview) => {
       const result = await importCall(entry.id, `/api/pm-loop/${goal.id}/worktrees/${entry.id}/import`, { fingerprint: preview.fingerprint }, { preview });
       if (result) imports.set(entry.id, { result });
       await refresh();
+      boardRefresh(goal);
     },
-    cancel: (key) => { imports.delete(key); render(); },
+    cancel: (key) => { stopPoll(key); imports.delete(key); render(); },
     ask: (key, what) => { imports.set(key, { confirm: what }); render(); },
     discard: async (goal, entry) => {
       const result = await importCall(entry.id, `/api/pm-loop/${goal.id}/worktrees/${entry.id}/discard`, {}, { confirm: 'discard' });
       if (result) imports.delete(entry.id);
       await refresh();
+      boardRefresh(goal);
     },
     cleanup: async (goal) => {
       const key = `${goal.id}:cleanup`;
       const result = await importCall(key, `/api/pm-loop/${goal.id}/worktrees/cleanup`, {}, { confirm: 'cleanup' });
       if (result) imports.set(key, { result });
       await refresh();
+      boardRefresh(goal);
     },
+    board: boardOf,
     reviews: setupReviews,
+    prReviews,
+    readPr: async (goal, feature, number) => {
+      const key = `${goal.id}:pr`;
+      prReviews.set(goal.id, { feature, number });
+      const info = await importCall(key, `/api/pm-loop/${goal.id}/review-pr`, { number });
+      const failed = imports.get(key)?.error;
+      imports.delete(key);
+      prReviews.set(goal.id, info ? { feature, number, info } : { feature, number, error: failed });
+      render();
+    },
+    askPr: (goal, value) => { prReviews.set(goal.id, { ...(prReviews.get(goal.id) ?? {}), ...value, error: null }); render(); },
+    closePr: (goal) => { prReviews.delete(goal.id); render(); },
+    fetchPr: async (goal, feature, info) => {
+      const key = `${goal.id}:pr`;
+      const open = prReviews.get(goal.id) ?? {};
+      const result = await importCall(key, `/api/pm-loop/${goal.id}/review-pr/fetch`, { feature, number: info.pr.number, head: info.pr.head });
+      const failed = imports.get(key)?.error;
+      imports.delete(key);
+      prReviews.set(goal.id, result ? { feature, number: open.number, result } : { ...open, confirm: null, error: failed });
+      await refresh();
+      boardRefresh(goal);
+    },
+    allowRun: async (goal, entry) => {
+      const result = await importCall(entry.id, `/api/pm-loop/${goal.id}/worktrees/${entry.id}/allow-run`, { head: entry.pr.head, hash: entry.run?.hash ?? null }, { confirm: 'allow-run' });
+      if (result) imports.delete(entry.id);
+      await refresh();
+    },
     set: (goal, value) => send(`/api/pm-loop/${goal.id}/worktrees`, value),
     openReview: (goal) => loadSetup(goal),
     closeReview: (goal) => { setupReviews.delete(goal.id); render(); },
@@ -513,11 +668,15 @@ export function mountPmLoop(container) {
     const health = toolHealthView(data.toolHealth ?? [], { busy, switches: data.toolSwitches ?? [], usage: data.toolUsage ?? [], daily: data.daily ?? null, retry: (tool) => send(`/api/tool-health/${encodeURIComponent(tool)}/retry`, {}),
       toggle: (tool, disabled) => send(`/api/tool-health/${encodeURIComponent(tool)}/disabled`, { disabled }) });
     clear(healthBox).append(...(health ? [health] : []));
-    const reviews = reviewSummaryView(data.repeatReview, data.repeatUnrated ?? []);
+    const reviews = reviewSummaryView(data.repeatReview, data.repeatUnrated ?? [], { list: reviewList, card: data.repeatDefault ?? null,
+      cardOptions: { busy, decide: decideDefault, notes: cardNotes, openRow: (goal, target) => reviewList.show(goal, target) } });
     clear(reviewBox).append(...(reviews ? [reviews] : []));
+    if (!reviewListSlot.contains(reviewList.node)) reviewListSlot.append(reviewList.node);
+    reviewList.render(data, { busy });
     clear(list).append(...(data.goals.length ? [...data.goals].reverse().map((goal) => goalView(goal, { decide, act, busy, choices: toolChoices, drafts, opened, review, changing, notes, toolOptions: data.toolOptions ?? [],
       toRecipe: (item) => { closeForm(); void recipes.openDraft(item.id).then(() => recipes.node.scrollIntoView?.({ block: 'nearest' })); },
-      allowOff: (item) => send(`/api/pm-loop/${item.id}/allow/off`, {}), allowOn: (item, value) => send(`/api/pm-loop/${item.id}/allow/on`, value), worktrees })) : [el('p', { class: 'empty kind', text: t('pmLoop.empty') })]));
+      allowOff: (item) => send(`/api/pm-loop/${item.id}/allow/off`, {}), allowOn: (item, value) => send(`/api/pm-loop/${item.id}/allow/on`, value), worktrees,
+      redGreen: (item, value) => send(`/api/pm-loop/${item.id}/red-green`, value), diagnose: diagnoseOf, approach: approachOf })) : [el('p', { class: 'empty kind', text: t('pmLoop.empty') })]));
     if (data.issues?.length) showError({ message: t('pmLoop.unreadable', data.issues.join(', ')) });
   }
   function refresh() {
@@ -540,6 +699,7 @@ export function mountPmLoop(container) {
   }, 1000);
   const source = openEvents();
   for (const type of ['pm', 'features', 'tasks', 'presence', 'resync']) source.addEventListener(type, () => { void refresh(); });
+  for (const type of ['pm', 'resync']) source.addEventListener(type, () => { for (const { view } of goalBoards.values()) view.poke(); });
   window.addEventListener('pagehide', () => { source.close(); clearInterval(ticker); });
   refresh();
   return { refresh };

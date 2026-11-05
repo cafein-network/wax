@@ -9,6 +9,9 @@ import { createLatestRefresh } from '/dashboard-refresh.mjs';
 import { rulesView } from '/rules-panel.mjs';
 import { wikiView } from '/wiki-panel.mjs';
 import { traceView } from '/trace-panel.mjs';
+import { rulingsView } from '/rulings-panel.mjs';
+import { approachController, approachView } from '/approach-panel.mjs';
+import { mountDiagnose } from '/diagnose-panel.mjs';
 
 const $ = (id) => document.getElementById(id);
 const PHASE_ORDER = ['plan', 'design', 'implement', 'review', 'report'];
@@ -355,6 +358,9 @@ async function loadTrace() {
   if (!traceFeature) return;
   const id = traceFeature, version = ++traceGeneration;
   $('trace-feature').textContent = id;
+  drawDiagnose();
+  void loadRulings();
+  void loadApproach();
   if (!$('trace-body').childElementCount) $('trace-body').append(el('p', { class: 'kind', text: t('dashboard.traceLoading') }));
   try {
     const trace = await api(`/api/features/${encodeURIComponent(id)}/trace?lang=${globalThis.waxLocale?.language === 'en' ? 'en' : 'ko'}`);
@@ -367,12 +373,81 @@ async function loadTrace() {
     clear($('trace-body')).append(el('p', { class: 'error', text: error.message }));
   }
 }
+let diagnoseBox = null;
+function drawDiagnose() {
+  if (!traceFeature) { diagnoseBox = null; clear($('trace-diagnose')); return; }
+  if (diagnoseBox?.id !== traceFeature) { diagnoseBox = { id: traceFeature, view: mountDiagnose(traceFeature) }; clear($('trace-diagnose')).append(diagnoseBox.view.node); }
+}
+let rulingsData = null, rulingsGeneration = 0;
+const rulingsState = { overriding: null, notes: new Map(), busy: false, message: '' };
+const rulingsActions = {
+  open: (id) => { rulingsState.overriding = id; rulingsState.message = ''; drawRulings(); },
+  close: () => { rulingsState.overriding = null; drawRulings(); },
+  note: (id, text) => rulingsState.notes.set(id, text),
+  mark: (ruling, action, note) => markRuling(ruling, action, note),
+};
+function drawRulings() {
+  const box = $('trace-rulings');
+  if (!rulingsData || rulingsData.id !== traceFeature) { clear(box); return; }
+  clear(box).append(rulingsView(rulingsData, { state: rulingsState, actions: rulingsActions, phaseLabel }));
+}
+async function loadRulings() {
+  const id = traceFeature, version = ++rulingsGeneration;
+  if (!id) { rulingsData = null; drawRulings(); return; }
+  if (rulingsData?.id !== id) { rulingsData = null; Object.assign(rulingsState, { overriding: null, notes: new Map(), message: '' }); clear($('trace-rulings')).append(el('p', { class: 'kind', text: t('rulings.screen.loading') })); }
+  try {
+    const data = await api(`/api/features/${encodeURIComponent(id)}/rulings`);
+    if (version !== rulingsGeneration) return;
+    rulingsData = data;
+    drawRulings();
+  } catch (error) {
+    if (version !== rulingsGeneration) return;
+    clear($('trace-rulings')).append(el('p', { class: 'error', text: error.message }));
+  }
+}
+async function markRuling(ruling, action, note) {
+  if (!rulingsData || rulingsState.busy) return;
+  rulingsState.busy = true; rulingsState.message = ''; drawRulings();
+  try {
+    const result = await api(`/api/features/${encodeURIComponent(rulingsData.id)}/rulings/${encodeURIComponent(ruling.id)}`, { method: 'POST', token: config.token,
+      body: { action, revision: rulingsData.revision, ...(action === 'override' ? { note } : {}) } });
+    if (action === 'override') { rulingsState.overriding = null; rulingsState.notes.delete(ruling.id); rulingsState.message = t('rulings.override.done', ruling.id, result.defect?.id ?? '-'); }
+  } catch (error) {
+    rulingsState.message = /변경되었습니다|has changed/i.test(error.message) ? t('rulings.changed') : error.message;
+  } finally {
+    rulingsState.busy = false;
+    await loadRulings();
+  }
+}
+
+let approachData = null, approachGeneration = 0, approachCtl = null;
+const approachPost = (path, body) => api(path, { method: 'POST', token: config.token, body });
+function drawApproach() {
+  const box = $('trace-approach');
+  if (!approachData || approachData.id !== traceFeature || (!approachData.proposal && !approachData.single && approachData.phase !== 'design')) { clear(box); return; }
+  clear(box).append(approachView(approachData, { state: approachCtl.state, actions: approachCtl.actions(approachData, (reload) => (reload ? void loadApproach() : drawApproach())) }));
+}
+async function loadApproach() {
+  const id = traceFeature, version = ++approachGeneration;
+  if (!id) { approachData = null; drawApproach(); return; }
+  if (approachData?.id !== id) { approachData = null; approachCtl = approachController(approachPost); }
+  try {
+    const data = await api(`/api/features/${encodeURIComponent(id)}/approach`);
+    if (version !== approachGeneration) return;
+    approachData = data;
+    drawApproach();
+  } catch (error) {
+    if (version !== approachGeneration) return;
+    clear($('trace-approach')).append(el('p', { class: 'error', text: error.message }));
+  }
+}
+
 function openTrace(id) {
   if (traceFeature !== id) { traceMarkdown = ''; clear($('trace-body')); }
   traceFeature = id;
   loadTrace().then(() => goTo('trace-panel'));
 }
-$('trace-close').addEventListener('click', () => { traceFeature = null; traceGeneration++; $('trace-panel').hidden = true; });
+$('trace-close').addEventListener('click', () => { traceFeature = null; traceGeneration++; rulingsGeneration++; rulingsData = null; drawRulings(); approachGeneration++; approachData = null; drawApproach(); drawDiagnose(); $('trace-panel').hidden = true; });
 $('trace-download').addEventListener('click', () => {
   if (!traceMarkdown || !traceFeature) return;
   const link = el('a', { href: URL.createObjectURL(new Blob([traceMarkdown], { type: 'text/markdown;charset=utf-8' })), download: `wax-trace-${traceFeature}.md` });

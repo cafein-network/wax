@@ -51,10 +51,10 @@ export function normalizeCi(source) {
 export const describeIssues = (source) => `${source.repo} · label:${source.label} · ${source.every}`;
 export const describeCi = (source) => `${source.repo} · ${source.branch}${source.workflow ? ` · ${source.workflow}` : ''} · ${source.every}`;
 
-export function runGh(args, { signal, timeout = GITHUB_LIMITS.timeoutMs, env = process.env } = {}) {
+export function runGh(args, { signal, timeout = GITHUB_LIMITS.timeoutMs, env = process.env, cwd } = {}) {
   return new Promise((resolve, reject) => {
     execFile(env.WAX_GH_BIN || 'gh', args, {
-      timeout, maxBuffer: GITHUB_LIMITS.maxBuffer, windowsHide: true, signal, encoding: 'utf8',
+      timeout, maxBuffer: GITHUB_LIMITS.maxBuffer, windowsHide: true, signal, encoding: 'utf8', ...(cwd ? { cwd } : {}),
       env: { ...env, GH_PROMPT_DISABLED: '1', GH_NO_UPDATE_NOTIFIER: '1', NO_COLOR: '1', CLICOLOR: '0' },
     }, (error, stdout, stderr) => {
       if (error) { reject(Object.assign(error, { stdout: String(stdout ?? ''), stderr: String(stderr ?? '') })); return; }
@@ -166,4 +166,46 @@ export function diffSeen(events, seen, { truncated = false } = {}) {
 export function pollDue(source, state = {}, now) {
   const last = Date.parse(state.lastPoll ?? '');
   return !Number.isFinite(last) || now - last >= everyMs(source.every) - GITHUB_LIMITS.slackMs || last > now;
+}
+
+export const PR_VIEW_FIELDS = 'number,url,title,state,headRefOid,headRefName,isCrossRepository,headRepositoryOwner,author,baseRefName,files';
+export const PR_LIMITS = { files: 300, path: 500, name: 200, number: 1_000_000_000 };
+const PR_URL = /^https:\/\/([^/\s]+)\/([^/\s]+)\/([^/\s]+)\/pull\/(\d+)$/;
+const plainText = (value, limit) => cutText(typeof value === 'string' ? value.replace(/[\p{Cc}\p{Cf}]/gu, ' ').trim() : '', limit);
+
+export function prNumber(value) {
+  const text = typeof value === 'number' ? String(value) : typeof value === 'string' ? value.trim().replace(/^#/, '') : '';
+  const number = /^[1-9][0-9]{0,9}$/.test(text) ? Number(text) : NaN;
+  if (!Number.isSafeInteger(number) || number > PR_LIMITS.number) throw fail('errors.worktreeReview.number');
+  return number;
+}
+
+export function parsePrView(stdout, number) {
+  let data;
+  try { data = JSON.parse(String(stdout ?? '')); } catch { throw new WaxError(t('errors.chat.triggers.ghBadOutput'), 502); }
+  const match = typeof data?.url === 'string' ? PR_URL.exec(data.url) : null;
+  if (!data || typeof data !== 'object' || data.number !== number || !match || Number(match[4]) !== number || httpsUrl(data.url) !== data.url) throw new WaxError(t('errors.chat.triggers.ghBadOutput'), 502);
+  const head = typeof data.headRefOid === 'string' ? data.headRefOid.toLowerCase() : '';
+  if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(head)) throw new WaxError(t('errors.chat.triggers.ghBadOutput'), 502);
+  const files = (Array.isArray(data.files) ? data.files : []).map((item) => (typeof item?.path === 'string' ? item.path : ''))
+    .filter((path) => path && path.length <= PR_LIMITS.path && !/[\p{Cc}\p{Cf}]/u.test(path));
+  return {
+    number, url: data.url, repo: { host: match[1].toLowerCase(), owner: match[2], name: match[3] },
+    title: plainText(data.title, GITHUB_LIMITS.title), state: ['OPEN', 'CLOSED', 'MERGED'].includes(data.state) ? data.state : 'UNKNOWN',
+    head, headRef: plainText(data.headRefName, PR_LIMITS.name), cross: data.isCrossRepository === true,
+    headOwner: plainText(data.headRepositoryOwner?.login, 100), author: plainText(data.author?.login, 100), base: plainText(data.baseRefName, PR_LIMITS.name),
+    files: files.slice(0, PR_LIMITS.files), filesTruncated: files.length > PR_LIMITS.files,
+  };
+}
+
+export async function readPullRequest(number, { gh = runGh, cwd, signal } = {}) {
+  let stdout;
+  try { ({ stdout } = await gh(['pr', 'view', String(number), `--json=${PR_VIEW_FIELDS}`], { signal, ...(cwd ? { cwd } : {}) })); }
+  catch (error) {
+    if (aborted(error)) throw error;
+    const sorted = classifyGhError(error);
+    if (sorted.connection) throw Object.assign(new WaxError(t(sorted.connection === 'missing' ? 'errors.worktreeReview.ghMissing' : 'errors.worktreeReview.ghLogin'), 502), { connection: sorted.connection });
+    throw sorted.error;
+  }
+  return parsePrView(stdout, number);
 }

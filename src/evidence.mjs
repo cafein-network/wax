@@ -7,6 +7,8 @@ import { getFeature, updateFeature, WaxError } from './workflow.mjs';
 import { author as validAuthor } from './chat/validate.mjs';
 import { gitEnv, treeFingerprint } from './freshness.mjs';
 import { worktreeAt, worktreeTag } from './worktrees.mjs';
+import { proofStep } from './plan-progress.mjs';
+import { killTree } from './process-tree.mjs';
 const byAuthor = (author) => (author === undefined ? {} : { author: validAuthor(author) });
 const exec = promisify(execFile);
 async function git(root, args) {
@@ -28,23 +30,36 @@ export function runCommand(root, command, timeout) {
   return new Promise((resolve, reject) => {
     const failed = () => new WaxError(t('errors.evidence.couldNotRunThe', windowsCommandHint(command)));
     let child;
-    try { child = spawn(command[0], command.slice(1), { cwd: root, shell: false, detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'] }); }
+    try { child = spawn(command[0], command.slice(1), { cwd: root, shell: false, detached: process.platform !== 'win32', windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }); }
     catch { reject(failed()); return; }
-    let output = '', truncated = false, timedOut = false, killTimer;
-    const append = (chunk) => { output += chunk.toString(); if (output.length > 20_000) { output = output.slice(0, 10_000) + output.slice(-10_000); truncated = true; } };
+    let output = '', truncated = false, timedOut = false;
+    const append = (chunk) => { ({ output, truncated } = keepOutput(output, chunk, truncated)); };
     child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
     child.stdout.on('data', append); child.stderr.on('data', append);
-    const stop = (signal) => { try { if (process.platform !== 'win32') process.kill(-child.pid, signal); else child.kill(signal); } catch {   } };
-    const interrupt = () => { stop('SIGTERM'); killTimer = setTimeout(() => stop('SIGKILL'), 2000); };
+    const interrupt = () => { void killTree(child); };
     process.once('SIGINT', interrupt); process.once('SIGTERM', interrupt);
-    const cleanup = () => { clearTimeout(timer); clearTimeout(killTimer); process.off('SIGINT', interrupt); process.off('SIGTERM', interrupt); };
-    const timer = setTimeout(() => { timedOut = true; stop('SIGTERM'); killTimer = setTimeout(() => stop('SIGKILL'), 2000); }, timeout);
+    const cleanup = () => { clearTimeout(timer); process.off('SIGINT', interrupt); process.off('SIGTERM', interrupt); };
+    const timer = setTimeout(() => { timedOut = true; void killTree(child); }, timeout);
     child.on('error', () => { cleanup(); reject(failed()); });
     child.on('close', (exitCode, signal) => { cleanup(); resolve({ exitCode, signal, output, truncated, timedOut }); });
   });
 }
+export function keepOutput(output, chunk, truncated = false) {
+  let next = output + chunk.toString();
+  if (next.length > 20_000) { next = next.slice(0, 10_000) + next.slice(-10_000); truncated = true; }
+  return { output: next, truncated };
+}
+export function testProof({ command, state = {}, durationMs, result, phase, iteration, extra = {}, author, worktree = null }) {
+  return { id: randomUUID(), kind: 'test', ...(phase !== undefined ? { phase, iteration } : {}), at: new Date().toISOString(), command, commit: state.commit ?? null, dirty: state.dirty ?? null,
+    ...(state.tree ? { tree: state.tree } : {}), durationMs, ...result, ...byAuthor(author), ...extra, ...(worktree ? { worktree: worktreeTag(worktree) } : {}) };
+}
+export async function runState(dir) {
+  let commit = null, dirty = null;
+  try { commit = (await git(dir, ['rev-parse', '--verify', 'HEAD'])).trim(); dirty = Boolean((await git(dir, ['status', '--porcelain'])).trim()); } catch {   }
+  return { commit, dirty, tree: await treeFingerprint(dir) };
+}
 export const MAX_TEST_MS = 30 * 60_000;
-export async function runTestProof(root, id, command, { revision, timeout = 120_000, verification, checks = [], author, worktree } = {}) {
+export async function runTestProof(root, id, command, { revision, timeout = 120_000, verification, checks = [], author, worktree, step: givenStep } = {}) {
   const owner = byAuthor(author);
   if ((verification !== undefined && !['static', 'runtime', 'integration', 'visual'].includes(verification)) || !Array.isArray(checks) || checks.length > 20 || !checks.every(check => typeof check === 'string' && /^[a-z][a-z0-9-]{0,63}$/.test(check))) throw new WaxError(t('errors.evidence.theVerificationTypeOr'));
   if (!Array.isArray(command) || !command.length || command.length > 100 || command.some((arg) => typeof arg !== 'string' || arg.length > 2000) || !command[0] ||
@@ -56,14 +71,14 @@ export async function runTestProof(root, id, command, { revision, timeout = 120_
     entry = await worktreeAt(root, typeof worktree === 'string' ? resolve(worktree) : worktree, { feature: feature.id });
     if (!entry) throw new WaxError(t('errors.evidence.worktreeNotRegistered', feature.id), 400);
   }
+  const step = proofStep(feature, { command, checks }, givenStep);
   const run = entry ? entry.path : root;
-  let commit = null, dirty = null;
-  try { commit = (await git(run, ['rev-parse', '--verify', 'HEAD'])).trim(); dirty = Boolean((await git(run, ['status', '--porcelain'])).trim()); } catch {   }
-  const tree = await treeFingerprint(run);
+  const state = await runState(run);
   const started = Date.now();
   const result = await runCommand(run, command, timeout);
-  const proof = { id: randomUUID(), kind: 'test', phase: feature.phase, iteration: feature.iteration, at: new Date().toISOString(), command, commit, dirty, ...(tree ? { tree } : {}), durationMs: Date.now() - started, ...result, ...owner,
-    ...(verification !== undefined || checks.length ? { verification: verification || 'static', checks: [...new Set(checks)] } : {}), ...(entry ? { worktree: worktreeTag(entry) } : {}) };
-  try { return { recorded: true, proof, feature: await updateFeature(root, id, 'attach-evidence', { proof, revision: feature.revision }) }; }
+  const proof = testProof({ command, state, durationMs: Date.now() - started, result, phase: feature.phase, iteration: feature.iteration, author,
+    extra: { ...(verification !== undefined || checks.length ? { verification: verification || 'static', checks: [...new Set(checks)] } : {}), ...(step.step ? { step: step.step } : {}) }, worktree: entry });
+  const warning = step.otherCommand ? { warning: t('errors.planSteps.stepOtherCommand', step.step) } : {};
+  try { return { recorded: true, proof, feature: await updateFeature(root, id, 'attach-evidence', { proof, revision: feature.revision }), ...warning }; }
   catch (error) { return { recorded: false, proof, error: '테스트 도중 작업이 변경되었거나 기록을 저장하지 못했습니다. 이 JSON 결과를 보관하고 최신 기록을 확인하세요.' }; }
 }

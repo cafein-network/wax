@@ -195,6 +195,34 @@ test('fake worker: done without completing the phase keeps the task warning and 
   assert.deepEqual([next.kind, next.phase], ['escalate', 'plan'], 'the phase does not advance');
 });
 
+test('fake worker: a design worker that proposes approaches ends without the "not completed" warning in its end record; a plain unfinished design done keeps it', async (t) => {
+  const approaches = [{ title: '서버', summary: 'API에서', tradeoffs: '요청 하나', cost: 'S', risk: 'low' }, { title: '화면', summary: '브라우저에서', tradeoffs: '두 곳', cost: 'M', risk: 'medium' }];
+  let propose = true;
+  const execute = async (root, input) => {
+    if (propose) await updateFeature(root, 'f1', 'approach-propose', { approach: approaches, author: authorOf(input.prompt) });
+    return reply('done', propose ? '방법 2개를 냈습니다.' : '끝냈다고 주장');
+  };
+  const { root, engine, goal: g, view, launch } = await setup(t, { execute });
+  await updateFeature(root, 'f1', 'save', { phase: 'plan', content: '# plan' });
+  await updateFeature(root, 'f1', 'complete', { phase: 'plan', evidence: '사람이 기획을 끝냄' });
+  await launch('claude');
+  await engine.workers.settled();
+  const task = (await listTasks(root, { all: true })).at(-1);
+  assert.deepEqual([task.phase, task.status], ['design', 'done']);
+  assert.match(task.updates.at(-1).warning, /완료되지 않았습니다/, 'the task check itself is unchanged');
+  const [end] = (await workerRecords(root, g.id)).filter((item) => item.outcome === 'exited');
+  assert.deepEqual([end.result, end.warning], ['done', undefined], 'the approach-wait end record carries no warning, like the card');
+  assert.deepEqual((await view()).suggestions.map((item) => item.kind), ['pick-approach']);
+
+  await updateFeature(root, 'f1', 'approach-pick', { approach: { number: 1 }, author: '대표', pickVia: 'dashboard' });
+  propose = false;
+  await launch('claude');
+  await engine.workers.settled();
+  const ends = (await workerRecords(root, g.id)).filter((item) => item.outcome === 'exited');
+  assert.equal(ends.length, 2);
+  assert.match(ends[1].warning, /완료되지 않았습니다/);
+});
+
 test('fake worker: a timeout stops the run, blocks the task with the reason and is recorded', async (t) => {
   const execute = (root, { signal }) => new Promise((_, reject) => {
     if (signal.aborted) reject(new Error('stopped'));

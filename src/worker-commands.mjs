@@ -6,12 +6,14 @@ const CLI = fileURLToPath(new URL('../bin/wax.mjs', import.meta.url));
 export const WORKER_FORBIDDEN = Object.freeze({
   chat: Object.freeze(['join', 'presence', 'reset', 'watch', 'post', 'assign', 'task', 'team pm']),
   skills: Object.freeze(['init', 'join', 'work', 'pm', 'chat', 'iterate', 'daily']),
+  wax: Object.freeze(['approach --pick']),
 });
 
 export function workerForbiddenPrompt() {
   const chat = WORKER_FORBIDDEN.chat.map((name) => `wax chat ${name}`).join(', ');
   const skills = WORKER_FORBIDDEN.skills.map((name) => `wax:${name}`).join(', ');
-  return `작업자가 부를 일이 아닌 명령: ${chat}. 팀 채널 참여·상태 바꾸기·채널 글·배정·업무 상태는 PM 루프와 사람이 합니다. 대화형 스킬(${skills})도 시작하지 마세요. 이런 요청은 승인 화면에 "작업자가 부를 일이 아닌 명령"으로 표시됩니다.`;
+  const wax = WORKER_FORBIDDEN.wax.map((name) => `wax ${name}`).join(', ');
+  return `작업자가 부를 일이 아닌 명령: ${chat}. 팀 채널 참여·상태 바꾸기·채널 글·배정·업무 상태는 PM 루프와 사람이 합니다. 대화형 스킬(${skills})도 시작하지 마세요. 설계 방법 고르기(${wax})는 사람이 합니다. 이런 요청은 승인 화면에 "작업자가 부를 일이 아닌 명령"으로 표시됩니다.`;
 }
 
 const FLAGS = new Set(['--all', '--wake', '--rename', '--clear', '--replace', '--status', '--json', '--help', '-h']);
@@ -65,6 +67,13 @@ function chatCommand(args) {
   return name && WORKER_FORBIDDEN.chat.includes(name) ? name : null;
 }
 
+function waxCommand(args) {
+  let i = 0;
+  while (args[i] === '--project' || args[i]?.startsWith('--project=')) i += args[i] === '--project' ? 2 : 1;
+  if (args[i] !== 'approach') return null;
+  return args.slice(i + 1).some((word) => word === '--pick' || word.startsWith('--pick=')) ? 'approach --pick' : null;
+}
+
 export function workerForbidden(request, { cli = CLI } = {}) {
   const details = request?.details;
   if (!details || typeof details !== 'object') return null;
@@ -74,6 +83,8 @@ export function workerForbidden(request, { cli = CLI } = {}) {
     const args = words && waxArgs(words);
     const name = args && chatCommand(args);
     if (name) return { command: `wax chat ${name}` };
+    const wax = args && waxCommand(args);
+    if (wax) return { command: `wax ${wax}` };
   }
   return null;
 }

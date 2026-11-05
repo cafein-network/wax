@@ -8,9 +8,10 @@ import { WaxError } from './workflow.mjs';
 import { gitEnv } from './freshness.mjs';
 import { withLock } from './chat/lock.mjs';
 import { chatDir, safeDir } from './chat/paths.mjs';
-import { ENV_NAME, WORKTREE_LIMITS, appendWorktree, checkWorktree, readWorktrees, worktreeNumber } from './worktrees.mjs';
+import { ENV_NAME, WORKTREE_LIMITS, appendWorktree, checkWorktree, isReview, readWorktrees, worktreeNumber } from './worktrees.mjs';
 import { readSetup, recordSetupRun, runSetup, setupDecisions, setupState } from './worktree-setup.mjs';
 import { BASELINE_LIMITS, finishBaseline, startBaseline } from './worktree-baseline.mjs';
+import { copyFolders } from './worktree-copy.mjs';
 
 export const PORT_RANGE = [41000, 41999];
 export const ENV_DEFAULTS = ['.env', '.env.local'];
@@ -150,7 +151,8 @@ export function addFailureDetail(detail, { path = '', platform = process.platfor
   return platform === 'win32' && LONG_PATH.test(detail) ? `${text} ${t('errors.worktrees.longPaths', path)}` : text;
 }
 
-export async function prepareWorktree(root, goal, feature, { by = 'pm-loop', now = Date.now, spawn, timers, setupTimeoutMs, signal = null, portProbe, baselineLimits = BASELINE_LIMITS, platform, taskkill } = {}) {
+export async function prepareWorktree(root, goal, feature, { by = 'pm-loop', now = Date.now, spawn, timers, setupTimeoutMs, signal = null, portProbe, baselineLimits = BASELINE_LIMITS, platform, taskkill,
+  copyOptions = {} } = {}) {
   if (!goal?.worktrees?.on) throw fail('errors.worktrees.off', 409, goal?.id ?? '-');
   if (signal?.aborted) throw Object.assign(fail('errors.worktrees.stoppedBefore', 409, goal.id), { setupOutcome: 'stopped' });
   if (!FEATURE.test(feature ?? '')) throw fail('errors.worktrees.featureId', 409, String(feature).slice(0, 64));
@@ -158,7 +160,7 @@ export async function prepareWorktree(root, goal, feature, { by = 'pm-loop', now
   const lockDir = await chatDir(root, null, { create: true });
   const made = await withLock(join(lockDir, 'worktrees.make.lock'), async () => {
     const all = await readWorktrees(root);
-    const mine = all.filter((entry) => entry.goal === goal.id && entry.feature === feature);
+    const mine = all.filter((entry) => entry.goal === goal.id && entry.feature === feature && !isReview(entry));
     const current = mine.filter((entry) => entry.state === 'active').at(-1) ?? null;
     if (current) {
       const checked = await checkWorktree(root, current);
@@ -195,18 +197,26 @@ export async function prepareWorktree(root, goal, feature, { by = 'pm-loop', now
   const setup = await setupIn(root, entry.path);
   const previous = entry.setup?.outcome ?? null;
   const again = !made.created && (SETUP_BLOCKS.has(previous) || (['pending', 'changed'].includes(previous) && setup.state === 'approved'));
-  let outcome = made.created || again ? setup.state === 'approved' ? null : setup.state : entry.setup?.outcome ?? 'none';
+  const argv = setup.state === 'approved' ? setup.config?.setup ?? null : null;
+  let outcome = made.created || again ? setup.state === 'approved' ? argv ? null : 'none' : setup.state : entry.setup?.outcome ?? 'none';
   let run = null, baseline = null;
-  if ((made.created || again) && setup.state === 'approved') {
+  const copyList = setup.state === 'approved' ? setup.config?.copy ?? [] : [];
+  const previousCopy = entry.setup?.copy ?? null;
+  let copy = previousCopy;
+  if (copyList.length && (made.created || (again && (!previousCopy || previousCopy.state === 'stopped')))) {
+    copy = await copyFolders(realRoot, entry.path, copyList, { signal, ...(platform ? { platform } : {}), now, ...copyOptions });
+    if (copy.state === 'stopped') outcome = 'stopped';
+  }
+  if ((made.created || again) && argv && outcome !== 'stopped') {
     const start = signal?.aborted ? null : await startBaseline(root, entry.id, { reuse: SETUP_BLOCKS.has(previous), limits: baselineLimits, dir: entry.path });
-    run = await runSetup(entry.path, setup.config.setup, { env: portVars(entry.port, setup), ...(setupTimeoutMs ? { timeoutMs: setupTimeoutMs } : {}), ...(spawn ? { spawn } : {}), ...(timers ? { timers } : {}), now,
+    run = await runSetup(entry.path, argv, { env: portVars(entry.port, setup), ...(setupTimeoutMs ? { timeoutMs: setupTimeoutMs } : {}), ...(spawn ? { spawn } : {}), ...(timers ? { timers } : {}), now,
       ...(signal ? { signal } : {}), ...(platform ? { platform } : {}), ...(taskkill ? { taskkill } : {}) });
     outcome = run.outcome;
     await recordSetupRun(root, { worktree: entry.id, goal: goal.id, feature, hash: setup.hash, outcome: run.outcome, code: run.code, signal: run.signal, ms: run.ms, output: run.output }, now());
     if (outcome === 'ok') baseline = await finishBaseline(root, entry.id, start, { hash: setup.hash ?? null, limits: baselineLimits, dir: entry.path, now: now() });
   }
   if (made.created || again) {
-    const record = await appendWorktree(root, { ...entry, env: copied, setup: { hash: setup.hash ?? null, outcome, ...(baseline ? { baseline } : {}) }, by, at: undefined }, { now: now() });
+    const record = await appendWorktree(root, { ...entry, env: copied, setup: { hash: setup.hash ?? null, outcome, ...(baseline ? { baseline } : {}), ...(copy ? { copy } : {}) }, by, at: undefined }, { now: now() });
     entry = { ...record, path: entry.path };
   }
   if (SETUP_BLOCKS.has(outcome)) {
@@ -214,7 +224,7 @@ export async function prepareWorktree(root, goal, feature, { by = 'pm-loop', now
     const id = outcome === 'timeout' ? 'errors.worktrees.setupTimeout' : outcome === 'stopped' ? 'errors.worktrees.setupStopped' : 'errors.worktrees.setupFailed';
     throw Object.assign(fail(id, 409, entry.id, run?.code ?? '-', out), { setupOutcome: outcome, entry });
   }
-  return { entry, created: made.created, env: portVars(entry.port, setup), setup: { state: setup.state, outcome, ...(setup.hash ? { hash: setup.hash } : {}), ...(baseline ? { baseline } : {}) }, copied, skipped,
+  return { entry, created: made.created, env: portVars(entry.port, setup), setup: { state: setup.state, outcome, ...(setup.hash ? { hash: setup.hash } : {}), ...(baseline ? { baseline } : {}), ...(copy ? { copy } : {}) }, copied, skipped,
     ...(made.created ? { portChecked: made.portChecked } : {}) };
 }
 

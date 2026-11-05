@@ -1,6 +1,6 @@
 {
   "name": "@cafein-network/wax",
-  "version": "0.16.0",
+  "version": "0.16.1",
   "description": "A portable, evidence-based AI coding workflow and team dashboard for Claude Code, Codex, GitHub Copilot CLI, Gemini CLI, Antigravity CLI and Grok Build",
   "type": "module",
   "license": "AGPL-3.0-only",
@@ -51,7 +51,7 @@
   ],
   "scripts": {
     "test": "node --test --test-timeout=60000 --import ./test/korean-output.mjs",
-    "test:browser": "node scripts/verify-design-browser.mjs && node scripts/verify-i18n-browser.mjs && node scripts/verify-requests-browser.mjs && node scripts/verify-trace-browser.mjs && node scripts/verify-snapshots-browser.mjs && node scripts/verify-compare-browser.mjs && node scripts/verify-search-browser.mjs && node scripts/verify-threads-browser.mjs && node scripts/verify-approvals-browser.mjs && node scripts/verify-approval-diff-browser.mjs && node scripts/verify-notify-browser.mjs && node scripts/verify-triggers-browser.mjs && node scripts/verify-pm-loop-browser.mjs && node scripts/verify-recipes-browser.mjs && node scripts/verify-manual-browser.mjs && node scripts/verify-auto-retry-browser.mjs && node scripts/verify-tool-health-browser.mjs && node scripts/verify-goal-allow-browser.mjs && node scripts/verify-worktrees-browser.mjs",
+    "test:browser": "node scripts/verify-design-browser.mjs && node scripts/verify-i18n-browser.mjs && node scripts/verify-requests-browser.mjs && node scripts/verify-trace-browser.mjs && node scripts/verify-snapshots-browser.mjs && node scripts/verify-compare-browser.mjs && node scripts/verify-search-browser.mjs && node scripts/verify-threads-browser.mjs && node scripts/verify-approvals-browser.mjs && node scripts/verify-approval-diff-browser.mjs && node scripts/verify-notify-browser.mjs && node scripts/verify-triggers-browser.mjs && node scripts/verify-pm-loop-browser.mjs && node scripts/verify-recipes-browser.mjs && node scripts/verify-manual-browser.mjs && node scripts/verify-auto-retry-browser.mjs && node scripts/verify-tool-health-browser.mjs && node scripts/verify-goal-allow-browser.mjs && node scripts/verify-worktrees-browser.mjs && node scripts/verify-worktree-board-browser.mjs && node scripts/verify-review-pr-browser.mjs && node scripts/verify-red-green-browser.mjs && node scripts/verify-rulings-browser.mjs && node scripts/verify-diagnose-browser.mjs && node scripts/verify-plan-steps-browser.mjs && node scripts/verify-approach-browser.mjs",
     "dashboard": "node bin/wax.mjs dashboard",
     "bump": "node scripts/bump-version.mjs",
     "build": "node scripts/build-commands.mjs && node scripts/build-faces.mjs",
@@ -59,6 +59,7 @@
     "size:skills": "node scripts/skill-size.mjs",
     "package": "python3 scripts/package-release.py",
     "test:package": "python3 test/package_test.py",
-    "test:windows": "node scripts/verify-windows.mjs"
+    "test:windows": "node scripts/verify-windows.mjs",
+    "eval:pressure": "node scripts/pressure-eval.mjs"
   }
 }

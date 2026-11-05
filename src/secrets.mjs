@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { lstat, readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { gitEnv } from './freshness.mjs';
+import { WORKTREE_ID, validWorktreeTag, worktreeTag } from './worktrees.mjs';
 import { t } from '../web/messages-catalog.mjs';
 import { WaxError } from './workflow.mjs';
 
@@ -129,6 +130,18 @@ export async function scanSecrets(root, { base } = {}) {
   return { state: findings.length ? 'found' : 'clean', base: from, files, findings: findings.slice(0, SECRET_LIMITS.findings), more: Math.max(0, findings.length - SECRET_LIMITS.findings) };
 }
 
+export function mergeSecretScans(project, trees) {
+  const seen = trees.filter(([, scan]) => scan && scan.reason !== 'no-git');
+  if (!seen.length) return project;
+  const all = [project, ...seen.map(([, scan]) => scan)];
+  const findings = [...project.findings, ...seen.flatMap(([entry, scan]) => scan.findings.map((item) => ({ ...item, worktree: entry.id })))];
+  const more = all.reduce((sum, scan) => sum + scan.more, 0) + Math.max(0, findings.length - SECRET_LIMITS.findings);
+  const unknown = all.find((scan) => scan.state === 'unknown');
+  const state = findings.length ? 'found' : unknown ? 'unknown' : 'clean';
+  return { state, ...(state === 'unknown' ? { reason: unknown.reason } : {}), ...(project.base ? { base: project.base } : {}), files: all.reduce((sum, scan) => sum + scan.files, 0),
+    findings: findings.slice(0, SECRET_LIMITS.findings), more, worktrees: seen.map(([entry]) => worktreeTag(entry)) };
+}
+
 export function validSecretScan(scan) {
   const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
   const short = (value, limit) => typeof value === 'string' && value.length > 0 && value.length <= limit;
@@ -136,7 +149,9 @@ export function validSecretScan(scan) {
     Number.isSafeInteger(scan.more) && scan.more >= 0 && (scan.reason === undefined || short(scan.reason, 40)) &&
     (scan.base === undefined || /^[a-f0-9]{40,64}$/.test(scan.base)) &&
     Array.isArray(scan.findings) && scan.findings.length <= SECRET_LIMITS.findings && scan.findings.every((item) => record(item) && short(item.file, 1000) && short(item.rule, 40) &&
-      (item.line === undefined || (Number.isSafeInteger(item.line) && item.line > 0)) && (item.preview === undefined || short(item.preview, 8)));
+      (item.line === undefined || (Number.isSafeInteger(item.line) && item.line > 0)) && (item.preview === undefined || short(item.preview, 8)) &&
+      (item.worktree === undefined || (typeof item.worktree === 'string' && WORKTREE_ID.test(item.worktree)))) &&
+    (scan.worktrees === undefined || (Array.isArray(scan.worktrees) && scan.worktrees.length <= SECRET_LIMITS.findings && scan.worktrees.every(validWorktreeTag)));
 }
 
-export const findingText = (item) => `${item.file}${item.line ? `:${item.line}` : ''} ${item.rule}${item.preview ? ` ${item.preview}` : ''}`;
+export const findingText = (item) => `${item.worktree ? `.wax/worktrees/${item.worktree}/` : ''}${item.file}${item.line ? `:${item.line}` : ''} ${item.rule}${item.preview ? ` ${item.preview}` : ''}`;

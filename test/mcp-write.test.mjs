@@ -248,7 +248,7 @@ test('wax_complete: the same refusals as wax complete, proofs and AC trace, revi
   failed(await reviewer.call('wax_complete', { id: 'login', phase: 'review', evidence: '검토', checks: ['ac-1'] }), 400, /checks\[0\] must be an object/);
   const done = await reviewer.call('wax_complete', { id: 'login', phase: 'review', evidence: '수용 기준 확인', proofIds: [reviewed.id], checks: pass, verdict: 'pass' });
   assert.equal(done.isError, false, done.content[0].text);
-  assert.equal(done.structuredContent.warning, null);
+  assert.match(done.structuredContent.warning, /^두 단계 검토 경고\(완료는 했습니다\): .*품질 검토 항목 없음\(경고\)$/);
   feature = await getFeature(root, 'login');
   assert.deepEqual([feature.phase, feature.completed.review.author, feature.completed.review.via, feature.completed.review.acceptance[0].status], ['report', 'claude-앱', 'mcp', 'pass']);
 });

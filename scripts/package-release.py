@@ -14,20 +14,21 @@ from strip_comments import strip
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMANDS = ('init', 'join', 'plan', 'design', 'implement', 'review', 'report', 'status', 'iterate', 'chat', 'daily', 'pm', 'work')
-CHAT = ('paths', 'validate', 'store', 'lock', 'event-hub', 'channels', 'presence', 'host-state', 'board', 'digest', 'watcher', 'listeners', 'watch', 'skills', 'skill-map', 'work-notes', 'rules', 'daily', 'team', 'usage', 'tools', 'tool-news', 'cron', 'trigger-github', 'triggers', 'pm-judge', 'tool-health', 'stuck-check', 'pm-review', 'pm-loop', 'requests', 'design-mcp', 'design', 'server', 'cli')
+CHAT = ('paths', 'validate', 'store', 'lock', 'event-hub', 'channels', 'presence', 'host-state', 'board', 'digest', 'watcher', 'listeners', 'watch', 'skills', 'skill-map', 'work-notes', 'rules', 'daily', 'team', 'usage', 'tools', 'tool-news', 'cron', 'trigger-github', 'triggers', 'pm-judge', 'tool-health', 'stuck-check', 'pm-review', 'pm-loop', 'pm-review-list', 'requests', 'design-mcp', 'design', 'server', 'cli')
 RECIPES = ('bugfix', 'feature', 'refactor')
 TOOL_FAILURES = ('codex', 'antigravity')
 WEB_TYPES = {'.html', '.mjs', '.css', '.svg', '.png', '.webp', '.json'}
 SIDE = 'web/office/side/'
 
 
-SOURCE_ONLY_TESTS = ('bump-version.test.mjs', 'ci-scope.test.mjs')
+SOURCE_ONLY_TESTS = ('bump-version.test.mjs', 'ci-scope.test.mjs', 'pressure-eval.test.mjs', 'pressure-eval-run.test.mjs', 'pressure-eval-edits.test.mjs', 'pressure-eval-ledger.test.mjs')
 
 
 def test_files(root):
     """Every behavioral test, so a release can check itself with node --test.
     bump-version tests the source repository's release tooling against CHANGELOG.md, which a release does not ship.
-    ci-scope tests the private CI scope script (scripts/ci-scope.mjs), which a release does not ship either."""
+    ci-scope tests the private CI scope script (scripts/ci-scope.mjs), which a release does not ship either.
+    pressure-eval tests the private skill pressure test runner (scripts/pressure-eval.mjs, test/eval/pressure/), kept out of the release too."""
     return tuple(sorted(path.relative_to(root).as_posix() for path in (root / 'test').glob('*.test.mjs') if path.name not in SOURCE_ONLY_TESTS))
 
 
@@ -118,17 +119,18 @@ FILES = (
     'GEMINI.md', 'gemini-extension.json', '.claude-plugin/plugin.json', '.codex-plugin/plugin.json', 'plugin.json', '.agents/plugins/marketplace.json', '.github/plugin/marketplace.json', '.github/workflows/public.yml', '.claude-plugin/marketplace.json',
     'claude-mods/hooks.json', 'claude-mods/usage.mjs', 'hooks/hooks.json',
     'bin/wax-approval-hook.mjs', 'bin/wax-host-hook.mjs', 'src/approvals.mjs', 'src/approval-hosts.mjs', 'src/approval-cli.mjs', 'src/codex-session.mjs', 'src/agent-tools.mjs', 'src/agent-session.mjs', 'docs/APPROVALS.md', 'docs/APPROVALS.ko.md', 'scripts/verify-approvals-browser.mjs', 'src/approval-preview.mjs', 'scripts/verify-approval-diff-browser.mjs',
-    'bin/wax.mjs', 'src/sqlite.mjs', 'src/search.mjs', 'src/search-sources.mjs', 'src/search-cli.mjs', 'src/recall.mjs', 'src/wiki.mjs', 'src/wiki-cli.mjs', 'src/cli-locale.mjs', 'docs/SEARCH.md', 'docs/SEARCH.ko.md', 'scripts/bench-search.mjs', 'scripts/verify-search-browser.mjs', 'src/workflow.mjs', 'src/quality.mjs', 'src/acceptance.mjs', 'src/defects.mjs', 'src/secrets.mjs', 'src/impact.mjs', 'src/deps.mjs', 'src/quality-report.mjs', 'src/durations.mjs', 'src/context.mjs', 'src/pr-body.mjs', 'src/run-trace.mjs', 'src/file-lock.mjs', 'src/backup.mjs', 'src/evidence.mjs', 'src/freshness.mjs', 'src/capture.mjs', 'src/project-detect.mjs', 'src/proof-schema.mjs', 'src/diagnostics.mjs', 'docs/USER_GUIDE.md', 'docs/USER_GUIDE.en.md', 'docs/DESIGN_STUDIO.md', 'docs/DESIGN_STUDIO.ko.md', 'SECURITY.md', 'SECURITY.ko.md', '.gitignore',
+    'bin/wax.mjs', 'src/sqlite.mjs', 'src/search.mjs', 'src/search-sources.mjs', 'src/search-cli.mjs', 'src/recall.mjs', 'src/wiki.mjs', 'src/wiki-cli.mjs', 'src/cli-locale.mjs', 'docs/SEARCH.md', 'docs/SEARCH.ko.md', 'scripts/bench-search.mjs', 'scripts/verify-search-browser.mjs', 'src/workflow.mjs', 'src/quality.mjs', 'src/acceptance.mjs', 'src/defects.mjs', 'src/red-green.mjs', 'src/plan-steps.mjs', 'src/rulings.mjs', 'src/approach.mjs', 'src/mention.mjs', 'src/secrets.mjs', 'src/scrub.mjs', 'src/impact.mjs', 'src/deps.mjs', 'src/quality-report.mjs', 'src/durations.mjs', 'src/context.mjs', 'src/pr-body.mjs', 'src/run-trace.mjs', 'src/file-lock.mjs', 'src/backup.mjs', 'src/evidence.mjs', 'src/freshness.mjs', 'src/capture.mjs', 'src/project-detect.mjs', 'src/proof-schema.mjs', 'src/diagnostics.mjs', 'docs/USER_GUIDE.md', 'docs/USER_GUIDE.en.md', 'docs/DESIGN_STUDIO.md', 'docs/DESIGN_STUDIO.ko.md', 'SECURITY.md', 'SECURITY.ko.md', '.gitignore', 'src/plan-progress.mjs', 'src/review-stages.mjs',
     'scripts/build-commands.mjs', 'scripts/skill-size.mjs', 'scripts/skill-budget.json', 'scripts/build-faces.mjs', 'scripts/import-side-prop.mjs', 'scripts/import-studio-art.mjs', 'scripts/package-release.py', 'scripts/bump-version.mjs', 'scripts/strip_comments.py', 'scripts/install-project.mjs', 'scripts/verify-codex-marketplace.mjs', 'scripts/verify-windows.mjs', 'scripts/chat-demo.mjs', 'scripts/verify-requests-browser.mjs', 'scripts/verify-threads-browser.mjs', 'scripts/verify-design-browser.mjs', 'scripts/i18n-strings.mjs', 'scripts/verify-i18n-browser.mjs', 'scripts/verify-notify-browser.mjs', 'scripts/verify-trace-browser.mjs',
     'src/status.mjs', 'src/tool-usage.mjs', 'src/snapshots.mjs', 'src/snapshot-cli.mjs', 'src/worktrees.mjs', 'scripts/verify-snapshots-browser.mjs', 'test/fixtures/usage/claude-result.json', 'src/mcp.mjs', 'src/mcp-config.mjs', 'src/visual-compare.mjs', 'scripts/verify-compare-browser.mjs',
     'scripts/verify-triggers-browser.mjs', 'src/trigger-cli.mjs',
     'scripts/verify-pm-loop-browser.mjs', 'src/pm-loop-cli.mjs',
     'src/recipes.mjs', 'src/recipe-cli.mjs', 'src/manual.mjs', 'scripts/verify-manual-browser.mjs', 'scripts/verify-auto-retry-browser.mjs', 'scripts/verify-recipes-browser.mjs', 'scripts/verify-tool-health-browser.mjs',
-    'src/goal-allow.mjs', 'scripts/verify-goal-allow-browser.mjs', 'src/worktree-make.mjs', 'src/worktree-setup.mjs', 'src/worktree-import.mjs', 'src/worktree-baseline.mjs', 'scripts/verify-worktrees-browser.mjs',
+    'src/goal-allow.mjs', 'scripts/verify-goal-allow-browser.mjs', 'src/worktree-make.mjs', 'src/worktree-setup.mjs', 'src/worktree-copy.mjs', 'src/worktree-preimport.mjs', 'src/process-tree.mjs', 'src/worktree-import.mjs', 'src/worktree-baseline.mjs', 'src/git-read.mjs', 'src/worktree-board.mjs', 'src/worktree-cli.mjs', 'src/worktree-review.mjs', 'scripts/verify-review-pr-browser.mjs', 'scripts/verify-worktrees-browser.mjs', 'scripts/verify-worktree-board-browser.mjs', 'scripts/verify-red-green-browser.mjs', 'scripts/verify-rulings-browser.mjs', 'scripts/verify-plan-steps-browser.mjs', 'scripts/verify-approach-browser.mjs',
     'src/plugin-hosts.mjs', 'src/update-cli.mjs',
     *(f'recipes/{name}.json' for name in RECIPES),
     'src/tool-failures.mjs',
     'src/worker-commands.mjs',
+    'src/json-lines.mjs', 'src/diagnose.mjs', 'src/diagnose-cli.mjs', 'src/diagnose-bundle.mjs', 'scripts/verify-diagnose-browser.mjs',
     *(f'tool-failures/{name}.json' for name in TOOL_FAILURES),
     *(f'test/fixtures/tool-failures/{name}.json' for name in TOOL_FAILURES),
     *(f'src/chat/{name}.mjs' for name in CHAT),

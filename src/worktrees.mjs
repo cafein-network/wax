@@ -27,10 +27,36 @@ const validBaseline = (value) => Boolean(value && typeof value === 'object' && !
   (value.state === 'ok' ? /^[a-f0-9]{64}$/.test(value.digest ?? '') && Number.isSafeInteger(value.count) : value.digest === undefined) &&
   Object.keys(value).every((key) => ['state', 'count', 'digest'].includes(key)));
 
+const COPY_STATE = ['ok', 'partial', 'none', 'stopped', 'unsupported'];
+const COPY_OUTCOME = ['cloned', 'copied', 'missing', 'exists', 'notIgnored', 'tracked', 'blocked', 'unsafeLink', 'tooLarge', 'timeout', 'failed', 'stopped'];
+const count = (value) => value === undefined || (Number.isSafeInteger(value) && value >= 0);
+const copyPath = (path) => typeof path === 'string' && path.length > 0 && path.length <= 200 && !HIDDEN.test(path) && !/[\\:]/.test(path) && !path.startsWith('/') &&
+  path.split('/').length <= 6 && path.split('/').every((part) => part && part !== '.' && part !== '..');
+const validCopy = (value) => Boolean(value && typeof value === 'object' && !Array.isArray(value) && COPY_STATE.includes(value.state) &&
+  (value.method === null || value.method === undefined || ['clone', 'copy', 'mixed'].includes(value.method)) && count(value.ms) &&
+  Array.isArray(value.entries) && value.entries.length <= 20 && Object.keys(value).every((key) => ['state', 'method', 'ms', 'entries'].includes(key)) &&
+  value.entries.every((item) => item && typeof item === 'object' && !Array.isArray(item) && copyPath(item.path) && COPY_OUTCOME.includes(item.outcome) &&
+    ['files', 'bytes', 'cloned', 'written', 'vanished'].every((key) => count(item[key])) &&
+    Object.keys(item).every((key) => ['path', 'outcome', 'files', 'bytes', 'cloned', 'written', 'vanished'].includes(key))));
+
+export const REVIEW_KIND = 'review';
+const validPr = (pr) => Boolean(pr && typeof pr === 'object' && !Array.isArray(pr) && Number.isSafeInteger(pr.number) && pr.number >= 1 && pr.number <= 1_000_000_000 &&
+  SHA.test(pr.head ?? '') && typeof pr.cross === 'boolean' && typeof pr.url === 'string' && pr.url.length <= 300 && (pr.url === '' || /^https:\/\/[^\s"'<>`]+$/.test(pr.url)) &&
+  Object.keys(pr).every((key) => ['number', 'head', 'cross', 'url'].includes(key)));
+export const isReview = (entry) => entry?.kind === REVIEW_KIND;
+export const reviewRef = (number) => `refs/wax/review/pr-${number}`;
+
 export function validWorktreeRecord(record) {
   if (!record || typeof record !== 'object' || Array.isArray(record) || record.schema !== 1 || !Number.isSafeInteger(record.seq)) return false;
-  if (!ID.test(record.id ?? '') || !GOAL.test(record.goal ?? '') || !FEATURE.test(record.feature ?? '') || !BRANCH.test(record.branch ?? '')) return false;
-  if (!record.id.startsWith(`${record.goal}-`) || record.branch !== `wax/${record.goal}/${record.feature}-${record.id.slice(record.goal.length + 1)}`) return false;
+  if (!ID.test(record.id ?? '') || !GOAL.test(record.goal ?? '') || !FEATURE.test(record.feature ?? '')) return false;
+  if (!record.id.startsWith(`${record.goal}-`)) return false;
+  if (record.kind !== undefined || record.pr !== undefined) {
+    if (record.kind !== REVIEW_KIND || record.branch !== null || !validPr(record.pr)) return false;
+    if ((record.env !== undefined && !(Array.isArray(record.env) && record.env.length === 0)) || (record.setup !== undefined && record.setup !== null)) return false;
+    if (record.reason !== undefined) return false;
+  } else {
+    if (!BRANCH.test(record.branch ?? '') || record.branch !== `wax/${record.goal}/${record.feature}-${record.id.slice(record.goal.length + 1)}`) return false;
+  }
   if (typeof record.path !== 'string' || !record.path || record.path.length > 4096 || HIDDEN.test(record.path) || !isAbsolute(record.path)) return false;
   if (!WORKTREE_STATES.includes(record.state) || !time(record.at)) return false;
   if (record.base !== undefined && record.base !== null && !SHA.test(record.base)) return false;
@@ -39,8 +65,9 @@ export function validWorktreeRecord(record) {
   if (record.setup !== undefined && record.setup !== null && (typeof record.setup !== 'object' || Array.isArray(record.setup) ||
     (record.setup.hash !== undefined && record.setup.hash !== null && !/^[a-f0-9]{64}$/.test(record.setup.hash)) ||
     (record.setup.outcome !== undefined && record.setup.outcome !== null && !(typeof record.setup.outcome === 'string' && /^[a-z][a-z-]{0,39}$/.test(record.setup.outcome))) ||
-    (record.setup.baseline !== undefined && !validBaseline(record.setup.baseline)))) return false;
+    (record.setup.baseline !== undefined && !validBaseline(record.setup.baseline)) || (record.setup.copy !== undefined && !validCopy(record.setup.copy)))) return false;
   if (record.by !== undefined && record.by !== null && !(typeof record.by === 'string' && record.by.length <= 80 && !HIDDEN.test(record.by))) return false;
+  if (record.reason !== undefined && !(record.state === 'removed' && record.reason === 'integrated')) return false;
   return true;
 }
 
@@ -165,5 +192,8 @@ export async function runFolder(root, cwd, filter = {}) {
   return worktree ? { root: realRoot, cwd: worktree.path, worktree } : null;
 }
 
-export const worktreeTag = (entry) => (entry ? { id: entry.id, branch: entry.branch } : null);
-export const validWorktreeTag = (tag) => Boolean(tag && typeof tag === 'object' && !Array.isArray(tag) && Object.keys(tag).length === 2 && ID.test(tag.id ?? '') && BRANCH.test(tag.branch ?? '') && tag.branch.endsWith(`-${tag.id.split('-').at(-1)}`) && tag.branch.startsWith(`wax/${tag.id.slice(0, 13)}/`));
+export const worktreeTag = (entry) => (entry ? isReview(entry) ? { id: entry.id, pr: entry.pr.number } : { id: entry.id, branch: entry.branch } : null);
+export const validWorktreeTag = (tag) => Boolean(tag && typeof tag === 'object' && !Array.isArray(tag) && Object.keys(tag).length === 2 && ID.test(tag.id ?? '') &&
+  (tag.pr !== undefined ? Number.isSafeInteger(tag.pr) && tag.pr >= 1
+    : BRANCH.test(tag.branch ?? '') && tag.branch.endsWith(`-${tag.id.split('-').at(-1)}`) && tag.branch.startsWith(`wax/${tag.id.slice(0, 13)}/`)));
+export const sameWorktree = (entry, tag) => Boolean(entry && tag && entry.id === tag.id && (isReview(entry) ? tag.pr === entry.pr.number && tag.branch === undefined : tag.branch === entry.branch));

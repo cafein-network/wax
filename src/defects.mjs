@@ -11,6 +11,8 @@ export const DEFECT_STATES = ['open', 'resolved'];
 export const DEFECT_LABELS = { open: '열림', resolved: '해결(재검증됨)' };
 const STATUS = ['pass', 'fail', 'unverified'];
 const AC = /^AC-[1-9][0-9]{0,2}$/;
+const RULING = /^R-[1-9][0-9]{0,2}$/;
+const STAGES = ['spec', 'quality'];
 
 export const isDefectCheck = (check) => typeof check?.id === 'string' && DEFECT_CHECK.test(check.id);
 const key = (id) => `D-${Number(id.match(DEFECT_CHECK)[1])}`;
@@ -23,11 +25,12 @@ const proofList = (value) => Array.isArray(value) && value.length <= 100 && valu
 export function validDefects(defects) {
   return Array.isArray(defects) && defects.length <= MAX_DEFECTS && new Set(defects.map((item) => item?.id)).size === defects.length &&
     defects.every((item) => item !== null && typeof item === 'object' && DEFECT_ID.test(item.id) && text(item.title, 200) && optional(item.detail, 2000) &&
-      (item.ac === undefined || AC.test(item.ac)) && DEFECT_STATES.includes(item.status) && iteration(item.foundIteration) && timestamp(item.foundAt) &&
+      (item.ac === undefined || AC.test(item.ac)) && (item.stage === undefined || STAGES.includes(item.stage)) && DEFECT_STATES.includes(item.status) && iteration(item.foundIteration) && timestamp(item.foundAt) &&
       (item.author === undefined || (typeof item.author === 'string' && AUTHOR.test(item.author))) &&
+      (item.source === undefined || (item.source !== null && typeof item.source === 'object' && Object.keys(item.source).length === 1 && RULING.test(item.source.ruling))) &&
       (item.status === 'open'
         ? item.resolvedIteration === undefined && item.resolvedAt === undefined && item.proofIds === undefined
-        : iteration(item.resolvedIteration) && item.resolvedIteration > item.foundIteration && timestamp(item.resolvedAt) && proofList(item.proofIds) && item.proofIds.length > 0) &&
+        : iteration(item.resolvedIteration) && (item.source ? item.resolvedIteration >= item.foundIteration : item.resolvedIteration > item.foundIteration) && timestamp(item.resolvedAt) && proofList(item.proofIds) && item.proofIds.length > 0) &&
       optional(item.verifyDetail, 2000));
 }
 
@@ -46,15 +49,16 @@ export function newDefects(feature, input, { at, author } = {}) {
   if (next + input.length - 1 > 999) throw new WaxError(t('errors.defects.tooMany', MAX_DEFECTS));
   return input.map((item, index) => {
     if (item === null || typeof item !== 'object' || Array.isArray(item) || !text(item.title, 200) || !optional(item.detail, 2000) ||
-        (item.ac !== undefined && (typeof item.ac !== 'string' || !AC.test(item.ac.toUpperCase())))) {
+        (item.ac !== undefined && (typeof item.ac !== 'string' || !AC.test(item.ac.toUpperCase()))) || (item.stage !== undefined && !STAGES.includes(item.stage))) {
       throw new WaxError(t('errors.defects.itemFormat', index + 1));
     }
     return { id: `D-${next++}`, title: item.title.trim(), ...(item.detail?.trim() ? { detail: item.detail.trim() } : {}),
-      ...(item.ac ? { ac: item.ac.toUpperCase() } : {}), status: 'open', foundIteration: feature.iteration, foundAt: at, ...(author ? { author } : {}) };
+      ...(item.ac ? { ac: item.ac.toUpperCase() } : {}), ...(item.stage ? { stage: item.stage } : {}), status: 'open', foundIteration: feature.iteration, foundAt: at, ...(author ? { author } : {}) };
   });
 }
 
-export const dueDefects = (feature) => (feature.defects ?? []).filter((item) => item.status === 'open' && item.foundIteration < feature.iteration);
+export const dueDefects = (feature) => (feature.defects ?? []).filter((item) => item.status === 'open' &&
+  (item.foundIteration < feature.iteration || (item.source?.ruling !== undefined && item.foundIteration <= feature.iteration)));
 export const openDefects = (feature) => (feature.defects ?? []).filter((item) => item.status === 'open');
 
 const passingTest = (feature, id) => feature.proofs?.some((proof) => proof.id === id && proof.iteration === feature.iteration &&
@@ -120,10 +124,10 @@ export function defectPrompt(feature, phase) {
   const lines = [];
   const open = openDefects(feature), due = dueDefects(feature);
   const list = (items) => items.map((item) => `- ${item.id}: ${cell(item.title)}${item.ac ? ` (${item.ac})` : ''}${item.detail ? ` — ${cell(item.detail)}` : ''}`).join('\n');
-  if (phase === 'implement' && open.length) lines.push(`이전 검토에서 찾은 열린 결함입니다. 각 결함을 고치고, 다시 생기지 않음을 보이는 테스트를 준비하세요:\n${list(open)}`);
+  if (phase === 'implement' && open.length) lines.push(`이전 검토에서 찾은 열린 결함입니다. 각 결함을 고치고, 다시 생기지 않음을 보이는 테스트를 준비하세요. 결함마다 고치기 전 실패와 고친 뒤 통과를 CLI test <id> --checks d-N -- <실행파일> <인수>처럼 결함 ID(d-1, d-2 …)로 남기세요:\n${list(open)}`);
   if (phase === 'review') {
     if (due.length) lines.push(`재검증할 결함 ID: ${due.map((item) => item.id).join(', ')}. 완료할 때 --checks-file JSON 배열에 결함마다 {"id":"d-1","status":"pass|fail|unverified","detail":"<확인 내용>","proofIds":["<현재 주기 통과 테스트 근거 ID>"]}를 넣으세요. 재검증은 통과한 테스트 근거로만 인정합니다. 아직 고쳐지지 않았으면 fail로 두고 완료하지 말고 iterate하세요. 재검증할 수 없는 결함이 남으면 --defect-unverified <사유>로 이유를 남겨야 완료되며, 그 결함은 열린 채로 남습니다.\n${list(due)}`);
-    lines.push('검토에서 결함을 찾아 iterate할 때는 --defects-file JSON 배열에 결함마다 {"title":"<무엇이 잘못됐나>","detail":"<재현 방법과 영향>","ac":"AC-1(관련 수용 기준, 선택)"}을 넣어 결함 기록(D-N)으로 남기세요.');
+    lines.push('검토에서 결함을 찾아 iterate할 때는 --defects-file JSON 배열에 결함마다 {"title":"<무엇이 잘못됐나>","detail":"<재현 방법과 영향>","ac":"AC-1(관련 수용 기준, 선택)","stage":"spec|quality(어느 검토 단계에서 찾았나, 선택)"}을 넣어 결함 기록(D-N)으로 남기세요.');
   }
   if (phase === 'report' && (feature.defects ?? []).length) lines.push(`결함 기록:\n${defectTable(feature)}\n보고서에 열린 결함을 숨기지 마세요.`);
   return lines;

@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { createChatServer } from '../src/chat/server.mjs';
-import { createFeature, updateFeature } from '../src/workflow.mjs';
+import { completePhase, createFeature, updateFeature } from '../src/workflow.mjs';
 import { runTestProof } from '../src/evidence.mjs';
 import { createGoal } from '../src/chat/pm-loop.mjs';
 import { chatDir } from '../src/chat/paths.mjs';
@@ -38,6 +38,19 @@ try {
   await updateFeature(root, id, 'complete', { phase: 'implement', evidence: '토큰 갱신 구현 <img src=x onerror=alert(1)>', proofIds: [proof.id], author: 'codex-a', tool: 'codex' });
   await updateFeature(root, id, 'iterate', { reason: '만료 토큰 처리가 빠짐', author: 'claude-b', defects: [{ title: '만료 토큰이 <b>통과</b>된다' }] });
   await createFeature(root, { id: 'other', title: '다른 작업' });
+  await createFeature(root, { id: 'staged', title: 'Staged review' });
+  await updateFeature(root, 'staged', 'save', { phase: 'plan', content: '- AC-1: Total includes the discount — check: test' });
+  await updateFeature(root, 'staged', 'complete', { phase: 'plan', evidence: 'plan' });
+  await updateFeature(root, 'staged', 'save', { phase: 'design', content: '# design' });
+  await updateFeature(root, 'staged', 'complete', { phase: 'design', evidence: 'design' });
+  await updateFeature(root, 'staged', 'save', { phase: 'implement', content: '# implement' });
+  await updateFeature(root, 'staged', 'complete', { phase: 'implement', evidence: 'implement', waiver: 'fixture' });
+  await updateFeature(root, 'staged', 'save', { phase: 'review', content: '# review' });
+  const reviewed = (await runTestProof(root, 'staged', [process.execPath, '-e', 'process.exit(0)'], { author: 'claude-b' })).proof;
+  await completePhase(root, 'staged', 'review', { evidence: 'reviewed', verdict: 'pass', proofIds: [reviewed.id], author: 'claude-b', reviewStages: 'warn', checks: [
+    { id: 'ac-1', status: 'pass', detail: 'total checked', proofIds: [reviewed.id] },
+    { id: 'q-tests', stage: 'quality', status: 'pass', detail: 'edge cases covered' },
+    { id: 'q-security', stage: 'quality', status: 'unverified', detail: 'not reviewed <img src=x onerror=alert(1)> with a long explanation that has to wrap on a narrow phone screen' }] });
   const goal = await createGoal(root, { title: '사용량', features: [id] }, { author: '대표' });
   const usage = claudeUsage(JSON.parse(JSON.parse(await readFile(new URL('../test/fixtures/usage/claude-result.json', import.meta.url), 'utf8')).line));
   const log = join(await chatDir(root, 'pm-loop'), `${goal.id}.jsonl`);
@@ -78,6 +91,7 @@ try {
   const usageRow = await visits.nth(4).locator('.trace-usage').textContent();
   assert.match(usageRow, /Claude Code 입력 2 · 출력 4 · 캐시 읽기 11384 · 캐시 쓰기 10300 · 추론 0 · 비용 \$0\.0847648 · 차례 1 · 실행 1번/);
   assert.match(usageRow, /사용량을 알리지 않은 실행 1번/);
+  assert.match(usageRow, /도구가 알린 비용 \$0\.08\(1번은 알 수 없음, 실제 청구와 다를 수 있음\)/, 'the reported cost total (DISCIPLINE.md 7)');
   assert.match(await visits.nth(4).textContent(), /사용량\(도구가 알린 값\)/);
 
   const [download] = await Promise.all([page.waitForEvent('download'), page.click('#trace-download')]);
@@ -86,7 +100,7 @@ try {
   assert.match(markdown, /^# 실행 기록: 로그인 개선/);
   assert.match(markdown, /## 4\. 검토 · 주기 0/);
   assert.match(markdown, /&lt;img src=x onerror=alert\(1\)&gt;/);
-  assert.match(markdown, /- 사용량\(도구가 알린 값\): Claude Code 입력 2 · 출력 4 .* · 실행 1번; 사용량을 알리지 않은 실행 1번/);
+  assert.match(markdown, /- 사용량\(도구가 알린 값\): Claude Code 입력 2 · 출력 4 .* · 실행 1번; 도구가 알린 비용 \$0\.08\(1번은 알 수 없음, 실제 청구와 다를 수 있음\); 사용량을 알리지 않은 실행 1번/);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(100);
@@ -119,9 +133,24 @@ try {
   const [englishDownload] = await Promise.all([english.waitForEvent('download'), english.click('#trace-download')]);
   assert.match(await readFile(await englishDownload.path(), 'utf8'), /^# Run trace: /);
   if (screenshots) await english.screenshot({ path: join(screenshots, 'trace-desktop-en.png'), fullPage: true });
+  await english.goto(`${base}/manage?feature=staged&lang=en`);
+  await english.locator('#trace-panel:not([hidden]) .trace-visit').first().waitFor();
+  const reviewVisit = english.locator('#trace-panel .trace-visit[data-phase="review"]');
+  if (!await reviewVisit.locator('details').evaluate((node) => node.open)) await reviewVisit.locator('summary').click();
+  const stagesBlock = reviewVisit.locator('.trace-review-stages');
+  await stagesBlock.waitFor();
+  assert.equal(await stagesBlock.locator('h4').innerText(), 'Two-stage review');
+  assert.equal(await stagesBlock.locator('.review-stages-line').innerText(), 'Spec passed (1) → Quality passed (1, 1 unverified)');
+  assert.deepEqual(await stagesBlock.locator('.trace-ac li').evaluateAll((nodes) => nodes.map((node) => [node.dataset.stage, node.dataset.item, node.querySelector('.badge')?.textContent])),
+    [['quality', 'q-tests', 'Passed'], ['quality', 'q-security', 'Unverified']]);
+  assert.match(await stagesBlock.innerText(), /not reviewed <img src=x onerror=alert\(1\)>/);
+  assert.equal(await english.locator('#trace-panel img').count(), 0, 'review detail stays text');
+  assert.doesNotMatch(await stagesBlock.innerText(), /[가-힣]/, 'English screen');
+  assert.equal(await english.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), true, 'two-stage review fits 390px');
+  if (screenshots) { await stagesBlock.scrollIntoViewIfNeeded(); await english.screenshot({ path: join(screenshots, 'review-stages-trace-en.png') }); }
 
   assert.deepEqual(errors, []);
-  console.log('PASS browser: run trace timeline, iteration revisit, expand, usage per visit (ko/en), Markdown download (ko/en), feature switch, close, 390px width (ko/en).');
+  console.log('PASS browser: run trace timeline, iteration revisit, expand, usage per visit (ko/en), Markdown download (ko/en), feature switch, close, 390px width (ko/en), two-stage review line (390px en).');
 } finally {
   await browser?.close(); await server?.shutdown();
   await rm(root, { recursive: true, force: true });

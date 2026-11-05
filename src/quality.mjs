@@ -3,6 +3,7 @@ import { extname, isAbsolute, relative, resolve } from 'node:path';
 import { qualityRequirements } from '../web/project-types.mjs';
 import { isAcCheck } from './acceptance.mjs';
 import { isDefectCheck } from './defects.mjs';
+import { isStageCheck } from './review-stages.mjs';
 
 const PREVIEW = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.html', '.blend', '.rbxl', '.rbxlx', '.mp4']);
 const CAPTURE = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.mp4']);
@@ -20,7 +21,7 @@ export async function artifactFile(root, file, kind = 'preview') {
 export async function assessQuality(root, feature, checks = [], proofIds = []) {
   const requirements = qualityRequirements(feature.projectType, feature.phase, feature.workMode);
   if (!requirements.length) return { ok: true, checks: [], missing: [], failed: [] };
-  if (Array.isArray(checks)) checks = checks.filter(c => !isAcCheck(c) && !isDefectCheck(c));
+  if (Array.isArray(checks)) checks = checks.filter(c => !isAcCheck(c) && !isDefectCheck(c) && !isStageCheck(c));
   const valid = Array.isArray(checks) && checks.length <= 20 && checks.every(c => c && typeof c.id === 'string' && ['pass', 'fail', 'unverified'].includes(c.status) &&
     typeof c.detail === 'string' && c.detail.trim() && c.detail.length <= 2000 && typeof c.artifact === 'string' && c.artifact.length <= 2000 &&
     Array.isArray(c.proofIds) && c.proofIds.length <= 100 && c.proofIds.every(id => typeof id === 'string')) && new Set(checks.map(c => c.id)).size === checks.length;

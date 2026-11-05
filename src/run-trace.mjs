@@ -15,6 +15,10 @@ import { captureLabelText, listCaptures } from './capture.mjs';
 import { compareCaptures, compareLines, hasComparison } from './visual-compare.mjs';
 import { listRuns, runSummary } from './snapshots.mjs';
 import { readWorktrees, validWorktreeTag, worktreeById } from './worktrees.mjs';
+import { redGreenDefectLines, redGreenLine, redGreenMarks, redGreenWarningLines } from '../web/red-green-text.mjs';
+import { stepProgress } from './plan-progress.mjs';
+import { planStepsLine, stepStateText } from '../web/plan-steps-text.mjs';
+import { reviewStagesLine, reviewStagesWarningLines, stageName } from '../web/review-stages-text.mjs';
 const PM_OUTCOME = { executed: 'trace.pmExecuted', dismissed: 'trace.pmDismissed', launched: 'trace.pmLaunched', exited: 'trace.pmExited', timeout: 'trace.pmTimeout', failed: 'trace.pmFailed', stopped: 'trace.pmStopped', stuck: 'trace.pmStuck', warned: 'trace.pmRepeatWarned', cleared: 'trace.pmCleared', restored: 'trace.pmRestored', imported: 'trace.pmImported' };
 const JUDGE_OUTCOME = { requested: 'trace.pmRequested', proposed: 'trace.pmProposed', rejected: 'trace.pmRejected', failed: 'trace.judgeFailed', timeout: 'trace.judgeTimeout', stopped: 'trace.judgeStopped' };
 const RUN_STATE = { new: 'trace.runState.new', delete: 'trace.runState.delete', modify: 'trace.runState.modify' };
@@ -25,7 +29,7 @@ const SHA = /^[a-f0-9]{40,64}$/;
 const REQUEST_ID = /^request-[a-f0-9-]{36}$/;
 const time = (value) => (typeof value === 'string' ? Date.parse(value) : NaN);
 const sha = (value) => (typeof value === 'string' && SHA.test(value) ? value : null);
-const worktreeMark = (value) => (validWorktreeTag(value) ? { id: value.id, branch: value.branch } : null);
+const worktreeMark = (value) => (validWorktreeTag(value) ? value.pr !== undefined ? { id: value.id, branch: null, pr: value.pr } : { id: value.id, branch: value.branch } : null);
 const clip = (value, limit) => { const all = Array.from(String(value ?? '').trim()); return all.length > limit ? `${all.slice(0, limit - 1).join('')}…` : all.join(''); };
 
 function proofSummary(proof, linked) {
@@ -124,9 +128,16 @@ export function traceVisits(feature, { request = null, pm = [], now = Date.now()
     const completion = visit.completion ?? null;
     delete visit.completion;
     const linked = new Set(Array.isArray(completion?.proofIds) ? completion.proofIds : []);
-    visit.proofs = proofs.filter((proof) => linked.has(proof.id) ||
+    const redGreen = visit.phase === 'implement' && completion?.redGreen && typeof completion.redGreen === 'object' ? completion.redGreen : null;
+    const marks = redGreenMarks(redGreen);
+    visit.proofs = proofs.filter((proof) => linked.has(proof.id) || marks.has(proof.id) ||
       (proof.phase === visit.phase && proof.iteration === visit.iteration && time(proof.at) >= startAt && time(proof.at) <= endAt))
-      .sort((a, b) => String(a.at).localeCompare(String(b.at))).slice(-TRACE_LIMITS.proofs).map((proof) => proofSummary(proof, linked.has(proof.id)));
+      .sort((a, b) => String(a.at).localeCompare(String(b.at))).slice(-TRACE_LIMITS.proofs)
+      .map((proof) => ({ ...proofSummary(proof, linked.has(proof.id)), ...(marks.has(proof.id) ? { redGreen: marks.get(proof.id) } : {}) }));
+    visit.redGreen = redGreen ? structuredClone(redGreen) : null;
+    const progress = visit.phase === 'implement' && feature ? stepProgress(feature, { iteration: visit.iteration }) : null;
+    visit.steps = progress ? { ...progress, steps: progress.steps.map(({ id, title, check, none, state, redGreen: paired, proof }) => ({ id, title: clip(title, 200), check: check ? clip(check, 300) : null,
+      none: none ? clip(none, 200) : null, state, redGreen: paired, proof })) } : null;
     visit.missingProofs = [...linked].filter((id) => !proofs.some((proof) => proof.id === id));
     visit.evidence = typeof completion?.evidence === 'string' ? completion.evidence : null;
     visit.waiver = typeof completion?.waiver === 'string' ? completion.waiver : null;
@@ -136,6 +147,7 @@ export function traceVisits(feature, { request = null, pm = [], now = Date.now()
       : Array.isArray(completion?.acceptance) ? completion.acceptance
       : visit.open ? (acceptanceTrace(feature ?? {}).length ? acceptanceTrace(feature ?? {}) : null) : null;
     visit.acWaiver = typeof completion?.acWaiver === 'string' ? completion.acWaiver : null;
+    visit.stages = visit.phase === 'review' && completion?.stages && typeof completion.stages === 'object' ? structuredClone(completion.stages) : null;
     const defectsById = new Map((Array.isArray(feature?.defects) ? feature.defects : []).map((item) => [item.id, item]));
     const titled = (item) => ({ ...item, title: defectsById.get(item.id)?.title ?? null });
     const due = visit.phase === 'review' && visit.open && feature ? dueDefects(feature) : [];
@@ -213,7 +225,7 @@ function git(root, args) {
 async function visitRange(root, visit, { pm, runs, registry, projectHead }) {
   const mine = new Set(visitWorkers(visit, pm));
   const own = runs.filter((item) => item.kind === 'worker' && mine.has(item.run) && typeof item.worktree === 'string');
-  const mark = (id) => (id ? { id, branch: registry.find((entry) => entry.id === id)?.branch ?? null } : null);
+  const mark = (id) => { const found = id ? registry.find((entry) => entry.id === id) : null; return id ? { id, branch: found?.branch ?? null, ...(found?.pr ? { pr: found.pr.number } : {}) } : null; };
   const worktree = !visit.open ? (visit.endHead ? visit.endWorktree : null) : (mark(own.at(-1)?.worktree) ?? visit.startWorktree);
   if (!worktree) return { worktree: null, from: visit.startHead, to: visit.endHead ?? (visit.open ? projectHead : null) };
   const runsHere = own.filter((item) => item.worktree === worktree.id);
@@ -337,16 +349,25 @@ export function renderTraceMarkdown(trace, language = cliText().language) {
     if (visit.warning) push(`- ${say('trace.warning', inline(visit.warning, PR_BODY_LIMITS.detail))}`);
     for (const decision of visit.pm ?? []) push(`- ${say('trace.pm', code(decision.at, 40), inline(decision.kind, 20), say(pmOutcome(decision)), code(decision.by, 45), decision.to ? code(decision.to, 45) : '-', inline(decision.reason, TRACE_LIMITS.note))}`);
     for (const note of visit.notes) push(`- ${say(note.outcome === 'question' ? 'trace.noteQuestion' : 'trace.noteBlocked', code(note.at, 40), inline(note.text, TRACE_LIMITS.note))}`);
-    if (visit.proofs.length || visit.missingProofs.length) {
+    if (visit.proofs.length || visit.missingProofs.length || visit.redGreen) {
       push('', `### ${say('prBody.verification')}`, '');
+      if (visit.redGreen) {
+        push(`- ${redGreenLine(visit.redGreen, say)}`);
+        for (const line of [...redGreenWarningLines(visit.redGreen, say), ...redGreenDefectLines(visit.redGreen, say)]) push(`- ${line}`);
+        if (visit.redGreen.waiver) push(`- ${say('qualityReport.redGreenWaiver', inline(visit.redGreen.waiver, PR_BODY_LIMITS.detail))}`);
+      }
       for (const proof of visit.proofs) {
         const label = proof.kind === 'git' ? say('prBody.commitRef', code(proof.commit.slice(0, 12))) : say('prBody.testRef', code(proof.command, 160), proof.exitCode ?? 'null', code(proof.id.slice(0, 8)));
         const result = proof.kind === 'git' ? say('prBody.fileCount', proof.files) : proof.timedOut ? say('prBody.timedOut') : proof.exitCode === 0 ? say('prBody.passed') : say('prBody.failed');
         const changed = !proof.changed ? '' : proof.changed.state === 'changed' ? `, ${say('prBody.changedFiles', proof.changed.count, proof.changed.files.slice(0, PR_BODY_LIMITS.files).map((file) => code(file, 120)).join(', '))}`
           : proof.changed.state === 'unchanged' ? `, ${say('trace.proofFresh')}` : `, ${say('trace.proofUnknown')}`;
-        push(`- ${label} — ${result}${proof.linked ? `, ${say('trace.linked')}` : ''}${proof.author ? `, ${say('prBody.by', code(proof.author, 45))}` : ''}${changed}`);
+        push(`- ${proof.redGreen ? `${say(proof.redGreen === 'red' ? 'redGreen.red' : 'redGreen.green')}: ` : ''}${label} — ${result}${proof.linked ? `, ${say('trace.linked')}` : ''}${proof.author ? `, ${say('prBody.by', code(proof.author, 45))}` : ''}${changed}`);
       }
       for (const missing of visit.missingProofs) push(`- ${say('prBody.proofMissing', code(String(missing).slice(0, 8)))}`);
+    }
+    if (visit.steps) {
+      push('', `### ${say('planSteps.title')}`, '', `- ${planStepsLine(visit.steps, say)}`);
+      for (const row of visit.steps.steps) push(`- ${row.id}${row.title ? ` ${inline(row.title, 120)}` : ''}${row.check ? ` ${code(row.check, 160)}` : ''} — ${inline(stepStateText(row, say, row.none), 200)}`);
     }
     if (visit.captures?.length) {
       push('', `### ${say('prBody.captures')}`, '');
@@ -357,6 +378,11 @@ export function renderTraceMarkdown(trace, language = cliText().language) {
       push('', `### ${say('prBody.acceptance')}`, '', `| ${say('prBody.acColumn')} | ${say('prBody.statusColumn')} | ${say('prBody.evidenceColumn')} |`, '| --- | --- | --- |');
       for (const item of visit.acceptance) push(`| ${inline(item.id, 20)} | ${say(AC_STATUS[item.status] ?? 'prBody.acPending')} | ${(item.proofIds ?? []).map((proofId) => code(String(proofId).slice(0, 8), 20, true)).join('; ') || '-'}${item.detail ? ` — ${inline(item.detail, PR_BODY_LIMITS.detail)}` : ''} |`);
       if (visit.acWaiver) push('', say('prBody.acWaiver', inline(visit.acWaiver, PR_BODY_LIMITS.detail)));
+    }
+    if (visit.stages) {
+      push('', `### ${say('reviewStages.title')}`, '', `- ${reviewStagesLine(visit.stages, say)}`);
+      for (const line of reviewStagesWarningLines(visit.stages, say)) push(`- ${line}`);
+      for (const item of visit.stages.checks ?? []) push(`- ${stageName(item.stage, say)} ${inline(item.id, 64)} — ${say(item.status === 'pass' ? 'qualityReport.pass' : 'qualityReport.unverified')}${item.detail ? ` — ${inline(item.detail, PR_BODY_LIMITS.detail)}` : ''}`);
     }
     if (visit.defects?.length) {
       push('', `### ${say('trace.defects')}`, '', `| ${say('qualityReport.defectColumn')} | ${say('qualityReport.statusColumn')} | ${say('qualityReport.evidenceColumn')} |`, '| --- | --- | --- |');
@@ -369,7 +395,7 @@ export function renderTraceMarkdown(trace, language = cliText().language) {
     }
     if (visit.files) {
       push('', `### ${say('trace.files')}`, '');
-      if (visit.files.worktree) push(say('trace.filesWorktree', code(visit.files.worktree.branch ?? visit.files.worktree.id, 100)));
+      if (visit.files.worktree) push(say('trace.filesWorktree', code(visit.files.worktree.branch ?? (visit.files.worktree.pr ? `PR #${visit.files.worktree.pr}` : visit.files.worktree.id), 100)));
       if (visit.files.unknown) push(say('trace.filesUnknown'));
       else if (!visit.files.count) push(say('trace.filesNone', short(visit.files.from), short(visit.files.to)));
       else {

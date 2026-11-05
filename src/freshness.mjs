@@ -1,19 +1,15 @@
 import { execFile } from 'node:child_process';
 import { lstat } from 'node:fs/promises';
 import { join } from 'node:path';
-import { worktreeById } from './worktrees.mjs';
+import { sameWorktree, worktreeById } from './worktrees.mjs';
+import { gitEnv } from './git-read.mjs';
 
 export const TREE_LIMITS = { files: 200, bytes: 64 * 1024 * 1024, timeout: 5000, buffer: 1_000_000 };
 const SHA = /^[a-f0-9]{40,64}$/;
 const own = (path) => path !== '.wax' && !path.startsWith('.wax/');
 const list = (text) => text.split('\0').filter(Boolean);
 
-const STRIP = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_COMMON_DIR', 'GIT_NAMESPACE', 'GIT_PREFIX'];
-export function gitEnv(extra = {}) {
-  const env = { ...process.env };
-  for (const key of Object.keys(env)) if (STRIP.includes(key.toUpperCase())) delete env[key];
-  return { ...env, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0', ...extra };
-}
+export { gitEnv };
 
 function git(root, args, input = '') {
   return new Promise((resolve, reject) => {
@@ -76,6 +72,11 @@ export function validTree(tree) {
   return entries.length <= TREE_LIMITS.files && entries.every(([path, id]) => path && path.length <= 4096 && !path.includes('\n') && !path.includes('\0') && (id === null || (typeof id === 'string' && SHA.test(id))));
 }
 
+export function treeKey(tree) {
+  if (!tree || tree.unknown !== undefined || !validTree(tree)) return null;
+  return [tree.head, Object.entries(tree.files).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))];
+}
+
 export function createTreeObserver(root) {
   let current;
   const diffs = new Map();
@@ -136,7 +137,7 @@ export async function evidenceFreshness(root, feature, observe = createTreeObser
   let result;
   if (basis.worktree) {
     const entry = await worktreeById(root, basis.worktree.id, { feature: feature.id }).catch(() => null);
-    result = entry && entry.branch === basis.worktree.branch ? await createTreeObserver(entry.path)(basis.tree) : { state: 'unknown', files: [] };
+    result = sameWorktree(entry, basis.worktree) ? await createTreeObserver(entry.path)(basis.tree) : { state: 'unknown', files: [] };
   } else result = await observe(basis.tree);
   return { basis: { id: basis.id, phase: basis.phase, at: basis.at }, state: result.state, count: result.files.length, files: result.files.slice(0, 20) };
 }

@@ -19,6 +19,7 @@ import { judgeRequest, matchAllow } from '../src/goal-allow.mjs';
 import { listRuns, previewRestore, readSnapshots, restoreSnapshot, runSummary, takeSnapshot, concurrentRuns } from '../src/snapshots.mjs';
 import { createGoal, createPmLoop, executeSuggestion, goalOverview, readDecisions, shellPath, workerPrompt } from '../src/chat/pm-loop.mjs';
 import { setPm } from '../src/chat/team.mjs';
+import { RULING_NOT_ALONE } from '../src/rulings.mjs';
 
 const run = promisify(execFile);
 const CLI = fileURLToPath(new URL('../bin/wax.mjs', import.meta.url));
@@ -515,7 +516,7 @@ test('worker prompt: without a worktree it only adds --project; with one it name
   const plain = workerPrompt(base);
   assert.ok(plain.includes(`CLI는 늘 --project ${JSON.stringify(shellPath(root))}를 붙여 부르세요`));
   assert.ok(plain.includes(`save implement f1 --file .wax/tmp/<문서>`));
-  assert.doesNotMatch(plain, /워크트리|--worktree/);
+  assert.doesNotMatch(plain.replace(RULING_NOT_ALONE[0], ''), /워크트리|--worktree/);
   const path = join(root, '.wax', 'worktrees', `${GOAL}-1`);
   const inTree = workerPrompt({ ...base, worktree: { id: `${GOAL}-1`, branch: `wax/${GOAL}/f1-1`, path } });
   assert.ok(inTree.includes(`등록된 워크트리 ${JSON.stringify(shellPath(path))}(브랜치 wax/${GOAL}/f1-1)`));

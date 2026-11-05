@@ -56,6 +56,16 @@ if (raw[first] === 'approvals') {
     const { snapshotCli } = await import('../src/snapshot-cli.mjs');
     await snapshotCli([...raw.slice(0, first), ...raw.slice(first + 1)]);
   } catch (error) { console.error(`wax snapshot: ${localize(error.message)}`); process.exitCode = 1; }
+} else if (raw[first] === 'diagnose') {
+  try {
+    const { diagnoseCli } = await import('../src/diagnose-cli.mjs');
+    await diagnoseCli([...raw.slice(0, first), ...raw.slice(first + 1)]);
+  } catch (error) { console.error(`wax diagnose: ${localize(error.message)}`); process.exitCode = 1; }
+} else if (raw[first] === 'worktree') {
+  try {
+    const { worktreeCli } = await import('../src/worktree-cli.mjs');
+    await worktreeCli([...raw.slice(0, first), ...raw.slice(first + 1)]);
+  } catch (error) { console.error(`wax worktree: ${localize(error.message)}`); process.exitCode = 1; }
 } else if (raw[first] === 'recipe') {
   try {
     const { recipeCli } = await import('../src/recipe-cli.mjs');
@@ -96,8 +106,10 @@ try {
     project: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' },
     file: { type: 'string' }, evidence: { type: 'string' }, verdict: { type: 'string' }, type: { type: 'string' }, verification: { type: 'string' }, checks: { type: 'string' }, 'checks-file': { type: 'string' },
     reason: { type: 'string' }, revision: { type: 'string' }, help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'v' },
-    prefix: { type: 'string' }, apply: { type: 'string' }, commit: { type: 'string' }, proofs: { type: 'string' }, 'no-proof': { type: 'string' }, 'ac-unverified': { type: 'string' }, 'defect-unverified': { type: 'string' }, 'defects-file': { type: 'string' }, author: { type: 'string' }, timeout: { type: 'string' }, budget: { type: 'string' }, check: { type: 'string' }, viewport: { type: 'string' }, scroll: { type: 'string' }, state: { type: 'string' },
-    out: { type: 'string' }, json: { type: 'boolean' }, worktree: { type: 'string' }
+    prefix: { type: 'string' }, apply: { type: 'string' }, commit: { type: 'string' }, proofs: { type: 'string' }, 'no-proof': { type: 'string' }, 'no-red': { type: 'string' }, 'ac-unverified': { type: 'string' }, 'defect-unverified': { type: 'string' }, 'defects-file': { type: 'string' }, author: { type: 'string' }, timeout: { type: 'string' }, budget: { type: 'string' }, check: { type: 'string' }, viewport: { type: 'string' }, scroll: { type: 'string' }, state: { type: 'string' },
+    out: { type: 'string' }, json: { type: 'boolean' }, worktree: { type: 'string' }, step: { type: 'string' },
+    what: { type: 'string' }, why: { type: 'string' }, cost: { type: 'string' }, area: { type: 'string' }, phase: { type: 'string' },
+    propose: { type: 'boolean' }, single: { type: 'string' }, pick: { type: 'string' }
   } });
   const [command, first, second] = positionals;
   const root = resolve(values.project ?? process.cwd());
@@ -108,6 +120,7 @@ try {
     if (revision !== undefined && (!Number.isInteger(revision) || revision < 1)) throw new Error(t('errors.wax.revisionMustBeA'));
     let result;
     if (values.worktree !== undefined && command !== 'test') throw new Error(t('errors.wax.worktreeOnlyTest'));
+    if (values.step !== undefined && command !== 'test') throw new Error(t('errors.wax.stepOnlyTest'));
     if (command === 'start') result = await createFeature(root, { id: first, title: values.title ?? first, description: values.description, projectType: values.type });
     else if (command === 'status') result = first ? await featureStatus(root, first) : await listFeatures(root);
     else if (command === 'context') {
@@ -210,7 +223,7 @@ try {
       if (result.failed?.length) process.exitCode = 1;
     }
     else if (command === 'evidence') { const feature = await getFeature(root, first); result = await updateFeature(root, first, 'attach-evidence', { proof: await collectGitProof(root, feature, values.commit, { author: values.author }), revision: revision ?? feature.revision }); }
-    else if (command === 'test') { result = await runTestProof(root, first, commandArgs, { revision, timeout: intOption(values, 'timeout'), verification: values.verification, checks: values.checks?.split(','), author: values.author, ...(values.worktree !== undefined ? { worktree: values.worktree } : {}) }); if (!result.recorded || result.proof.exitCode !== 0 || result.proof.timedOut) process.exitCode = 1; }
+    else if (command === 'test') { result = await runTestProof(root, first, commandArgs, { revision, timeout: intOption(values, 'timeout'), verification: values.verification, checks: values.checks?.split(','), author: values.author, ...(values.worktree !== undefined ? { worktree: values.worktree } : {}), ...(values.step !== undefined ? { step: values.step } : {}) }); if (!result.recorded || result.proof.exitCode !== 0 || result.proof.timedOut) process.exitCode = 1; }
     else if (command === 'capture') result = await captureArtifact(root, first, { check: values.check, file: values.file, command: commandArgs, revision, timeout: intOption(values, 'timeout'), viewport: values.viewport, scroll: values.scroll, state: values.state });
     else if (command === 'prompt') {
       const feature = await getFeature(root, second);
@@ -225,9 +238,37 @@ try {
       if (!values.file) throw new Error(t('errors.wax.fileNeedsTheDocument'));
       result = await updateFeature(root, second, 'save', { phase: first, content: await readFile(resolve(values.file), 'utf8'), revision });
     } else if (command === 'complete') {
-      const done = await completePhase(root, second, first, { runFolder: process.cwd(), evidence: values.evidence, verdict: values.verdict, author: values.author, revision, proofIds: values.proofs, waiver: values['no-proof'], acWaiver: values['ac-unverified'], defectWaiver: values['defect-unverified'], checks: values['checks-file'] ? await readJsonOption('checks-file', values['checks-file']) : undefined });
+      const done = await completePhase(root, second, first, { runFolder: process.cwd(), evidence: values.evidence, verdict: values.verdict, author: values.author, revision, proofIds: values.proofs, waiver: values['no-proof'], redWaiver: values['no-red'], acWaiver: values['ac-unverified'], defectWaiver: values['defect-unverified'], checks: values['checks-file'] ? await readJsonOption('checks-file', values['checks-file']) : undefined });
       if (done.warning) console.error(`wax: ${say('cli.warning', localize(done.warning))}`);
       result = done.feature;
+    }
+    else if (command === 'ruling') {
+      if (positionals.length !== 2) throw new Error(t('errors.wax.usageRuling'));
+      const { rulingInput } = await import('../src/rulings.mjs');
+      const ruling = rulingInput(values, values.file === undefined ? undefined : await readJsonOption('file', values.file));
+      const feature = await updateFeature(root, first, 'ruling', { ruling, author: values.author, phase: values.phase, revision });
+      result = { id: feature.id, revision: feature.revision, ruling: feature.rulings.at(-1) };
+    }
+    else if (command === 'approach') {
+      const actions = ['propose', 'single', 'pick'].filter((name) => values[name] !== undefined && values[name] !== false);
+      if (positionals.length !== 2 || actions.length > 1 || (values.file !== undefined && actions[0] !== 'propose') || (values.reason !== undefined && actions[0] !== 'pick')) throw new Error(t('errors.wax.usageApproach'));
+      const { effectiveApproachMode } = await import('../src/approach.mjs');
+      if (!actions.length) {
+        const feature = await getFeature(root, first);
+        result = { id: feature.id, phase: feature.phase, revision: feature.revision, mode: effectiveApproachMode(feature), approach: feature.approach ?? null };
+      } else {
+        let options;
+        if (actions[0] === 'propose') {
+          if (values.file === undefined) throw new Error(t('errors.wax.usageApproach'));
+          options = { approach: await readJsonOption('file', values.file), author: values.author };
+        } else if (actions[0] === 'single') options = { approach: values.single, author: values.author };
+        else {
+          if (revision === undefined) throw new Error(t('errors.approach.pickRevision'));
+          options = { approach: { number: intOption(values, 'pick'), reason: values.reason }, author: values.author, pickVia: 'cli' };
+        }
+        const feature = await updateFeature(root, first, `approach-${actions[0]}`, { ...options, revision });
+        result = { id: feature.id, revision: feature.revision, approach: feature.approach };
+      }
     }
     else if (command === 'iterate') result = await updateFeature(root, first, 'iterate', { reason: values.reason, author: values.author, revision, runFolder: process.cwd(), defects: values['defects-file'] ? await readJsonOption('defects-file', values['defects-file']) : undefined });
     else if (command === 'edit') result = await updateFeature(root, first, 'edit', { title: values.title, description: values.description, revision });

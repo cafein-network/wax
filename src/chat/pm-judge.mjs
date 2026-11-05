@@ -101,6 +101,8 @@ export function quotedData(data, limit = 2000) {
 
 const BLOCKS_NOTE = 'blocks의 status는 그 업무의 지금 상태입니다. blocked가 아니면(cancelled는 사람이 회수함, done은 끝남) 이미 지나간 막힘이니 남은 막힘으로 적지 마세요.';
 
+const ROOT_CAUSE_NOTE = 'blocks의 rootCause는 원인 찾기 모드 작업자가 보고한 가설(hypothesis)·한 변경(change)·결과(result)입니다. 고쳐지지 않은(not-fixed) 같은 가설로 retry를 고르지 마세요. missing이면 가설 보고가 없던 시도입니다.';
+
 const UNAVAILABLE_NOTE = 'unavailableTools는 이 컴퓨터에서 최근 고정 실패(config: 모델·인증 거부, quota: 사용 한도, permission: headless에서 거부되는 동작)가 남았거나 사람이 쓰지 않기로 한(disabled) 도구입니다. 다른 도구가 있으면 그 도구(permission은 phases의 단계에서)를 tool로 고르지 마세요. installedTools에 없는 도구도 고르지 마세요.';
 
 const TASKS = {
@@ -118,6 +120,7 @@ const TASKS = {
     `tool은 ${TOOL_IDS.join(', ')} 중 하나 또는 null, question은 ask에서만 씁니다. 다시 시도해도 같은 이유로 막힐 것 같으면 retry를 고르지 마세요.`,
     UNAVAILABLE_NOTE,
     BLOCKS_NOTE,
+    ROOT_CAUSE_NOTE,
   ],
   report: [
     `할 일: 대표에게 보낼 목표 진행 보고 초안을 ${JUDGE_LIMITS.report}자 이내 한국어로 쓰세요. 무엇이 끝났고, 무엇이 남았고, 사람이 정해야 할 것이 무엇인지 기록에 있는 사실만 적으세요.`,

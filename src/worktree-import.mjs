@@ -8,9 +8,12 @@ import { WaxError } from './workflow.mjs';
 import { gitEnv } from './freshness.mjs';
 import { renameWithRetry } from './file-lock.mjs';
 import { SNAPSHOT_LIMITS, restoreTarget, takeSnapshot } from './snapshots.mjs';
-import { appendWorktree, checkWorktreePath, readWorktrees } from './worktrees.mjs';
+import { appendWorktree, checkWorktreePath, isReview, readWorktrees } from './worktrees.mjs';
+import { deleteReviewRef } from './worktree-review.mjs';
 import { pickFreePort } from './worktree-make.mjs';
 import { BASELINE_UNSAFE, blobIds, readBaseline } from './worktree-baseline.mjs';
+import { copiedPaths } from './worktree-copy.mjs';
+import { scratchTree } from './git-read.mjs';
 
 export const IMPORT_LIMITS = { files: SNAPSHOT_LIMITS.files, bytes: SNAPSHOT_LIMITS.bytes, timeout: 60_000, shown: 200, dirty: 20 };
 export const MERGE_TREE_VERSION = [2, 38];
@@ -22,7 +25,7 @@ const own = (path) => path !== '.wax' && !path.startsWith('.wax/');
 const list = (text) => String(text).split('\0').filter(Boolean);
 const fail = (id, status = 409, ...values) => new WaxError(t(id, ...values), status);
 const hash = (value) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
-const FIXED = { GIT_AUTHOR_NAME: 'wax', GIT_AUTHOR_EMAIL: 'wax@localhost.invalid', GIT_COMMITTER_NAME: 'wax', GIT_COMMITTER_EMAIL: 'wax@localhost.invalid',
+export const STATE_IDENTITY = { GIT_AUTHOR_NAME: 'wax', GIT_AUTHOR_EMAIL: 'wax@localhost.invalid', GIT_COMMITTER_NAME: 'wax', GIT_COMMITTER_EMAIL: 'wax@localhost.invalid',
   GIT_AUTHOR_DATE: '@0 +0000', GIT_COMMITTER_DATE: '@0 +0000' };
 
 
@@ -61,16 +64,19 @@ export function manualCommands(entry) {
   return [`git -C ${where} status`, `git -C ${where} add -A`, `git -C ${where} commit -m "${entry.feature}"`, `git status`, `git merge --squash --no-commit ${entry.branch}`];
 }
 
-function statusPaths(text) {
-  const paths = [], folders = [], untracked = new Set();
+const underAny = (path, folders) => folders.some((folder) => path === folder || path.startsWith(`${folder}/`));
+
+function statusPaths(text, copied = []) {
+  const paths = [], folders = [], untracked = new Set(), copiedHits = [];
   for (const entry of list(text)) {
     if (!/^.. ./.test(entry)) continue;
     const path = entry.slice(3);
     if (!own(path)) continue;
+    if (copied.length && underAny(path.replace(/\/$/, ''), copied)) { copiedHits.push(path.replace(/\/$/, '')); continue; }
     (path.endsWith('/') ? folders : paths).push(path.replace(/\/$/, ''));
     if (entry.startsWith('??') && !path.endsWith('/')) untracked.add(path);
   }
-  return { paths: [...new Set(paths)].sort(), folders: [...new Set(folders)].sort(), untracked };
+  return { paths: [...new Set(paths)].sort(), folders: [...new Set(folders)].sort(), untracked, copiedHits };
 }
 
 export function excludedSummary(paths) {
@@ -87,18 +93,24 @@ async function entryOf(root, goal, id) {
   if (!entry) throw fail('errors.worktreeImport.notFound', 404, String(id).slice(0, 40));
   return entry;
 }
+async function importable(root, goal, id) {
+  const entry = await entryOf(root, goal, id);
+  if (isReview(entry)) throw fail('errors.worktreeReview.noImport', 409, entry.id);
+  return entry;
+}
 
 export async function worktreeSummary(root, entry) {
   try {
     const checked = await checkWorktreePath(root, entry);
     if (!checked || entry.state !== 'active') return null;
-    const status = statusPaths(await git(checked.path, ['status', '--porcelain=v1', '-z', '--no-renames', '--untracked-files=all'], { timeout: 5000 }));
+    const copied = copiedPaths(entry.setup?.copy);
+    const status = statusPaths(await git(checked.path, ['status', '--porcelain=v1', '-z', '--no-renames', '--untracked-files=all'], { timeout: 5000 }), copied);
     const baseline = await readBaseline(root, entry).catch(() => ({ state: 'failed' }));
     const paths = baseline.state === 'ok' ? status.paths.filter((path) => !(status.untracked.has(path) && baseline.paths[path])) : status.paths;
     const head = await line(checked.path, ['rev-parse', '--verify', '-q', 'HEAD^{commit}']);
     let committed = [], commits = 0;
     if (head && entry.base && head !== entry.base) {
-      committed = list(await git(checked.path, ['diff-tree', '-r', '--name-only', '-z', '--no-renames', entry.base, head, '--'], { timeout: 5000 })).filter(own);
+      committed = list(await git(checked.path, ['diff-tree', '-r', '--name-only', '-z', '--no-renames', entry.base, head, '--'], { timeout: 5000 })).filter((path) => own(path) && !underAny(path, copied));
       commits = Number(await line(checked.path, ['rev-list', '--count', `${entry.base}..${head}`])) || 0;
     }
     return { files: new Set([...paths, ...committed]).size, commits, uncommitted: paths.length };
@@ -106,7 +118,7 @@ export async function worktreeSummary(root, entry) {
 }
 
 
-async function withScratch(fn) {
+export async function withScratch(fn) {
   const dir = await mkdtemp(join(tmpdir(), 'wax-import-'));
   try {
     await mkdir(join(dir, 'objects'));
@@ -136,21 +148,16 @@ const zero = (blob) => !blob || /^0+$/.test(blob);
 
 async function stateCommit(folder, base, paths, env, index, message) {
   if (!paths.length) return base;
-  const indexEnv = { ...env, GIT_INDEX_FILE: index };
-  const plain = ['-c', 'core.splitIndex=false', '-c', 'core.untrackedCache=false'];
-  await git(folder, [...plain, 'read-tree', base], { env: indexEnv });
-  await git(folder, [...plain, 'update-index', '--add', '--remove', '-z', '--stdin'], { env: indexEnv, input: `${paths.join('\0')}\0` });
-  const tree = await line(folder, ['write-tree'], { env: indexEnv });
+  const exec = (args, { index: file = null, input = '', binary = false } = {}) => git(folder, args, { env: file ? { ...env, GIT_INDEX_FILE: file } : env, input, binary });
+  const tree = await scratchTree(exec, { base, paths, index, objects: env.GIT_OBJECT_DIRECTORY });
   if (!SHA.test(tree ?? '')) throw fail('errors.worktreeImport.gitFailed', 409, 'write-tree');
-  const commit = await line(folder, ['-c', 'commit.gpgSign=false', 'commit-tree', tree, '-p', base, '-m', message], { env: { ...env, ...FIXED } });
+  const commit = await line(folder, ['-c', 'commit.gpgSign=false', 'commit-tree', tree, '-p', base, '-m', message], { env: { ...env, ...STATE_IDENTITY } });
   if (!SHA.test(commit ?? '')) throw fail('errors.worktreeImport.gitFailed', 409, 'commit-tree');
   return commit;
 }
 
-async function inspect(root, entry, scratch, { version }) {
+async function stateBasics(root, entry) {
   const realRoot = await realpath(root);
-  const base = { worktree: entry.id, goal: entry.goal, feature: entry.feature, branch: entry.branch, state: entry.state, version: version ?? null };
-  if (!mergeTreeSupported(version)) return { ...base, supported: false, commands: manualCommands(entry), ready: false };
   if (entry.state !== 'active') throw fail('errors.worktreeImport.notActive', 409, entry.id, entry.state);
   const checked = await checkWorktreePath(root, entry);
   if (!checked) throw fail('errors.worktreeImport.folderMissing', 409, entry.id);
@@ -160,16 +167,19 @@ async function inspect(root, entry, scratch, { version }) {
   if ((await line(folder, ['symbolic-ref', '-q', 'HEAD'])) !== `refs/heads/${entry.branch}`) throw fail('errors.worktreeImport.branchMoved', 409, entry.id, entry.branch);
   const tip = await line(folder, ['rev-parse', '--verify', '-q', 'HEAD^{commit}']);
   if (!SHA.test(tip ?? '')) throw fail('errors.worktreeImport.noHead', 409);
-  const baseline = await readBaseline(root, entry);
-  if (BASELINE_UNSAFE.has(baseline.state)) {
-    return { ...base, supported: true, head, tip, baseline: { state: baseline.state, ...(baseline.count ? { count: baseline.count } : {}) }, commands: manualCommands(entry),
-      merged: null, conflicts: [], files: [], count: 0, skip: [], excluded: excludedSummary([]), exists: [], changed: [], over: null, dirty: [], dirtyCount: 0, uncommitted: 0, ready: false,
-      fingerprint: hash({ worktree: entry.id, head, tip, baseline: baseline.state }), plan: [] };
-  }
+  return { realRoot, folder, head, tip };
+}
+
+async function scratchEnv(realRoot, scratch) {
   const common = await line(realRoot, ['rev-parse', '--path-format=absolute', '--git-common-dir']);
   if (!common || common.includes(delimiter) || HIDDEN.test(common)) throw fail('errors.worktreeImport.gitFailed', 409, 'git-common-dir');
-  const env = { GIT_OBJECT_DIRECTORY: join(scratch, 'objects'), GIT_ALTERNATE_OBJECT_DIRECTORIES: join(common, 'objects') };
-  const status = statusPaths(await git(folder, ['status', '--porcelain=v1', '-z', '--no-renames', '--untracked-files=all']));
+  return { GIT_OBJECT_DIRECTORY: join(scratch, 'objects'), GIT_ALTERNATE_OBJECT_DIRECTORIES: join(common, 'objects') };
+}
+
+async function worktreeCommit(entry, folder, tip, baseline, env, scratch) {
+  const copiedFolders = copiedPaths(entry.setup?.copy);
+  const status = statusPaths(await git(folder, ['status', '--porcelain=v1', '-z', '--no-renames', '--untracked-files=all']), copiedFolders);
+  const copiedHits = [...status.copiedHits];
   const skip = status.folders.map((path) => ({ path, reason: 'notFile' }));
   const excluded = [];
   let uncommittedPaths = status.paths;
@@ -181,6 +191,37 @@ async function inspect(root, entry, scratch, { version }) {
     uncommittedPaths = status.paths.filter((path) => !same.has(path));
   }
   const commit = await stateCommit(folder, tip, uncommittedPaths, env, join(scratch, 'worktree.index'), `wax import ${entry.id}`);
+  return { commit, copiedFolders, copiedHits, skip, excluded, uncommittedPaths };
+}
+
+export async function worktreeState(root, entry, scratch) {
+  const { realRoot, folder, head, tip } = await stateBasics(root, entry);
+  const baseline = await readBaseline(root, entry).catch(() => ({ state: 'failed' }));
+  const env = await scratchEnv(realRoot, scratch);
+  const { commit } = await worktreeCommit(entry, folder, tip, baseline, env, scratch);
+  const behind = Number(await line(realRoot, ['rev-list', '--count', `${tip}..${head}`]));
+  return { folder, head, tip, commit, baseline: baseline.state, behind: Number.isSafeInteger(behind) ? behind : null };
+}
+
+export async function diffStates(root, scratch, before, after, { limit = IMPORT_LIMITS.shown } = {}) {
+  if (before === after) return [];
+  const realRoot = await realpath(root);
+  const env = await scratchEnv(realRoot, scratch);
+  return list(await git(realRoot, ['diff-tree', '-r', '--name-only', '-z', '--no-renames', before, after, '--'], { env })).slice(0, limit);
+}
+
+async function inspect(root, entry, scratch, { version }) {
+  const base = { worktree: entry.id, goal: entry.goal, feature: entry.feature, branch: entry.branch, state: entry.state, version: version ?? null };
+  if (!mergeTreeSupported(version)) return { ...base, supported: false, commands: manualCommands(entry), ready: false };
+  const { realRoot, folder, head, tip } = await stateBasics(root, entry);
+  const baseline = await readBaseline(root, entry);
+  if (BASELINE_UNSAFE.has(baseline.state)) {
+    return { ...base, supported: true, head, tip, baseline: { state: baseline.state, ...(baseline.count ? { count: baseline.count } : {}) }, commands: manualCommands(entry),
+      merged: null, conflicts: [], files: [], count: 0, skip: [], excluded: excludedSummary([]), copied: excludedSummary([]), exists: [], changed: [], over: null, dirty: [], dirtyCount: 0, uncommitted: 0, ready: false,
+      fingerprint: hash({ worktree: entry.id, head, tip, baseline: baseline.state }), plan: [] };
+  }
+  const env = await scratchEnv(realRoot, scratch);
+  const { commit, copiedFolders, copiedHits, skip, excluded, uncommittedPaths } = await worktreeCommit(entry, folder, tip, baseline, env, scratch);
   const project = statusPaths(await git(realRoot, ['status', '--porcelain=v1', '-z', '--no-renames', '--untracked-files=all']));
   const dirty = [...project.paths, ...project.folders.map((path) => `${path}/`)].sort();
   const ours = dirty.length ? await stateCommit(realRoot, head, project.paths, env, join(scratch, 'project.index'), 'wax project state') : head;
@@ -193,8 +234,8 @@ async function inspect(root, entry, scratch, { version }) {
     baseline: { state: baseline.state, ...(baseline.state === 'ok' ? { count: baseline.count } : {}) } };
   const conflicts = merged.code === 1 ? [...new Set(rest)].sort() : [];
   if (conflicts.length || dirty.length) {
-    return { ...facts, merged: null, conflicts, files: [], count: 0, skip, excluded: excludedSummary(excluded), exists: [], changed: [], over: null, ready: false,
-      fingerprint: hash({ worktree: entry.id, head, tip, commit, ours, conflicts }), plan: [] };
+    return { ...facts, merged: null, conflicts, files: [], count: 0, skip, excluded: excludedSummary(excluded), copied: excludedSummary(copiedHits), exists: [], changed: [], over: null, ready: false,
+      fingerprint: hash({ worktree: entry.id, head, tip, commit, ours, conflicts, copied: [...new Set(copiedHits)].sort() }), plan: [] };
   }
   const raw = parseRaw(await git(realRoot, ['diff-tree', '-r', '-z', '--no-renames', head, tree, '--'], { env }));
   const counts = parseNumstat(await git(realRoot, ['diff-tree', '-r', '-z', '--numstat', '--no-renames', head, tree, '--'], { env }));
@@ -203,6 +244,7 @@ async function inspect(root, entry, scratch, { version }) {
     const { path } = change;
     if (!own(path)) { skip.push({ path, reason: 'sensitive' }); continue; }
     if (HIDDEN.test(path)) { skip.push({ path, reason: 'outside' }); continue; }
+    if (underAny(path, copiedFolders)) { copiedHits.push(path); continue; }
     const action = zero(change.oldBlob) || change.status === 'A' ? 'new' : zero(change.newBlob) || change.status === 'D' ? 'delete' : 'modify';
     if (action === 'new' && baseline.state === 'ok' && baseline.paths[path] && baseline.paths[path] === change.newBlob && !linkMode(change.newMode)) { excluded.push(path); continue; }
     const modes = [action === 'new' ? null : change.oldMode, action === 'delete' ? null : change.newMode].filter(Boolean);
@@ -224,9 +266,9 @@ async function inspect(root, entry, scratch, { version }) {
   const files = plan.slice(0, IMPORT_LIMITS.shown).map((item) => ({ path: item.path, action: item.action, ...(item.counts ? item.counts : { binary: true }),
     ...(item.newMode && item.oldMode && item.newMode !== item.oldMode ? { mode: item.newMode } : item.action === 'new' && item.newMode === '100755' ? { mode: item.newMode } : {}) }));
   const fingerprint = hash({ worktree: entry.id, head, tip, commit, merged: tree, plan: plan.map((item) => [item.path, item.action, item.oldBlob, item.newBlob, item.newMode, item.current]),
-    skip: skip.map((item) => [item.path, item.reason]), exists, changed, excluded: [...excluded].sort() });
+    skip: skip.map((item) => [item.path, item.reason]), exists, changed, excluded: [...excluded].sort(), copied: [...new Set(copiedHits)].sort() });
   const ready = !exists.length && !changed.length && !over && plan.length > 0;
-  return { ...facts, merged: tree, conflicts: [], files, count: plan.length, skip, excluded: excludedSummary(excluded), exists, changed, over, ready, fingerprint, plan, env };
+  return { ...facts, merged: tree, conflicts: [], files, count: plan.length, skip, excluded: excludedSummary(excluded), copied: excludedSummary(copiedHits), exists, changed, over, ready, fingerprint, plan, env };
 }
 
 async function currentIds(realRoot, plan) {
@@ -250,12 +292,19 @@ async function blobSizes(realRoot, ids, env) {
   return out;
 }
 
-const shown = ({ plan, env, ...rest }) => rest;
+const shown = ({ plan, env, checksGate, ...rest }) => rest;
 
-export async function previewImport(root, goal, id, { version } = {}) {
-  const entry = await entryOf(root, goal, id);
+export async function previewImport(root, goal, id, { version, gate = null } = {}) {
+  const entry = await importable(root, goal, id);
   const found = await versionOf(version);
-  return withScratch(async (scratch) => shown(await inspect(root, entry, scratch, { version: found })));
+  return withScratch(async (scratch) => shown(await gated(entry, await inspect(root, entry, scratch, { version: found }), gate)));
+}
+
+async function gated(entry, preview, gate) {
+  if (!gate || !preview.supported) return preview;
+  const checks = await gate(entry, preview);
+  return { ...preview, checks: checks.view, checksGate: checks, ready: Boolean(preview.ready && !checks.blocked),
+    fingerprint: checks.fingerprint ? hash({ import: preview.fingerprint, checks: checks.fingerprint }) : preview.fingerprint };
 }
 
 async function writeImported(target, bytes, mode) {
@@ -277,15 +326,16 @@ async function pruneEmpty(realRoot, target) {
   }
 }
 
-export async function applyImport(root, goal, id, { by, fingerprint, phase = null, version, now = Date.now } = {}) {
-  const entry = await entryOf(root, goal, id);
+export async function applyImport(root, goal, id, { by, fingerprint, phase = null, version, now = Date.now, gate = null } = {}) {
+  const entry = await importable(root, goal, id);
   const found = await versionOf(version);
   return withScratch(async (scratch) => {
-    const preview = await inspect(root, entry, scratch, { version: found });
+    const preview = await gated(entry, await inspect(root, entry, scratch, { version: found }), gate);
     if (!preview.supported) throw fail('errors.worktreeImport.oldGit', 409, found ?? '-', MERGE_TREE_VERSION.join('.'));
     if (BASELINE_UNSAFE.has(preview.baseline?.state)) throw fail(BASELINE_ERRORS[preview.baseline.state], 409, entry.id);
     if (preview.conflicts.length) throw fail('errors.worktreeImport.conflicts', 409, preview.conflicts.length, preview.conflicts.slice(0, 10).join(', '));
     if (preview.dirtyCount) throw fail('errors.worktreeImport.dirty', 409, preview.dirtyCount, preview.dirty.slice(0, 10).join(', '));
+    if (preview.checksGate?.blocked) throw fail(preview.checksGate.blocked, 409);
     if (typeof fingerprint !== 'string' || fingerprint !== preview.fingerprint) throw fail('errors.worktreeImport.changed', 409);
     if (preview.exists.length) throw fail('errors.worktreeImport.exists', 409, preview.exists.slice(0, 10).join(', '));
     if (preview.changed.length) throw fail('errors.worktreeImport.projectChanged', 409, preview.changed.slice(0, 10).join(', '));
@@ -318,7 +368,7 @@ export async function applyImport(root, goal, id, { by, fingerprint, phase = nul
     const post = await takeSnapshot(root, { ...meta, point: 'post-import' }, { now });
     const record = await appendWorktree(root, { ...entry, state: 'imported', by, at: undefined }, { now: now() });
     return { run, worktree: entry.id, branch: entry.branch, feature: entry.feature, goal: entry.goal, head: preview.head, tip: preview.tip, uncommitted: preview.uncommitted,
-      imported, skipped, failed, excluded: preview.excluded?.count ?? 0, count: preview.plan.length, preImport: pre.id, postImport: post?.id ?? null, state: record.state, at: record.at };
+      imported, skipped, failed, ...(preview.checksGate?.record ? { checks: { ...preview.checksGate.record, commands: preview.checksGate.commands.length } } : {}), excluded: preview.excluded?.count ?? 0, copied: preview.copied?.count ?? 0, count: preview.plan.length, preImport: pre.id, postImport: post?.id ?? null, state: record.state, at: record.at };
   });
 }
 
@@ -339,26 +389,45 @@ export async function reactivateImported(root, id, { by, now = Date.now, portPro
   return appendWorktree(root, { ...entry, ...(port !== null && port !== undefined ? { port } : {}), state: 'active', by, at: undefined }, { now: now() });
 }
 
-export async function cleanupWorktrees(root, goal, { by, now = Date.now } = {}) {
+async function removeEntry(root, realRoot, entry, { by, now, reason = undefined }) {
+  const checked = await checkWorktreePath(root, entry);
+  const record = { ...entry, state: 'removed', by, at: undefined, ...(reason ? { reason } : {}) };
+  const withRef = async (out) => (isReview(entry) ? { ...out, ref: await deleteReviewRef(root, entry).catch(() => 'failed') } : out);
+  if (!checked) {
+    const there = await lstat(entry.path).then(() => true, () => false);
+    if (there) return { outcome: 'unsafe' };
+    await appendWorktree(root, record, { now: now() });
+    return withRef({ outcome: 'missing' });
+  }
+  const hooks = await mkdtemp(join(tmpdir(), 'wax-no-hooks-'));
+  try {
+    await git(realRoot, ['-c', `core.hooksPath=${hooks}`, 'worktree', 'remove', '--force', checked.path]);
+    await appendWorktree(root, record, { now: now() });
+  } catch (error) { return { outcome: 'failed', reason: String(error.stderr || error.message).trim().slice(0, 300) }; }
+  finally { await rm(hooks, { recursive: true, force: true }).catch(() => {}); }
+  return withRef({ outcome: 'removed' });
+}
+
+export async function cleanupWorktrees(root, goal, { by, now = Date.now, reviewDone = new Set() } = {}) {
   const realRoot = await realpath(root);
   const mine = (await readWorktrees(root)).filter((item) => item.goal === goal && item.state !== 'removed');
-  const out = { removed: [], missing: [], unsafe: [], failed: [], kept: mine.filter((item) => item.state === 'active').map((item) => item.id) };
-  for (const entry of mine.filter((item) => item.state === 'imported' || item.state === 'discarded')) {
-    const checked = await checkWorktreePath(root, entry);
-    if (!checked) {
-      const there = await lstat(entry.path).then(() => true, () => false);
-      if (there) { out.unsafe.push(entry.id); continue; }
-      await appendWorktree(root, { ...entry, state: 'removed', by, at: undefined }, { now: now() });
-      out.missing.push(entry.id);
-      continue;
-    }
-    const hooks = await mkdtemp(join(tmpdir(), 'wax-no-hooks-'));
-    try {
-      await git(realRoot, ['-c', `core.hooksPath=${hooks}`, 'worktree', 'remove', '--force', checked.path]);
-      await appendWorktree(root, { ...entry, state: 'removed', by, at: undefined }, { now: now() });
-      out.removed.push(entry.id);
-    } catch (error) { out.failed.push({ id: entry.id, reason: String(error.stderr || error.message).trim().slice(0, 300) }); }
-    finally { await rm(hooks, { recursive: true, force: true }).catch(() => {}); }
+  const done = (item) => item.state === 'imported' || item.state === 'discarded' || (item.state === 'active' && isReview(item) && reviewDone.has(item.id));
+  const out = { removed: [], missing: [], unsafe: [], failed: [], kept: mine.filter((item) => !done(item)).map((item) => item.id), refs: {} };
+  for (const entry of mine.filter(done)) {
+    const result = await removeEntry(root, realRoot, entry, { by, now });
+    if (result.outcome === 'failed') out.failed.push({ id: entry.id, reason: result.reason });
+    else out[result.outcome].push(entry.id);
+    if (result.ref) out.refs[entry.id] = result.ref;
   }
   return out;
+}
+
+export async function removeIntegratedWorktree(root, goal, id, { by, now = Date.now } = {}) {
+  const realRoot = await realpath(root);
+  const entry = await importable(root, goal, id);
+  if (entry.state !== 'active') throw fail('errors.worktreeCleanup.notActive', 409, entry.id, entry.state);
+  const done = await removeEntry(root, realRoot, entry, { by, now, reason: 'integrated' });
+  if (done.outcome === 'unsafe') throw fail('errors.worktreeImport.folderMissing', 409, entry.id);
+  if (done.outcome === 'failed') throw fail('errors.worktreeCleanup.failed', 500, entry.id, done.reason);
+  return { worktree: entry.id, branch: entry.branch, outcome: done.outcome };
 }

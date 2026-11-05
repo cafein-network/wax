@@ -9,9 +9,15 @@ import { detectProjectType } from './project-detect.mjs';
 import { assessQuality, qualityMessage } from './quality.mjs';
 import { acceptanceIds, acceptanceTable, assessAcceptance, validTrace } from './acceptance.mjs';
 import { assessDefects, defectPrompt, newDefects, validDefects, validDefectTrace } from './defects.mjs';
-import { findingText, scanSecrets, secretScanMode, validSecretScan } from './secrets.mjs';
+import { findingText, mergeSecretScans, scanSecrets, secretScanMode, validSecretScan } from './secrets.mjs';
 import { headState } from './freshness.mjs';
-import { validWorktreeTag, worktreeContaining, worktreeTag } from './worktrees.mjs';
+import { activeWorktrees, validWorktreeTag, worktreeContaining, worktreeTag } from './worktrees.mjs';
+import { assessRedGreen, redGreenWarning, validDiscipline, validRedGreen } from './red-green.mjs';
+import { markRuling, newRuling, rulingPrompt, validRulings } from './rulings.mjs';
+import { assessPlanSteps, planStepsWarning, validPlanSteps } from './plan-steps.mjs';
+import { assessStepProgress, stepPrompt, withStepPairs } from './plan-progress.mjs';
+import { approachPrompt, approachWarning, assessApproach, changeApproach, validApproach, validApproachDone } from './approach.mjs';
+import { assessReviewStages, reviewStagePrompt, reviewStagesWarning, validReviewStages } from './review-stages.mjs';
 
 export const PHASES = ['plan', 'design', 'implement', 'review', 'report'];
 export const LABELS = { plan: '기획', design: '설계', implement: '구현', review: '검토', report: '보고' };
@@ -78,8 +84,11 @@ export function validateStored(feature, id = feature?.id) {
       (feature.archivedAt !== undefined && feature.archivedAt !== null && !timestamp(feature.archivedAt)) ||
       (feature.proofs !== undefined && (!Array.isArray(feature.proofs) || feature.proofs.length > 100 || !feature.proofs.every(validProof))) ||
       (feature.defects !== undefined && !validDefects(feature.defects)) ||
+      (feature.rulings !== undefined && !validRulings(feature.rulings)) ||
+      (feature.approach !== undefined && !validApproach(feature.approach)) ||
       (feature.projectType !== undefined && !Object.hasOwn(PROJECT_TYPES, feature.projectType)) ||
       (feature.workMode !== undefined && !['project', 'sm'].includes(feature.workMode)) ||
+      (feature.discipline !== undefined && !validDiscipline(feature.discipline)) ||
       !record(feature.artifacts) || !Object.entries(feature.artifacts).every(([phase, content]) => PHASES.includes(phase) && text(content, MAX_ARTIFACT)) ||
       !record(feature.completed) || !Object.entries(feature.completed).every(([phase, completion]) =>
         PHASES.includes(phase) && record(completion) && timestamp(completion.at) && text(completion.evidence, 5000) && (phase !== 'review' || completion.verdict === 'pass') &&
@@ -90,9 +99,13 @@ export function validateStored(feature, id = feature?.id) {
         (completion.acWaiver === undefined || (phase === 'review' && text(completion.acWaiver, 2000))) &&
         (completion.defects === undefined || (phase === 'review' && validDefectTrace(completion.defects))) &&
         (completion.defectWaiver === undefined || (phase === 'review' && text(completion.defectWaiver, 2000))) &&
-        (completion.secretScan === undefined || (SECRET_PHASES.includes(phase) && validSecretScan(completion.secretScan)))) ||
+        (completion.secretScan === undefined || (SECRET_PHASES.includes(phase) && validSecretScan(completion.secretScan))) &&
+        (completion.redGreen === undefined || (phase === 'implement' && validRedGreen(completion.redGreen))) &&
+        (completion.steps === undefined || (['plan', 'implement'].includes(phase) && validPlanSteps(completion.steps, phase))) &&
+        (completion.approach === undefined || (phase === 'design' && validApproachDone(completion.approach))) &&
+        (completion.stages === undefined || (phase === 'review' && validReviewStages(completion.stages)))) ||
       !Array.isArray(feature.history) || !feature.history.every((event) => record(event) &&
-        ['create', 'save', 'complete', 'iterate', 'archive', 'edit', 'archive-feature', 'restore', 'import', 'attach-evidence'].includes(event.action) && [...PHASES, 'done'].includes(event.phase) && timestamp(event.at) &&
+        ['create', 'save', 'complete', 'iterate', 'archive', 'edit', 'archive-feature', 'restore', 'import', 'attach-evidence', 'ruling', 'ruling-mark', 'discipline', 'approach-propose', 'approach-single', 'approach-pick', 'approach-again'].includes(event.action) && [...PHASES, 'done'].includes(event.phase) && timestamp(event.at) &&
         (event.head === undefined || (typeof event.head === 'string' && /^[a-f0-9]{40,64}$/.test(event.head))) &&
         (event.dirty === undefined || typeof event.dirty === 'boolean') &&
         (event.worktree === undefined || validWorktreeTag(event.worktree)) &&
@@ -260,6 +273,15 @@ export function reviewSeparation(feature, author) {
   return { same: false, warning: null };
 }
 
+function disciplineRecord(feature, phase, proofIds, options) {
+  const redGreen = withStepPairs(feature, assessRedGreen(feature, phase, proofIds, options.redWaiver, { mode: options.redGreen }).record);
+  const steps = (phase === 'implement' ? assessStepProgress : assessPlanSteps)(feature, phase, { mode: options.planSteps }).record;
+  const approach = assessApproach(feature, phase, { mode: options.approachMode }).record;
+  const stages = assessReviewStages(feature, phase, options.checks, { mode: options.reviewStages }).record;
+  return { ...(redGreen ? { redGreen } : {}), ...(steps ? { steps } : {}), ...(approach ? { approach } : {}), ...(stages ? { stages } : {}) };
+}
+const DISCIPLINE_WARNINGS = [(done) => redGreenWarning(done.redGreen), (done) => planStepsWarning(done.steps), (done) => approachWarning(done.approach), (done) => reviewStagesWarning(done.stages)];
+
 function checkRevision(feature, revision) {
   if (revision !== undefined && revision !== feature.revision) throw new WaxError(t('errors.workflow.theTaskHasChanged'), 409);
 }
@@ -272,8 +294,16 @@ async function stageTree(root, id, runFolder) {
 const SECRET_PHASES = ['implement', 'review'];
 export async function featureSecrets(root, id, runFolder) {
   const feature = await getFeature(root, id);
+  const base = feature.history.find((event) => event.action === 'create')?.head;
   const entry = runFolder ? await worktreeContaining(root, runFolder, { feature: id }) : null;
-  return scanSecrets(entry ? entry.path : root, { base: feature.history.find((event) => event.action === 'create')?.head });
+  if (entry) {
+    const scan = await scanSecrets(entry.path, { base });
+    return scan.reason === 'no-git' ? scan : { ...scan, worktrees: [worktreeTag(entry)] };
+  }
+  const project = await scanSecrets(root, { base });
+  const trees = [];
+  for (const item of await activeWorktrees(root, { feature: id }).catch(() => [])) trees.push([item, await scanSecrets(item.path, { base })]);
+  return mergeSecretScans(project, trees);
 }
 async function stageSecrets(root, id, runFolder) {
   const mode = secretScanMode();
@@ -282,8 +312,18 @@ async function stageSecrets(root, id, runFolder) {
   return !scan || scan.reason === 'no-git' ? null : { mode, scan };
 }
 
+function iterateCycle(feature, phase, at, reason) {
+  feature.history.push({ action: 'archive', phase, at, iteration: feature.iteration,
+    artifacts: { ...feature.artifacts }, completed: { ...feature.completed }, reason });
+  for (const name of ['implement', 'review', 'report']) {
+    delete feature.artifacts[name]; delete feature.completed[name];
+  }
+  feature.phase = 'implement';
+  feature.iteration += 1;
+}
+
 export async function updateFeature(root, id, action, options = {}) {
-  const tree = ['complete', 'iterate'].includes(action) ? await stageTree(root, id, options.runFolder) : {};
+  const tree = ['complete', 'iterate', 'ruling-mark'].includes(action) ? await stageTree(root, id, options.runFolder) : {};
   const secrets = action === 'complete' && SECRET_PHASES.includes(options.phase) ? await stageSecrets(root, id, options.runFolder) : null;
   if (options.tool !== undefined && (typeof options.tool !== 'string' || !TOOL.test(options.tool))) throw new WaxError(t('errors.workflow.theToolIdMust'));
   const via = validVia(options.via);
@@ -292,19 +332,51 @@ export async function updateFeature(root, id, action, options = {}) {
     checkRevision(feature, options.revision);
     const at = new Date().toISOString();
     const phase = feature.phase;
-    let changes, signed = {};
+    let changes, signed = {}, event = { action, reason: options.reason };
     if (feature.archivedAt && action !== 'restore') throw new WaxError(t('errors.workflow.thisTaskIsArchived'), 409);
     if (action === 'attach-evidence') {
       if (!validProof(options.proof) || options.proof.phase !== phase || options.proof.iteration !== feature.iteration) throw new WaxError(t('errors.workflow.verificationEvidenceForThe'));
       feature.proofs ||= [];
       if (feature.proofs.length >= 100 || feature.proofs.some((proof) => proof.id === options.proof.id)) throw new WaxError(t('errors.workflow.theEvidenceIsA'));
       feature.proofs.push(structuredClone(options.proof));
+    } else if (action === 'ruling') {
+      if (phase === 'done') throw new WaxError(t('errors.rulings.done'), 409);
+      if (options.phase !== undefined && validPhase(options.phase) !== phase) throw new WaxError(t('errors.rulings.otherPhase', phase), 409);
+      const ruling = newRuling(feature, options.ruling, { at, author: options.author });
+      feature.rulings = [...(feature.rulings ?? []), ruling];
+      signed.ruling = ruling.id;
+      if (ruling.author) signed.author = ruling.author;
+    } else if (action === 'ruling-mark') {
+      const mark = markRuling(feature, options.ruling, { action: options.mark, note: options.note, by: options.author, at });
+      signed = { ruling: mark.ruling.id, mark: options.mark, author: options.author };
+      if (mark.defect) {
+        const [defect] = newDefects(feature, [mark.defect], { at, author: options.author });
+        defect.source = { ruling: mark.ruling.id };
+        feature.defects = [...(feature.defects ?? []), defect];
+        mark.ruling.marked.defect = defect.id;
+        signed.defects = [defect.id];
+        if (mark.effect === 'iterate') {
+          feature.history.push({ action: 'ruling-mark', phase, at, ...signed });
+          event = { action: 'iterate', reason: t('rulings.override.reason', mark.ruling.id, mark.ruling.what.slice(0, 200)) };
+          iterateCycle(feature, phase, at, event.reason);
+          signed = { author: options.author, defects: [defect.id], ruling: mark.ruling.id };
+        }
+      }
+    } else if (action.startsWith('approach-')) {
+      signed = changeApproach(feature, action.slice('approach-'.length), options.approach, { at, by: options.author, via: options.pickVia, mode: options.approachMode });
     } else if (action === 'edit') {
       const title = requireText(options.title, '제목', 200);
       if (typeof options.description !== 'string' || options.description.length > 10_000) throw new WaxError(t('errors.workflow.theDescriptionMustBe'));
       changes = { before: { title: feature.title, description: feature.description }, after: { title, description: options.description } };
       feature.title = title;
       feature.description = options.description;
+    } else if (action === 'discipline') {
+      const next = options.discipline ?? {};
+      if (!validDiscipline(next)) throw new WaxError(t('errors.workflow.disciplineFormat'));
+      const after = Object.keys(next).length ? structuredClone(next) : null;
+      changes = { before: { discipline: feature.discipline ?? null }, after: { discipline: after } };
+      if (after) feature.discipline = after; else delete feature.discipline;
+      if (typeof options.author === 'string' && options.author.trim()) signed = { author: options.author.trim().slice(0, 100) };
     } else if (action === 'archive-feature') {
       feature.archivedAt = at;
     } else if (action === 'restore') {
@@ -332,13 +404,14 @@ export async function updateFeature(root, id, action, options = {}) {
       const quality = await assessQuality(root, feature, options.checks, proofIds);
       if (!quality.ok) throw new WaxError(qualityMessage(quality));
       const waiver = proofWaiver(feature, phase, proofIds, options.waiver);
+      const discipline = disciplineRecord(feature, phase, proofIds, options);
       const acceptance = assessAcceptance(feature, phase, options.checks, options.acWaiver);
       const defects = assessDefects(feature, phase, options.checks, options.defectWaiver);
       if (secrets?.scan.state === 'found' && secrets.mode === 'enforce') {
         throw new WaxError(t('errors.secrets.found', secrets.scan.findings.map(findingText).join(', ') + (secrets.scan.more ? ` (+${secrets.scan.more})` : '')), 409);
       }
       defects.resolve(feature, at);
-      feature.completed[phase] = { at, evidence, ...(proofIds.length ? { proofIds: [...new Set(proofIds)] } : {}), ...(waiver ? { waiver } : {}), ...(quality.checks.length ? { checks: quality.checks } : {}), ...acceptance, ...defects.record, ...(secrets ? { secretScan: secrets.scan } : {}), ...(phase === 'review' ? { verdict: 'pass' } : {}), ...signed };
+      feature.completed[phase] = { at, evidence, ...(proofIds.length ? { proofIds: [...new Set(proofIds)] } : {}), ...(waiver ? { waiver } : {}), ...(quality.checks.length ? { checks: quality.checks } : {}), ...acceptance, ...defects.record, ...discipline, ...(secrets ? { secretScan: secrets.scan } : {}), ...(phase === 'review' ? { verdict: 'pass' } : {}), ...signed };
       feature.phase = PHASES[PHASES.indexOf(phase) + 1] ?? 'done';
     } else if (action === 'iterate') {
       if (!['review', 'report', 'done'].includes(phase)) throw new WaxError(t('errors.workflow.youCanReturnTo'), 409);
@@ -347,18 +420,12 @@ export async function updateFeature(root, id, action, options = {}) {
       const reason = requireText(options.reason, '개선 사유', 5000);
       const found = newDefects(feature, options.defects, { at, author: options.author });
       if (found.length) { feature.defects = [...(feature.defects ?? []), ...found]; signed.defects = found.map((item) => item.id); }
-      feature.history.push({ action: 'archive', phase, at, iteration: feature.iteration,
-        artifacts: { ...feature.artifacts }, completed: { ...feature.completed }, reason });
-      for (const name of ['implement', 'review', 'report']) {
-        delete feature.artifacts[name]; delete feature.completed[name];
-      }
-      feature.phase = 'implement';
-      feature.iteration += 1;
+      iterateCycle(feature, phase, at, reason);
     } else throw new WaxError(t('errors.workflow.unknownTask'));
     feature.revision += 1;
     feature.updatedAt = at;
-    const run = ['complete', 'iterate'].includes(action) ? { ...tree, ...(options.tool ? { tool: options.tool } : {}) } : {};
-    feature.history.push({ action, phase, at, evidence: options.evidence, reason: options.reason, ...(changes ? { changes } : {}), ...signed, ...(via ? { via } : {}), ...run });
+    const run = ['complete', 'iterate'].includes(event.action) ? { ...tree, ...(options.tool ? { tool: options.tool } : {}) } : {};
+    feature.history.push({ action: event.action, phase, at, evidence: options.evidence, reason: event.reason, ...(changes ? { changes } : {}), ...signed, ...(via ? { via } : {}), ...run });
     return feature;
   });
 }
@@ -368,7 +435,7 @@ export async function completePhase(root, id, phase, options = {}) {
   const feature = await updateFeature(root, id, 'complete', { ...options, phase, proofIds });
   const done = feature.completed[phase];
   const secret = done?.secretScan?.state === 'found' ? t('errors.secrets.warned', done.secretScan.findings.map(findingText).join(', ')) : null;
-  return { feature, warning: [done?.warning, secret].filter(Boolean).join(' ') || null };
+  return { feature, warning: [done?.warning, secret, ...(done ? DISCIPLINE_WARNINGS.map((warn) => warn(done)) : [])].filter(Boolean).join(' ') || null };
 }
 
 export const WEB_GUIDE = '웹 서비스: plan에서 실행 명령, 기준 URL, Playwright 설정 유무를 확인하고 수용 기준을 화면 시나리오로 적으세요. ' +
@@ -381,9 +448,14 @@ export const WEB_GUIDE = '웹 서비스: plan에서 실행 명령, 기준 URL, P
 
 const INSTRUCTIONS = {
   plan: '요구사항과 기존 코드를 조사하고 문제, 사용자, 범위, 제외 범위, 수용 기준, 제약 및 미확정 질문을 작성하세요. 사용자가 여럿이면 역할별로 무엇을 먼저 보고 하며 무엇을 볼 수 없어야 하는지 핵심 흐름을 적으세요. ' +
-    '수용 기준은 한 줄에 하나씩 줄 맨 앞에 ID를 붙여 "- AC-1: <기준> — 검증: <방법>"처럼 AC-1, AC-2 … 순서로 적고 각 기준에 검증 방법을 붙이세요. 검토는 ID마다 통과 근거를 연결해야 완료됩니다.',
+    '수용 기준은 한 줄에 하나씩 줄 맨 앞에 ID를 붙여 "- AC-1: <기준> — 검증: <방법>"처럼 AC-1, AC-2 … 순서로 적고 각 기준에 검증 방법을 붙이세요. 검토는 ID마다 통과 근거를 연결해야 완료됩니다. ' +
+    '수용 기준 아래에 일을 단계로 잘게 나눠 줄 맨 앞에 "- S-1: <무엇> — files: <바꿀 파일> — check: `<명령>` — done: <완료 기준> — AC: AC-1"처럼 S-1, S-2 … 순서로 적으세요. 단계 하나는 2~5분 일이고, check는 CLI test가 셸 없이 실행할 정확한 명령 하나(| & ; < > $ \\ * 같은 셸 문자 없이)나 checks=<검사 ID>, 시험할 수 없는 단계는 없음(<사유>)입니다. 설명은 <무엇> 칸에 쓰고, 단계마다 그 단계만 보는 check(예: 테스트 파일 하나)를 적으세요. ' +
+    '핑계와 반박: "단계는 구현하면서 정하면 된다" → 단계마다 검사가 없으면 구현은 끝에 한 번만 검사합니다. "검사 명령은 나중에 정한다" → wax test가 돌릴 정확한 명령이 단계의 일부입니다. "이 단계는 시험할 수 없다" → check: 없음(사유)로 적고 빈칸으로 두지 마세요.',
   design: '기획의 수용 기준을 충족하는 구조, 데이터 모델, 인터페이스, 오류 처리, 수정할 파일 및 검증 전략을 설계하세요. 실제 저장소의 관례를 따르세요.',
-  implement: '설계에 맞춰 필요한 코드를 작성하세요. 수정 파일과 이유, 실행할 테스트, 남은 작업을 기록하세요. API 키·토큰·개인 키는 코드에 넣지 말고 환경 변수로 읽으세요. 구현·검토 완료 때 wax가 이 작업에서 더해진 줄의 비밀값과 .env·개인 키 파일을 점검하며, 미리 CLI secrets <id>로 확인할 수 있습니다. 코드에 접근할 수 없으면 파일 경로별 코드 초안을 제공하고 적용되지 않았음을 명시하세요.',
+  implement: '설계에 맞춰 필요한 코드를 작성하세요. 수정 파일과 이유, 실행할 테스트, 남은 작업을 기록하세요. API 키·토큰·개인 키는 코드에 넣지 말고 환경 변수로 읽으세요. 구현·검토 완료 때 wax가 이 작업에서 더해진 줄의 비밀값과 .env·개인 키 파일을 점검하며, 미리 CLI secrets <id>로 확인할 수 있습니다. 코드에 접근할 수 없으면 파일 경로별 코드 초안을 제공하고 적용되지 않았음을 명시하세요. ' +
+    '고치기 전에 바뀔 동작을 시험하는 검사를 CLI test로 먼저 실행해 실패를 남기고, 고친 뒤 같은 명령을 같은 검사 ID로 다시 실행하세요(빨강→초록). 실패를 먼저 볼 수 없는 변경이면 --no-red <사유>로 남기세요. ' +
+    '핑계와 반박: "간단한 수정이라 테스트를 먼저 돌릴 필요 없다" → 실패를 보지 않은 테스트는 고친 것을 시험하는지 모릅니다. "고친 뒤 통과했으니 됐다" → 처음부터 통과하는 테스트도 통과합니다. 고치기 전 실패가 근거입니다. ' +
+    '"시간이 없다" → 빨강 한 번은 검사 한 번입니다. 없으면 --no-red에 사유를 남기세요. "테스트를 고치면 통과한다" → 테스트만 바뀐 초록은 경고로 남습니다.',
   review: '기획·설계와 실제 변경을 비교하세요. 수용 기준별 충족 여부와 근거를 표로 작성하고(기획에 AC ID가 있으면 ID별로), 오류·회귀·보안 결함을 구체적 파일과 연결하세요. ' +
     '이어서 구조 → 기능 → 효율 → 표현 순서로 점검하세요: (1) 역할별 핵심 흐름과 순서가 기획과 맞고, 역할마다 막혀야 할 데이터·동작이 화면에서 숨기는 데 그치지 않고 서버에서도 막히는지 (2) 되돌릴 수 없는 동작(삭제·승인·전송·결제 등)에 확인·취소·수정 경로가 있는지 (3) 화면·출력의 수치와 집계가 원본 데이터와 맞는지 (4) 실제에 가까운 데이터 양에서 찾기(검색·필터·페이지 나누기)와 응답 속도가 버티는지 (5) 상태(로딩·오류·빈 화면)와 읽기 쉬운 표현. 해당하지 않는 항목은 해당 없음과 이유를 적으세요. ' +
     '발견한 문제마다 무엇을 고칠지와 함께 누가 어떤 상황에서 왜 곤란한지를 적어 구현 담당이 의도를 알게 하세요. 테스트를 실제로 실행한 결과만 기록하고 확인하지 못한 항목은 미검증으로 표시하세요.',
@@ -413,6 +485,10 @@ export function buildPrompt(feature, phase = feature.phase, { rules = '', freshn
     ...(phase === 'review' && impact ? [impact] : []),
     ...acceptancePrompt(feature, phase),
     ...defectPrompt(feature, phase),
+    ...stepPrompt(feature, phase),
+    ...reviewStagePrompt(feature, phase),
+    ...rulingPrompt(feature, phase),
+    ...approachPrompt(feature, phase),
     ...(feature.projectType === 'web' ? [WEB_GUIDE] : []),
     ...(rules ? [rules] : []),
     ...(manual ? [manual] : []),

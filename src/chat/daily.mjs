@@ -34,7 +34,7 @@ const oneLine = (text, max = 160) => {
 const phaseLabel = (phase) => LABELS[phase] ?? (phase === 'done' ? '완료' : phase);
 const FEATURE_ACTIONS = {
   create: () => '작업 생성', import: () => '작업 가져옴', edit: () => '작업 정보 수정',
-  'archive-feature': () => '작업 보관', restore: () => '작업 복원',
+  'archive-feature': () => '작업 보관', restore: () => '작업 복원', discipline: () => '작업 규율 설정',
   save: (event) => `${phaseLabel(event.phase)} 문서 저장`,
   complete: (event) => `${phaseLabel(event.phase)} 단계 완료`,
   iterate: () => '개선 주기 시작',

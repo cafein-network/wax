@@ -167,6 +167,7 @@ test('wax kind: only status/save/complete of the worker\'s own task and phase, w
     'wax save implement fix-sum --file .wax/tmp/plan.md --project /elsewhere',
     `wax complete implement fix-sum --author ${AUTHOR} --no-proof "skip"`,
     `wax complete implement fix-sum --author ${AUTHOR} --ac-unverified "skip"`,
+    `wax complete implement fix-sum --author ${AUTHOR} --no-red "skip"`,
     'wax complete implement fix-sum --author 대표 --evidence x',
     'wax complete implement fix-sum --evidence x',
     `wax complete implement fix-sum --author ${AUTHOR} --checks-file /tmp/c.json`,
@@ -205,6 +206,19 @@ test('test kind: only wax test <task> -- <the human-typed command>; the bare com
   await check('wax test fix-sum --author 대표 -- node --test', null);
   await check('wax test fix-sum --project /x -- node --test', null);
   await check('wax test fix-sum -- node --test', null, { ...ctx, test: '' });
+  await check('wax test fix-sum --step S-1 -- node --test', 'test');
+  await check(`node "${CLI}" test fix-sum --revision 4 --step S-12 --author ${AUTHOR} -- node --test`, 'test');
+  await check('wax test fix-sum --step S-0 -- node --test', null);
+  await check('wax test fix-sum --step S-100 -- node --test', null);
+  await check('wax test fix-sum --step s-1 -- node --test', null);
+  await check('wax test fix-sum --step AC-1 -- node --test', null);
+  await check('wax test fix-sum --step "S-1" -- node --test', 'test');
+  await check('wax test fix-sum --step S-1;x -- node --test', null);
+  await check('wax test fix-sum --step S-1 --step S-2 -- node --test', null);
+  await check('wax test fix-sum --step -- node --test', null);
+  await check('wax test fix-sum --step=S-1 -- node --test', null);
+  await check('wax test fix-sum --step S-1 -- node --test', null, { ...ctx, phase: 'review' });
+  await check('wax test fix-sum --step S-1 -- node --test', null, { ...ctx, phase: 'plan' });
   const piped = { ...ctx, test: 'npm run lint && npm test' };
   await check('npm run lint && npm test', null, piped);
   await check('wax test fix-sum -- npm run lint && npm test', null, piped);
@@ -633,4 +647,159 @@ test('the review prompt shows the complete shape with --verdict pass, and that s
   assert.match(line('review'), new RegExp(`complete review fix-sum --author ${AUTHOR} --verdict pass --evidence`));
   assert.doesNotMatch(line('implement'), /--verdict/, 'only review needs a verdict');
   assert.equal(await matchAllow(bash(`wax complete review fix-sum --author ${AUTHOR} --verdict pass --evidence "AC 2개 확인" --proofs p-1`), ['wax'], ctx), 'wax');
+});
+
+test('wax kind: ruling only for the worker\'s own task, stage and name with a --file under .wax/tmp (DISCIPLINE.md 3, D9)', async (t) => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), 'wax-goal-allow-ruling-')));
+  t.after(() => rm(base, { recursive: true, force: true }));
+  const root = join(base, 'project'), other = join(base, 'other');
+  for (const dir of [join(root, '.wax', 'tmp'), join(root, 'src'), join(other, '.wax', 'tmp')]) await mkdir(dir, { recursive: true });
+  const ctx = { root, cli: CLI, feature: 'fix-sum', phase: 'implement', author: AUTHOR, test: 'node --test' };
+  const ok = async (command, context = ctx) => assert.equal(await matchAllow(bash(command), ['wax'], context), 'wax', command);
+  const no = async (command, context = ctx) => assert.equal(await matchAllow(bash(command), ['wax'], context), null, command);
+  const absolute = join(root, '.wax/tmp/r1.json').replaceAll('\\', '/');
+  await ok(`wax ruling fix-sum --phase implement --author ${AUTHOR} --file .wax/tmp/r1.json`);
+  await ok(`wax ruling fix-sum --author ${AUTHOR} --file ${absolute} --phase implement`);
+  await ok(`node "${CLI}" --project "${root}" ruling fix-sum --phase implement --author ${AUTHOR} --file "${absolute}"`);
+  await ok(`wax ruling fix-sum --phase implement --author ${AUTHOR} --file .wax/tmp/r1.json --project "${root}"`);
+  for (const command of [
+    `wax ruling other-task --phase implement --author ${AUTHOR} --file .wax/tmp/r1.json`,
+    `wax ruling fix-sum --phase review --author ${AUTHOR} --file .wax/tmp/r1.json`,
+    `wax ruling fix-sum --author ${AUTHOR} --file .wax/tmp/r1.json`,
+    'wax ruling fix-sum --phase implement --author wax-worker-codex --file .wax/tmp/r1.json',
+    'wax ruling fix-sum --phase implement --author 대표 --file .wax/tmp/r1.json',
+    'wax ruling fix-sum --phase implement --file .wax/tmp/r1.json',
+    `wax ruling fix-sum --phase implement --author ${AUTHOR}`,
+    `wax ruling fix-sum --phase implement --author ${AUTHOR} --file src/r1.json`,
+    `wax ruling fix-sum --phase implement --author ${AUTHOR} --file .wax/tmp/../../src/r1.json`,
+    `wax ruling fix-sum --phase implement --author ${AUTHOR} --file ${join(other, '.wax/tmp/r1.json').replaceAll('\\', '/')}`,
+    `wax ruling fix-sum --phase implement --author ${AUTHOR} --file .wax/tmp/r1.json --project "${other}"`,
+    `wax ruling fix-sum --phase implement --author ${AUTHOR} --what x --why y --cost z`,
+    `wax ruling fix-sum --phase implement --author ${AUTHOR} --file .wax/tmp/r1.json --area naming`,
+    `wax ruling fix-sum --phase implement --author ${AUTHOR} --file .wax/tmp/r1.json --revision 3`,
+    `wax ruling fix-sum --phase implement --author ${AUTHOR} --file .wax/tmp/r1.json; rm -rf src`,
+    `wax ruling fix-sum --phase implement --author ${AUTHOR} --file=.wax/tmp/r1.json`,
+    `wax ruling fix-sum --phase implement --author ${AUTHOR} --author ${AUTHOR} --file .wax/tmp/r1.json`,
+    `wax ruling --phase implement --author ${AUTHOR} --file .wax/tmp/r1.json`,
+  ]) await no(command);
+  await no(`wax ruling fix-sum --phase implement --author ${AUTHOR} --file .wax/tmp/r1.json`, { ...ctx, phase: 'review' });
+  await no(`wax ruling fix-sum --phase implement --author ${AUTHOR} --file .wax/tmp/r1.json`, { ...ctx, author: 'wax-worker-codex' });
+  assert.equal(await matchAllow(bash(`wax ruling fix-sum --phase implement --author ${AUTHOR} --file .wax/tmp/r1.json`), ['test', 'write'], ctx), null);
+  const allow = { on: true, kinds: ['wax'] };
+  const line = (phase) => allowPrompt(allow, { feature: { id: 'fix-sum' }, phase, author: AUTHOR, root }).split('\n').find((text) => text.startsWith('허용되는 wax 명령'));
+  const shown = line('implement').match(/node (?:"[^"]+"|\S+) --project (?:"[^"]+"|\S+) ruling fix-sum --phase implement --author \S+ --file \S+/)?.[0];
+  assert.ok(shown, line('implement'));
+  await ok(shown.replace('<파일>', 'r1.json'));
+  assert.doesNotMatch(line('plan'), / ruling /);
+  assert.doesNotMatch(line('report'), / ruling /);
+});
+
+test('wax kind: approach --propose only for the worker\'s own task in the design stage, its own name and a --file under .wax/tmp (DISCIPLINE.md 6)', async (t) => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), 'wax-goal-allow-approach-')));
+  t.after(() => rm(base, { recursive: true, force: true }));
+  const root = join(base, 'project'), other = join(base, 'other');
+  for (const dir of [join(root, '.wax', 'tmp'), join(root, 'src'), join(other, '.wax', 'tmp')]) await mkdir(dir, { recursive: true });
+  const ctx = { root, cli: CLI, feature: 'fix-sum', phase: 'design', author: AUTHOR, test: 'node --test' };
+  const ok = async (command, context = ctx) => assert.equal(await matchAllow(bash(command), ['wax'], context), 'wax', command);
+  const no = async (command, context = ctx) => assert.equal(await matchAllow(bash(command), ['wax'], context), null, command);
+  const absolute = join(root, '.wax/tmp/a.json').replaceAll('\\', '/');
+  const shape = `wax approach fix-sum --propose --file .wax/tmp/a.json --author ${AUTHOR}`;
+  await ok(shape);
+  await ok('wax approach fix-sum --propose --file .wax/tmp/a.json');
+  await ok(`wax approach fix-sum --propose --author ${AUTHOR} --file ${absolute}`);
+  await ok(`node "${CLI}" --project "${root}" approach fix-sum --propose --file "${absolute}" --author ${AUTHOR}`);
+  await ok(`wax approach fix-sum --propose --file .wax/tmp/a.json --project "${root}"`);
+  await ok(`bash -lc '${shape}'`);
+  for (const command of [
+    `wax approach other-task --propose --file .wax/tmp/a.json --author ${AUTHOR}`,
+    'wax approach fix-sum --propose --file .wax/tmp/a.json --author wax-worker-codex',
+    'wax approach fix-sum --propose --file .wax/tmp/a.json --author 대표',
+    `wax approach fix-sum --propose --author ${AUTHOR}`,
+    `wax approach fix-sum --file .wax/tmp/a.json --author ${AUTHOR}`,
+    `wax approach fix-sum --file .wax/tmp/a.json --propose --author ${AUTHOR}`,
+    `wax approach --propose fix-sum --file .wax/tmp/a.json`,
+    `wax approach fix-sum --propose --propose --file .wax/tmp/a.json`,
+    `wax approach fix-sum --propose --file src/a.json --author ${AUTHOR}`,
+    `wax approach fix-sum --propose --file .wax/tmp/../../src/a.json`,
+    `wax approach fix-sum --propose --file ${join(other, '.wax/tmp/a.json').replaceAll('\\', '/')}`,
+    'wax approach fix-sum --propose --file D:/elsewhere/.wax/tmp/a.json',
+    `wax approach fix-sum --propose --file .wax/tmp/a.json --project "${other}"`,
+    `wax --project "${root}" approach fix-sum --propose --file .wax/tmp/a.json --project "${root}"`,
+    `wax approach fix-sum --pick 1 --author ${AUTHOR} --revision 3`,
+    `wax approach fix-sum --propose --file .wax/tmp/a.json --pick 1`,
+    `wax approach fix-sum --propose --file .wax/tmp/a.json --single x`,
+    `wax approach fix-sum --single "하나뿐" --author ${AUTHOR}`,
+    `wax approach fix-sum --propose --file .wax/tmp/a.json --revision 3`,
+    `wax approach fix-sum --propose --file .wax/tmp/a.json --reason x`,
+    `wax approach fix-sum --propose --file .wax/tmp/a.json --phase design`,
+    `wax approach fix-sum --propose --file .wax/tmp/a.json extra`,
+    `wax approach fix-sum --propose --file=.wax/tmp/a.json`,
+    `wax approach fix-sum --propose=true --file .wax/tmp/a.json`,
+    'wax approach fix-sum',
+    `${shape}; rm -rf src`,
+    `${shape} && echo x`,
+    `${shape} | head`,
+    `${shape} > .wax/tmp/out.txt`,
+    `wax approach fix-sum --propose --file "$(echo .wax/tmp/a.json)"`,
+    'wax approach fix-sum --propose --file .wax/tmp/*.json',
+    `wax approach fix-sum --propose --file ".wax/tmp/a;b.json"`,
+  ]) await no(command);
+  for (const phase of ['plan', 'implement', 'review', 'report']) await no(shape, { ...ctx, phase });
+  await no(shape, { ...ctx, author: 'wax-worker-codex' });
+  await no(shape, { ...ctx, feature: 'other-task' });
+  assert.equal(await matchAllow(bash(shape), ['test', 'write', 'read'], ctx), null);
+  if (await createTestSymlink(t, other, join(root, '.wax', 'tmp', 'out'), 'dir')) {
+    await no('wax approach fix-sum --propose --file .wax/tmp/out/a.json');
+    await no(`wax approach fix-sum --propose --file ${absolute.replace('a.json', 'out/a.json')}`);
+  }
+  assert.equal(await matchAllow(codexCommand(shape, root), ['wax'], ctx), 'wax');
+  assert.equal(await matchAllow(codexCommand(shape, join(root, 'src')), ['wax'], ctx), null);
+  const allow = { on: true, kinds: ['wax'] };
+  const line = (phase) => allowPrompt(allow, { feature: { id: 'fix-sum' }, phase, author: AUTHOR, root }).split('\n').find((text) => text.startsWith('허용되는 wax 명령'));
+  const shown = line('design').match(/node (?:"[^"]+"|\S+) --project (?:"[^"]+"|\S+) approach fix-sum --propose --file \S+ --author [\w-]+/)?.[0];
+  assert.ok(shown, line('design'));
+  await ok(shown.replace('<파일>', 'a.json'));
+  for (const phase of ['plan', 'implement', 'review', 'report']) assert.doesNotMatch(line(phase), / approach /, phase);
+});
+
+test('wax kind on win32 (simulated): approach --propose takes the backslash spellings of this project for --project, never a backslash --file or another drive', { skip: process.platform === 'win32' && 'a backslash cannot be in a Windows file name; the test above covers real Windows paths' }, async (t) => {
+  const base = await mkdtemp(join(tmpdir(), 'wax-win-approach-'));
+  t.after(() => rm(base, { recursive: true, force: true }));
+  const root = join(await realpath(base), 'p\\proj');
+  await mkdir(join(root, '.wax', 'tmp'), { recursive: true });
+  const cli = '/x/bin/wax.mjs';
+  const ctx = { root, cli, feature: 'f1', phase: 'design', author: AUTHOR, test: 'node --test', platform: 'win32' };
+  const check = (command, extra = {}) => matchAllow(bash(command), ['wax'], { ...ctx, ...extra });
+  const doubled = (path) => path.replaceAll('\\', '\\\\');
+  for (const value of [`"${root}"`, `"${doubled(root)}"`, `'${root}'`, doubled(root)]) {
+    assert.equal(await check(`node ${cli} --project ${value} approach f1 --propose --file .wax/tmp/a.json --author ${AUTHOR}`), 'wax', value);
+    assert.equal(await check(`node ${cli} approach f1 --propose --file .wax/tmp/a.json --project ${value}`), 'wax', value);
+  }
+  for (const command of [
+    `node ${cli} --project "${root}" approach f1 --propose --file "${root}\\.wax\\tmp\\a.json"`,
+    `node ${cli} --project "${root}" approach f1 --propose --file ".wax\\tmp\\a.json"`,
+    `node ${cli} --project "${root}" approach f1 --propose --file "D:\\other\\.wax\\tmp\\a.json"`,
+    `node ${cli} --project "${root}" approach f1 --propose --file D:/other/.wax/tmp/a.json`,
+    `node ${cli} --project "${root}2" approach f1 --propose --file .wax/tmp/a.json`,
+    `node ${cli} --project "${root}\\src" approach f1 --propose --file .wax/tmp/a.json`,
+    `node ${cli} --project "${root}" approach f1 --propose --file .wax/tmp/a.json --single x`,
+    `node ${cli} --project "${root}" approach f1 --pick 1 --author ${AUTHOR}`,
+  ]) assert.equal(await check(command), null, command);
+  assert.equal(await check(`node ${cli} --project "${root}" approach f1 --propose --file .wax/tmp/a.json`, { phase: 'implement' }), null);
+  assert.equal(await check(`node ${cli} --project "${root}" approach f1 --propose --file .wax/tmp/a.json`, { platform: 'linux' }), null);
+});
+
+test('the goal-allow step ID shape matches plan-steps STEP_ID', async () => {
+  const { STEP_ID } = await import('../src/plan-steps.mjs');
+  const source = await (await import('node:fs/promises')).readFile(new URL('../src/goal-allow.mjs', import.meta.url), 'utf8');
+  assert.ok(source.includes(`const STEP = ${STEP_ID};`), 'goal-allow STEP must stay identical to plan-steps STEP_ID');
+});
+
+test('worker prompt lists --step for the test kind only in implement', async () => {
+  const { allowPrompt } = await import('../src/chat/pm-loop.mjs');
+  const allow = { on: true, kinds: ['test'], test: 'node --test' };
+  const implement = allowPrompt(allow, { feature: { id: 'f1' }, phase: 'implement', author: 'wax-worker-claude' });
+  assert.match(implement, /test f1 \[--revision <n>\] \[--author wax-worker-claude\] \[--step S-<n>\] -- node --test\./);
+  assert.match(implement, /같은 검사 명령을 쓰면 --step/);
+  for (const phase of ['plan', 'design', 'review', 'report']) assert.doesNotMatch(allowPrompt(allow, { feature: { id: 'f1' }, phase, author: 'w' }), /--step/, phase);
 });

@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { addedLines, mask, scanLine, scanSecrets, secretScanMode, sensitiveFile, validSecretScan } from '../src/secrets.mjs';
-import { createFeature, getFeature, updateFeature, validateStored } from '../src/workflow.mjs';
+import { addedLines, findingText, mask, mergeSecretScans, scanLine, scanSecrets, secretScanMode, sensitiveFile, validSecretScan } from '../src/secrets.mjs';
+import { createFeature, featureSecrets, getFeature, updateFeature, validateStored } from '../src/workflow.mjs';
 import { characteristicEvidence } from '../src/quality-report.mjs';
 
 const CLI = fileURLToPath(new URL('../bin/wax.mjs', import.meta.url));
@@ -152,4 +152,54 @@ test('CLI secrets reports masked findings and exits 1', async (t) => {
   assert.equal(json.findings[0].rule, 'slack-token');
   assert.match(run().stderr, /사용법: secrets <id>/);
   assert.match(await readFile(join(root, 'cfg.js'), 'utf8'), /xoxb/, 'the scan never edits files');
+});
+
+async function worktree(root, { goal = 'goal-0000000a', feature = 'pay', n = 1 } = {}) {
+  const real = await realpath(root);
+  const id = `${goal}-${n}`, branch = `wax/${goal}/${feature}-${n}`, path = join(real, '.wax', 'worktrees', id);
+  await mkdir(join(real, '.wax', 'chat'), { recursive: true });
+  execFileSync('git', ['worktree', 'add', '-q', '-b', branch, path, 'HEAD'], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] });
+  const record = { schema: 1, seq: n, id, goal, feature, branch, path, base: null, port: null, env: [], setup: null, state: 'active', at: new Date().toISOString(), by: '대표' };
+  await appendFile(join(real, '.wax', 'chat', 'worktrees.jsonl'), `${JSON.stringify(record)}\n`);
+  return { id, branch, path };
+}
+
+test('completing from the project folder also scans the task’s active worktree: findings there block, and a clean worktree is counted, not "0 files"', async (t) => {
+  const { root } = await repo(t);
+  await toImplement(root);
+  const tree = await worktree(root);
+  await writeFile(join(tree.path, 'client.js'), `const key = '${KEYS.github}';\n`);
+  await assert.rejects(updateFeature(root, 'pay', 'complete', { phase: 'implement', evidence: '구현', waiver: '확인', runFolder: root }),
+    (error) => error.status === 409 && error.message.includes(`.wax/worktrees/${tree.id}/client.js:1 github-token ghp_…`) && !error.message.includes(KEYS.github));
+  const scan = await featureSecrets(root, 'pay', root);
+  assert.deepEqual([scan.state, scan.files, scan.findings[0].worktree, scan.worktrees], ['found', 1, tree.id, [{ id: tree.id, branch: tree.branch }]]);
+  assert.ok(validSecretScan(scan));
+  assert.equal(findingText(scan.findings[0]), `.wax/worktrees/${tree.id}/client.js:1 github-token ghp_…`);
+
+  await writeFile(join(tree.path, 'client.js'), 'const key = process.env.KEY;\n');
+  await writeFile(join(root, 'local.js'), `const s = '${KEYS.slack}';\n`);
+  const inside = await featureSecrets(root, 'pay', join(tree.path));
+  assert.deepEqual([inside.state, inside.files, inside.worktrees], ['clean', 1, [{ id: tree.id, branch: tree.branch }]]);
+  const both = await featureSecrets(root, 'pay', root);
+  assert.deepEqual([both.state, both.files, both.findings.map(findingText)], ['found', 2, ['local.js:1 slack-token xoxb…']]);
+  await rm(join(root, 'local.js'));
+
+  const done = await updateFeature(root, 'pay', 'complete', { phase: 'implement', evidence: '구현', waiver: '확인', runFolder: root });
+  const recorded = done.completed.implement.secretScan;
+  assert.deepEqual([recorded.state, recorded.files, recorded.worktrees], ['clean', 1, [{ id: tree.id, branch: tree.branch }]], 'the worktree file was read, not a silent 0');
+  assert.doesNotThrow(() => validateStored(done));
+});
+
+test('merging scans: found wins, then unknown, no-git worktrees are skipped, and the record shape is checked', () => {
+  const entry = { id: 'goal-0000000a-1', branch: 'wax/goal-0000000a/pay-1' };
+  const clean = (files = 0) => ({ state: 'clean', base: 'a'.repeat(40), files, findings: [], more: 0 });
+  assert.deepEqual(mergeSecretScans(clean(), []), clean());
+  assert.deepEqual(mergeSecretScans(clean(), [[entry, { state: 'unknown', reason: 'no-git', files: 0, findings: [], more: 0 }]]), clean());
+  const unknown = mergeSecretScans(clean(2), [[entry, { state: 'unknown', reason: 'too-many-files', base: 'a'.repeat(40), files: 0, findings: [], more: 0 }]]);
+  assert.deepEqual([unknown.state, unknown.reason, unknown.files], ['unknown', 'too-many-files', 2], 'an unread worktree is not reported clean');
+  const found = mergeSecretScans({ state: 'unknown', reason: 'too-large', files: 0, findings: [], more: 0 }, [[entry, { ...clean(1), state: 'found', findings: [{ file: 'a.js', line: 1, rule: 'aws-access-key', preview: 'AKIA…' }] }]]);
+  assert.deepEqual([found.state, found.findings[0].worktree], ['found', entry.id]);
+  assert.ok(validSecretScan(found));
+  assert.equal(validSecretScan({ ...found, findings: [{ ...found.findings[0], worktree: '../x' }] }), false);
+  assert.equal(validSecretScan({ ...found, worktrees: [{ id: 'nope' }] }), false);
 });

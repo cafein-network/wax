@@ -41,7 +41,7 @@ test('대시보드의 외부 조회는 공식 도구 소식 모듈에 한정하�
 
 test('GitHub 조회는 트리거 2차 모듈만 사용자의 gh로 하며 셸을 쓰지 않는다', async () => {
   const runsGh = /execFile\([^,]*'gh'/;
-  for (const file of [...await files(join('src', 'chat'), ['.mjs']), ...await files('bin', ['.mjs'])]) {
+  for (const file of [...await files('src', ['.mjs']), ...await files('bin', ['.mjs'])]) {
     if (file !== join('src', 'chat', 'trigger-github.mjs')) assert.doesNotMatch(await readFile(join(root, file), 'utf8'), runsGh, file);
   }
   const github = await readFile(join(root, 'src', 'chat', 'trigger-github.mjs'), 'utf8');

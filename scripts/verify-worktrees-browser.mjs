@@ -21,12 +21,15 @@ try {
   const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
   git('init', '-q');
   git('config', 'core.autocrlf', 'false');
-  await writeFile(join(root, '.gitignore'), '.wax/\n.setup-done\n');
+  await writeFile(join(root, '.gitignore'), '.wax/\n.setup-done\nnode_modules/\n');
+  await mkdir(join(root, 'node_modules', 'dep'), { recursive: true });
+  await writeFile(join(root, 'node_modules', 'dep', 'index.js'), 'export default 1;\n');
   await writeFile(join(root, 'shared.txt'), 'line\n');
   await mkdir(join(root, 'docs', 'wax'), { recursive: true });
   await mkdir(join(root, 'scripts'));
   await writeFile(join(root, 'scripts', 'setup.mjs'), 'import { mkdirSync, writeFileSync } from "node:fs";\nwriteFileSync(".setup-done", String(process.env.PORT));\nmkdirSync("vendor", { recursive: true });\nwriteFileSync("vendor/lib.js", "export default 1;\\n");\n');
-  await writeFile(join(root, 'docs', 'wax', 'worktree.json'), `${JSON.stringify({ setup: [process.execPath, 'scripts/setup.mjs'], portEnv: 'PORT' }, null, 2)}\n`);
+  await writeFile(join(root, 'scripts', 'check.mjs'), 'import { readFileSync } from "node:fs";\nfor (let i = 1; i <= 50; i++) console.log(`check line ${i}`);\nif (readFileSync("shared.txt", "utf8").includes("BROKEN")) { console.error("shared.txt is BROKEN"); process.exit(1); }\nconsole.log("all good");\n');
+  await writeFile(join(root, 'docs', 'wax', 'worktree.json'), `${JSON.stringify({ setup: [process.execPath, 'scripts/setup.mjs'], portEnv: 'PORT', copy: ['node_modules', 'build'], checks: [[process.execPath, 'scripts/check.mjs']] }, null, 2)}\n`);
   git('add', '-A'); git('-c', 'user.name=Wax Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'fixture');
   for (const id of ['header-copy', 'footer-copy']) await createFeature(root, { id, title: `Edit shared.txt (${id})` });
   await setPm(root, { author: '대표', kind: 'human' });
@@ -88,10 +91,16 @@ try {
   const reviewText = await review.innerText();
   assert.match(reviewText, /Setup script approval[\s\S]*docs\/wax\/worktree\.json/);
   assert.match(reviewText, /"portEnv": "PORT"/);
-  assert.match(reviewText, /1 repository files named in the arguments \(included in the hash\)/);
+  assert.match(reviewText, /2 repository files named in the arguments \(included in the hash\)/);
   assert.match(reviewText, /sha256 [a-f0-9]{64}/);
   assert.match(reviewText, /5-minute cap/);
   assert.match(reviewText, /The hash covers only worktree\.json, the files named in the arguments and, for npm, pnpm, yarn, bun or npx commands, package\.json and the lock files/);
+  assert.deepEqual(await review.locator('.pm-worktree-copy li').evaluateAll((nodes) => nodes.map((node) => [node.dataset.path, node.dataset.state])), [['node_modules', 'ready'], ['build', 'missing']]);
+  assert.match(reviewText, /2 folders to copy \(their state in the project now\)[\s\S]*node_modules · present and ignored \(copied\)[\s\S]*build · missing \(skipped\)/);
+  assert.match(reviewText, /1 pre-import check commands \(run without a shell, in that worktree\)/);
+  assert.match(reviewText, /The hash binds which commands run, not the worker code they read/);
+  assert.match(reviewText, /Pre-import checks run only when you press Run checks in the import preview\. An import needs them to pass\./);
+  assert.match(reviewText, /once per new worktree/);
   await review.locator('.pm-worktree-ref[data-path="scripts/setup.mjs"] summary').click();
   assert.match(await review.locator('.pm-worktree-ref[data-path="scripts/setup.mjs"] pre').textContent(), /writeFileSync\("\.setup-done"/);
   await noKorean(review, 'setup approval screen');
@@ -128,6 +137,10 @@ try {
   await page.waitForFunction((id) => document.querySelectorAll(`#pm-loop-panel .pm-goal[data-goal="${id}"] .pm-worktree-list li`).length === 2, goalId);
   const listText = await listed.allInnerTexts();
   assert.ok(listText.every((text) => /wax\/goal-[a-f0-9]{8}\/(header|footer)-copy-[12][\s\S]*port 410\d\d[\s\S]*setup done[\s\S]*active/.test(text)), listText.join('\n'));
+  if (process.platform !== 'win32') {
+    assert.ok(listText.every((text) => /· 1 copied/.test(text)), listText.join('\n'));
+    for (const entry of entries) assert.equal(await readFile(join(entry.path, 'node_modules', 'dep', 'index.js'), 'utf8'), 'export default 1;\n', 'node_modules was copied into the worktree');
+  }
   assert.equal(await page.locator(`#pm-loop-panel .pm-goal[data-goal="${goalId}"] .pm-worktrees-toggle input`).isDisabled(), true, 'locked once workers started');
   await noKorean(page.locator(`#pm-loop-panel .pm-goal[data-goal="${goalId}"] .pm-worktrees`), 'worktree list');
   await fits('worktree list');
@@ -154,14 +167,57 @@ try {
   const item = (feature) => box.locator(`.pm-worktree-list li[data-worktree="${byFeature[feature].id}"]`);
   await item('header-copy').locator('.pm-worktree-summary').waitFor();
   assert.match(await item('header-copy').locator('.pm-worktree-summary').innerText(), /1 files changed · 0 commits · 1 uncommitted files/);
+  const copiedToo = process.platform !== 'win32';
+  const w = byFeature['header-copy'].path;
+  if (copiedToo) {
+    await writeFile(join(w, 'node_modules', 'dep', 'index.js'), 'export default 2;\n');
+    execFileSync('git', ['add', '-f', 'node_modules/dep/index.js'], { cwd: w });
+    execFileSync('git', ['-c', 'user.name=Wax Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'commit a copied file'], { cwd: w });
+  }
+  await writeFile(join(w, 'shared.txt'), 'line\nedited by header-copy\nBROKEN\n');
   await item('header-copy').locator('.pm-worktree-import-open').click();
+  const precheck = item('header-copy').locator('.pm-worktree-import .pm-worktree-precheck');
+  await precheck.waitFor();
+  assert.equal(await precheck.getAttribute('data-state'), 'notRun');
+  assert.match(await precheck.innerText(), /Pre-import checks · Commands from: worktree\.json `checks` \(approved\)[\s\S]*scripts\/check\.mjs Waiting[\s\S]*The checks have not run yet\. An import needs them to pass\./);
+  assert.match(await precheck.innerText(), /up to 10 minutes each and 30 minutes in total/);
+  assert.equal(await item('header-copy').locator('.pm-worktree-import').getAttribute('data-ready'), 'no');
+  assert.equal(await item('header-copy').locator('.pm-worktree-import-confirm').isDisabled(), true);
+  assert.equal(await precheck.locator('button').evaluateAll((nodes) => nodes.map((node) => node.textContent).join('|')), 'Run checks', 'no button to skip the checks (W14)');
+  await precheck.locator('.pm-worktree-precheck-run').click();
+  await item('header-copy').locator('.pm-worktree-precheck[data-state="failed"]').waitFor({ timeout: 30_000 });
+  assert.match(await precheck.innerText(), /scripts\/check\.mjs Failed [0-9.]+s · exit code 1[\s\S]*Last 40 lines of output[\s\S]*The checks did not pass, so this cannot be imported/);
+  await precheck.locator('.pm-worktree-precheck-output summary').click();
+  const tail = await precheck.locator('.pm-worktree-precheck-output pre').textContent();
+  assert.match(tail, /shared\.txt is BROKEN/);
+  assert.equal(tail.split('\n').length, 40, 'only the last 40 lines');
+  assert.equal(await item('header-copy').locator('.pm-worktree-import-confirm').isDisabled(), true, 'a failed check keeps the import off');
+  assert.equal(await precheck.locator('.pm-worktree-precheck-run').innerText(), 'Run again');
+  await item('header-copy').locator('.pm-worktree-checks', { hasText: /Pre-import checks: Failed \(0 of 1 commands passed\)/ }).waitFor();
+  await noKorean(precheck, 'pre-import checks failed');
+  await fits('pre-import checks failed');
+  if (screenshots) await precheck.screenshot({ path: join(screenshots, 'worktree-precheck-failed-390-en.png') });
+  await writeFile(join(w, 'shared.txt'), 'line\nedited by header-copy\n');
+  await item('header-copy').locator('.pm-worktree-import .pm-worktree-cancel').click();
+  await item('header-copy').locator('.pm-worktree-import-open').click();
+  await item('header-copy').locator('.pm-worktree-precheck[data-state="stale"]').waitFor();
+  assert.match(await precheck.innerText(), /Changed since the checks ran\. Run them again\./);
+  assert.equal(await item('header-copy').locator('.pm-worktree-import-confirm').isDisabled(), true, 'a stale result keeps the import off');
+  await precheck.locator('.pm-worktree-precheck-run').click();
+  await item('header-copy').locator('.pm-worktree-precheck[data-state="passed"]').waitFor({ timeout: 30_000 });
+  assert.match(await precheck.innerText(), /scripts\/check\.mjs Passed[\s\S]*The checks passed for the current worktree and HEAD\./);
+  await noKorean(precheck, 'pre-import checks passed');
+  await fits('pre-import checks passed');
   const preview = item('header-copy').locator('.pm-worktree-import');
-  await preview.waitFor();
   assert.equal(await preview.getAttribute('data-ready'), 'yes');
   assert.deepEqual(await preview.locator('.pm-worktree-files li').evaluateAll((nodes) => nodes.map((node) => [node.dataset.path, node.dataset.action])), [['shared.txt', 'modify']]);
   assert.match(await preview.innerText(), /1 files to import, 0 skipped[\s\S]*uncommitted changes/);
   assert.deepEqual(await preview.locator('.pm-worktree-excluded li').evaluateAll((nodes) => nodes.map((node) => [node.dataset.path, node.dataset.reason, node.innerText])), [['vendor', 'setupOutput', 'vendor 1 files']]);
   assert.match(await preview.locator('.pm-worktree-excluded').innerText(), /1 files the setup script made and nobody changed since are left out/);
+  if (copiedToo) {
+    assert.deepEqual(await preview.locator('.pm-worktree-copied-out li').evaluateAll((nodes) => nodes.map((node) => [node.dataset.path, node.dataset.reason, node.innerText])), [['node_modules', 'copied', 'node_modules 1 files']]);
+    assert.match(await preview.locator('.pm-worktree-copied-out').innerText(), /1 files inside copied build folders \(copy in worktree\.json\) are left out/);
+  }
   await noKorean(preview, 'import preview');
   await fits('import preview');
   if (screenshots) await preview.screenshot({ path: join(screenshots, 'worktree-import-preview-390-en.png') });
@@ -213,9 +269,10 @@ try {
   await imported.waitFor();
   assert.match(await imported.innerText(), /Import locally[\s\S]*Imported worktree[\s\S]*shared\.txt/);
   assert.equal(await imported.locator('.trace-restore-open').innerText(), 'Undo this import');
+  assert.match(await page.locator('#trace-panel').innerText(), /Pre-import checks passed \(1 commands\)/);
   await fits('run trace import');
   assert.deepEqual(errors, []);
-  console.log('PASS browser: isolated branch checkbox (default off) → setup script approval screen → two fake workers on different tasks edit the same file in separate worktrees → each run diff shows only its own change, project tree untouched → import one (preview leaves out the setup output with its reason → confirm → uncommitted change in the project) → the other shows the conflict and is refused → discard → cleanup (folders gone, branches kept), 390px English.');
+  console.log('PASS browser: isolated branch checkbox (default off) → setup script approval screen → two fake workers on different tasks edit the same file in separate worktrees → each run diff shows only its own change, project tree untouched → pre-import checks in the preview (run → failed with the output tail → import off → fix the worktree → stale → run again → passed) → import one (preview leaves out the setup output with its reason → confirm → uncommitted change in the project) → the other shows the conflict and is refused → discard → cleanup (folders gone, branches kept), 390px English.');
 } finally {
   await browser?.close(); await server?.shutdown();
   await rm(root, { recursive: true, force: true });

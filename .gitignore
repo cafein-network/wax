@@ -1,5 +1,6 @@
 node_modules/
 .wax/
+.wax-eval/
 *.tgz
 .env
 .env.*

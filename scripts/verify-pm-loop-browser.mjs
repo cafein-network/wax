@@ -11,6 +11,7 @@ import { setPm } from '../src/chat/team.mjs';
 import { joinPresence, setPresence } from '../src/chat/presence.mjs';
 import { startBeat } from '../src/chat/listeners.mjs';
 import { claudeUsage } from '../src/tool-usage.mjs';
+import { appendRecord, makeId } from '../src/chat/store.mjs';
 
 const modulePath = process.env.WAX_PLAYWRIGHT_MODULE || process.argv[2];
 if (!modulePath) throw new Error('Playwright 모듈 경로를 WAX_PLAYWRIGHT_MODULE 또는 첫 번째 인수로 지정하세요.');
@@ -31,13 +32,14 @@ for (const [author, kind] of [['codex-a', 'codex'], ['claude-a', 'claude']]) {
   beats.push(await startBeat(root, author, null, 10_000, () => {}));
 }
 const workerRuns = [];
-const AUTO_FREE = new Set(['refund', 'metered']);
+const AUTO_FREE = new Set(['refund', 'metered', 'costed']);
 const METERED = claudeUsage(JSON.parse(JSON.parse(await readFile(new URL('../test/fixtures/usage/claude-result.json', import.meta.url), 'utf8')).line));
 async function executeWorker(dir, input) {
   const author = input.prompt.match(/작업자 이름: ([^.]+)\./)[1];
   const phase = input.prompt.match(/단계: ([a-z]+), 업무/)[1];
   const feature = input.prompt.match(/작업: ([^,]+), 단계/)[1];
   if (REPEATERS.has(feature)) return repeatWorker(input, { author, phase, feature });
+  if (feature === 'rootcause') return rootCauseWorker(input, { author, feature });
   let release;
   const gate = new Promise((done) => { release = done; });
   workerRuns.push({ tool: input.tool, author, phase, feature, release });
@@ -46,7 +48,7 @@ async function executeWorker(dir, input) {
   await writeFile(doc, `# ${phase}\n\n가짜 headless 작업자가 남긴 문서입니다.\n`);
   await wax('save', phase, feature, '--file', doc);
   await wax('complete', phase, feature, '--evidence', `${phase} 완료(가짜 작업자)`, '--author', author, ...(['implement', 'review'].includes(phase) ? ['--no-proof', '브라우저 검사의 가짜 작업자'] : []), ...(phase === 'review' ? ['--verdict', 'pass'] : []));
-  return { threadId: 'fake-worker', status: 'completed', message: JSON.stringify({ outcome: 'done', report: `${phase} 단계를 끝냈습니다.` }), ...(feature === 'metered' && input.tool === 'claude' ? { usage: METERED } : {}) };
+  return { threadId: 'fake-worker', status: 'completed', message: JSON.stringify({ outcome: 'done', report: `${phase} 단계를 끝냈습니다.` }), ...(['metered', 'costed'].includes(feature) && input.tool === 'claude' ? { usage: METERED } : {}) };
 }
 const REPEATERS = new Set(['flaky', 'stuck']);
 const FAIL = `console.log('took', Date.now() % 1000, 'ms in', require('os').tmpdir() + '/run-' + Math.random().toString(36).slice(2)); console.error('Expected sum to be three'); process.exit(1)`;
@@ -64,6 +66,15 @@ async function repeatWorker(input, { author, phase, feature }) {
   }
   await Promise.race([gate, aborted]);
   return { threadId: 'fake-worker', status: 'completed', message: JSON.stringify({ outcome: 'blocked', report: '같은 검사가 계속 실패합니다.' }) };
+}
+const rootCausePrompts = [];
+async function rootCauseWorker(input, { author, feature }) {
+  if (!input.prompt.startsWith('앞선 시도가 같은 검사를')) return repeatWorker(input, { author, phase: 'plan', feature });
+  rootCausePrompts.push(input.prompt);
+  await wax('test', feature, '--author', author, '--', process.execPath, '-e', FAIL).catch(() => {});
+  const first = rootCausePrompts.length === 1;
+  return { threadId: 'fake-worker', status: 'completed', message: JSON.stringify({ outcome: 'blocked', report: '가설을 확인했지만 고쳐지지 않았습니다.',
+    rootCause: first ? { reproduced: true, hypothesis: '포트 3000을 낡은 시험 서버가 쥐고 있다', change: '시험 포트를 바꿈', result: 'not-fixed' } : null }) };
 }
 const judgeRuns = [];
 async function executeJudge(dir, input) {
@@ -424,6 +435,83 @@ try {
   }
   await closePages(phoneReview, englishReview);
 
+  const flakyGoal = await flaky.getAttribute('data-goal');
+  const flakyLog = join(root, '.wax', 'chat', 'pm-loop', `${flakyGoal}.jsonl`);
+  const addLog = (record) => appendRecord(flakyLog, (seq) => ({ schema: 1, record: 'decision', id: makeId('pd', seq), seq, goal: flakyGoal, ...record }));
+  const fakeBase = { tool: 'claude', feature: 'flaky', phase: 'implement', iteration: 0, to: 'wax-worker-claude' };
+  for (let i = 0; i < 10; i++) {
+    const worker = `pw-f${String(i).padStart(7, '0')}`, at = Date.now() - 3 * 24 * 3600_000 + i * 60_000;
+    await addLog({ kind: 'worker', outcome: 'launched', worker, task: `t-fake-${i}`, by: '대표', ...fakeBase, at: new Date(at).toISOString() });
+    await addLog({ kind: 'repeat', outcome: 'warned', worker, by: 'pm-loop', ...fakeBase, at: new Date(at + 1000).toISOString(),
+      repeat: { kind: 'test', key: 'f'.repeat(64), command: `node --test fake-${i}.test.js`, exitCode: 1, count: 3, proofIds: [`gone-${i}`] }, reason: 'fake' });
+    await addLog({ kind: 'worker', outcome: 'exited', worker, ...fakeBase, at: new Date(at + 2000).toISOString() });
+  }
+  const listPage = await open('/manage');
+  const listPanel = listPage.locator('#pm-loop-panel');
+  await listPanel.locator('.pm-review-summary[data-unrated="10"]').waitFor();
+  await listPanel.locator('.pm-review-open').click();
+  const reviewList = listPanel.locator('.pm-review-list');
+  const progress = reviewList.locator('.pm-review-progress p');
+  await reviewList.waitFor();
+  assert.match(await progress.innerText(), /^평가 2\/10 · 틀림 0 · 모르겠음 0 · 평가 안 함 10$/);
+  assert.equal(await reviewList.locator('.pm-review-progress progress').getAttribute('value'), '2');
+  assert.equal(await reviewList.locator('.pm-review-row').count(), 10, 'the default filter shows only the not-reviewed rows');
+  await reviewList.getByRole('button', { name: '전부' }).click();
+  const realRow = reviewList.locator(`.pm-review-row[data-goal="${flakyGoal}"][data-verdict="right"]`);
+  await realRow.locator('.pm-review-toggle').click();
+  await realRow.locator('.pm-review-normalized').first().waitFor();
+  assert.match(await realRow.locator('.pm-review-normalized').first().innerText(), /took <duration> in <tmp>[\s\S]*Expected sum to be three/);
+  assert.doesNotMatch(await realRow.locator('.pm-review-raw').first().innerText(), /<tmp>|<duration>/);
+  assert.match(await realRow.locator('.pm-review-evidence').innerText(), /종료 코드 1 · 같은 실패 3번 · 같은 열쇠의 근거 3\/3개\s*같은 코드[\s\S]*트리\(커밋 없음\) · 바뀐 파일 \d+개/, 'the test project has no commit yet');
+  await reviewList.getByRole('button', { name: '평가 안 한 것만' }).click();
+  const current = reviewList.locator('.pm-review-row.current');
+  await current.locator('.pm-review-proof[data-missing="true"]').waitFor();
+  assert.match(await current.innerText(), /node --test fake-9\.test\.js[\s\S]*근거 없음[\s\S]*맞음 \(1\)[\s\S]*틀림 \(2\)[\s\S]*모르겠음 \(3\)/);
+  await current.getByRole('button', { name: '맞음 (1)' }).click();
+  await progress.filter({ hasText: '평가 3/10' }).waitFor();
+  await reviewList.locator('.pm-review-row.current[data-target] .pm-review-toggle[aria-expanded="true"]').waitFor();
+  assert.match(await reviewList.locator('.pm-review-row.current').innerText(), /fake-8\.test\.js/, 'the next not-reviewed row opens');
+  await reviewList.locator('.pm-review-row.current input[name="review-note"]').fill('3');
+  assert.match(await progress.innerText(), /평가 3\/10/);
+  await reviewList.locator('.pm-review-row.current .pm-review-toggle').focus();
+  await listPage.keyboard.press('3');
+  await progress.filter({ hasText: '모르겠음 1' }).waitFor();
+  for (let n = 4; n <= 10; n++) {
+    await listPage.keyboard.press('1');
+    await progress.filter({ hasText: `평가 ${n}/10` }).waitFor();
+  }
+  assert.match(await progress.innerText(), /^평가 10\/10 · 틀림 0 · 모르겠음 1 · 평가 안 함 1$/);
+  const notSure = (await (await fetch(`${base}/api/pm-loop/${flakyGoal}`)).json()).repeatReviews.find((item) => item.review?.verdict === 'unsure');
+  assert.equal(notSure.review.note, '3', 'the note typed in the box went with the not-sure review');
+  const card = listPanel.locator('.pm-repeat-default[data-state="ask"]');
+  await card.waitFor();
+  assert.match(await card.innerText(), /되풀이 평가가 기준에 닿았습니다\(맞음 10 · 틀림 0\)\. 기본값을 stop으로 바꿀지 정해 주세요[\s\S]*설정을 바꾸지 않고 기록만 남깁니다/);
+  const phoneCard = await open('/manage', { width: 390, height: 844 });
+  await phoneCard.locator('#pm-loop-panel .pm-repeat-default[data-state="ask"]').waitFor();
+  await phoneCard.locator('#pm-loop-panel .pm-review-open').click();
+  await phoneCard.locator('#pm-loop-panel .pm-review-row.current .pm-review-proof').waitFor();
+  assert.equal(await noHorizontalScroll(phoneCard), true, '/manage at 390px with the review list and the threshold card');
+  if (process.env.WAX_SCREENSHOT_DIR) await phoneCard.locator('#pm-loop-panel .pm-review-summary-box').screenshot({ path: join(process.env.WAX_SCREENSHOT_DIR, 'pm-review-card-ko-390.png') });
+  await card.getByRole('button', { name: '바꾸기로 함' }).click();
+  const decided = listPanel.locator('.pm-repeat-default[data-state="decided"]');
+  await decided.waitFor();
+  assert.match(await decided.innerText(), /stop으로 바꾸기로 함 · \S+ · [\s\S]*다음 배포에서 기본값을 바꿉니다[\s\S]*WAX_STUCK_CHECK=stop/);
+  assert.equal(process.env.WAX_STUCK_CHECK, undefined, 'the switch changed no setting');
+  assert.match(await readFile(join(root, '.wax', 'chat', 'repeat-default.jsonl'), 'utf8'), /"outcome":"decided","to":"stop"/);
+  const englishList = await open('/manage?lang=en', { width: 390, height: 844 });
+  await englishList.locator('#pm-loop-panel .pm-review-open').click();
+  const englishProgress = englishList.locator('#pm-loop-panel .pm-review-progress p');
+  await englishProgress.waitFor();
+  assert.match(await englishProgress.innerText(), /^Reviewed 10\/10 · wrong 0 · not sure 1 · not reviewed 1$/);
+  assert.match(await englishList.locator('#pm-loop-panel .pm-review-summary').innerText(), /right 10 · wrong 0 · not sure 1 · not reviewed 1[\s\S]*Decided to switch to stop[\s\S]*The default changes in the next release/);
+  await englishList.locator('#pm-loop-panel .pm-review-row.current .pm-review-proof').waitFor();
+  assert.match(await englishList.locator('#pm-loop-panel .pm-review-row.current').innerText(), /No evidence[\s\S]*Right \(1\)[\s\S]*Wrong \(2\)[\s\S]*Not sure \(3\)/);
+  assert.equal(await englishList.locator('#pm-loop-panel .pm-review-row.current input[name="review-note"]').getAttribute('placeholder'), 'Note (optional, 300 characters)');
+  assert.doesNotMatch(await englishList.locator('#pm-loop-panel .pm-review-list').innerText(), /null|undefined/);
+  assert.equal(await noHorizontalScroll(englishList), true, 'English /manage at 390px with the review list');
+  if (process.env.WAX_SCREENSHOT_DIR) await englishList.locator('#pm-loop-panel .pm-review-list').screenshot({ path: join(process.env.WAX_SCREENSHOT_DIR, 'pm-review-list-en-390.png') });
+  await closePages(listPage, phoneCard, englishList);
+
   await createFeature(root, { id: 'metered', title: '사용량 확인' });
   await panel.getByRole('button', { name: '＋ 새 목표' }).click();
   await panel.locator('input[name="title"]').fill('사용량 확인');
@@ -472,6 +560,86 @@ try {
     await phoneUsage.locator(`#pm-loop-panel .pm-goal[data-goal="${meteredGoal}"]`).screenshot({ path: join(process.env.WAX_SCREENSHOT_DIR, 'pm-usage-ko-390.png') });
   }
   await closePages(phoneUsage, englishUsage);
+
+  await createFeature(root, { id: 'costed', title: '비용 확인' });
+  await panel.getByRole('button', { name: '＋ 새 목표' }).click();
+  await panel.locator('input[name="title"]').fill('비용 확인');
+  await panel.locator('input[name="feature"][value="costed"]').check();
+  const costForm = panel.locator('form', { has: manage.locator('input[name="feature"][value="costed"]') });
+  await costForm.locator('details', { has: manage.locator('input[name="costUsd"]') }).evaluate((node) => { node.open = true; });
+  assert.match(await costForm.innerText(), /비용 한도\(USD, 선택\)[\s\S]*비용 한도는 도구가 알린 비용\(지금은 Claude Code만\)의 합에 걸립니다/);
+  await costForm.locator('input[name="costUsd"]').fill('0,05');
+  await panel.getByRole('button', { name: '목표 만들기' }).click();
+  const panelError = panel.locator('p.error[role="alert"]', { hasText: '비용 한도는' });
+  await panelError.waitFor({ state: 'visible' });
+  assert.match(await panelError.innerText(), /비용 한도는 \$0\.01~\$10000\.00 사이의 달러 금액이어야 합니다\(소수 둘째 자리까지, 소수점은 \. 예: 5\.50\)/);
+  await costForm.locator('input[name="costUsd"]').fill('0.05');
+  await panel.getByRole('button', { name: '목표 만들기' }).click();
+  const costed = panel.locator('.pm-goal', { has: manage.locator('.pm-feature[data-feature="costed"]') });
+  await costed.getByRole('button', { name: '계획 확인하고 시작' }).click();
+  assert.match(await costed.locator('.pm-cost').innerText(), /비용 한도: \$0\.00 \/ \$0\.05 · 도구가 알린 비용\(실제 청구와 다를 수 있음\)/);
+  const costCard = costed.locator('.pm-card[data-kind="start-worker"][data-key^="costed:0:plan:start-worker"]');
+  await costCard.waitFor({ timeout: 10_000 });
+  await costCard.locator('select[name="tool"]').selectOption('codex');
+  const costWarning = costCard.locator('.pm-tool-warning');
+  await costWarning.waitFor({ state: 'visible' });
+  assert.match(await costWarning.innerText(), /Codex: 이 도구는 비용을 알리지 않습니다/);
+  await costCard.locator('select[name="tool"]').selectOption('claude');
+  await costWarning.waitFor({ state: 'hidden' });
+  await costCard.getByRole('button', { name: 'Claude Code 작업자 시작' }).click();
+  const costedGoal = await costed.getAttribute('data-goal');
+  const stoppedCosted = panel.locator(`.pm-goal[data-goal="${costedGoal}"][data-state="stopped"]`);
+  await stoppedCosted.waitFor({ timeout: 15_000 });
+  assert.match(await stoppedCosted.locator('p.error').innerText(), /비용 한도 \$0\.05에 닿았습니다\(도구가 알린 비용\)/);
+  assert.match(await stoppedCosted.locator('.pm-cost').innerText(), /비용 한도: \$0\.08 \/ \$0\.05 · 도구가 알린 비용\(실제 청구와 다를 수 있음\)/);
+  assert.match(await stoppedCosted.locator('.pm-usage').innerText(), /도구가 알린 비용 \$0\.08\(실제 청구와 다를 수 있음\)/);
+  assert.equal(await stoppedCosted.locator('.pm-resume input[name="costUsd"]').inputValue(), '0.05', 'raising it is a person resuming');
+  assert.equal(await stoppedCosted.locator('.pm-resume-button').count(), 1);
+  const phoneCost = await open('/manage?lang=en', { width: 390, height: 844 });
+  const englishCosted = phoneCost.locator(`#pm-loop-panel .pm-goal[data-goal="${costedGoal}"]`);
+  await englishCosted.locator('.pm-cost').waitFor();
+  assert.match(await englishCosted.locator('.pm-cost').innerText(), /Cost limit: \$0\.08 \/ \$0\.05 · Cost reported by the tool, may differ from your bill/);
+  assert.match(await englishCosted.locator('p.error').innerText(), /Reached the \$0\.05 cost limit \(cost reported by tools\)/);
+  assert.equal(await noHorizontalScroll(phoneCost), true, 'English /manage at 390px with a cost limit');
+  if (process.env.WAX_SCREENSHOT_DIR) await englishCosted.screenshot({ path: join(process.env.WAX_SCREENSHOT_DIR, 'pm-cost-en-390.png') });
+  await closePages(phoneCost);
+
+  process.env.WAX_STUCK_CHECK = 'stop';
+  await createFeature(root, { id: 'rootcause', title: '포트를 쥔 서버' });
+  const rc = await startRepeat('rootcause', '원인 찾기');
+  for (const attempt of [1, 2]) {
+    const blockedCard = rc.locator('.pm-card[data-kind="blocked"]');
+    await blockedCard.waitFor({ timeout: 20_000 });
+    await blockedCard.getByRole('button', { name: '배정 회수' }).click();
+    const rcCard = rc.locator(`.pm-card[data-kind="start-worker"]`, { has: manage.locator('.pm-root-cause-badge', { hasText: `원인 찾기 모드(${attempt}번째)` }) });
+    await rcCard.waitFor({ timeout: 10_000 });
+    await rcCard.getByRole('button', { name: /작업자 시작$/ }).click();
+    await until(async () => rootCausePrompts.length === attempt, `root-cause attempt ${attempt}`, 15_000);
+  }
+  const doubtCard = rc.locator('.pm-card[data-kind="approach-doubt"]');
+  await doubtCard.waitFor({ timeout: 15_000 });
+  const doubtText = await doubtCard.innerText();
+  assert.match(doubtText, /접근이 틀렸을 수 있음[\s\S]*사람 결정[\s\S]*같은 실패에 원인 찾기를 2번 했지만 고쳐지지 않았습니다\. 접근이 틀렸을 수 있습니다/);
+  assert.match(doubtText, /가설: 포트 3000을 낡은 시험 서버가 쥐고 있다 · 고쳐지지 않음 · 한 변경: 시험 포트를 바꿈[\s\S]*가설 보고 없음/);
+  assert.deepEqual(await doubtCard.locator('.proposal-actions button').allInnerTexts(), ['한 번 더 시도', '목표 정지'], 'no dismiss button');
+  assert.match(rootCausePrompts[1], /> .*포트 3000을 낡은 시험 서버가 쥐고 있다/, 'the second attempt sees the first hypothesis as quoted data');
+  assert.equal(await rc.locator('.pm-card[data-kind="judge"]').count(), 0, 'no blocker judgment card');
+  await openedText(rc.locator('.pm-decisions'), /2번째 가설 보고 없음[\s\S]*1번째 가설: 포트 3000을 낡은 시험 서버가 쥐고 있다 · 고쳐지지 않음/, 'the root-cause decision log');
+  const rcGoal = await rc.getAttribute('data-goal');
+  const phoneDoubt = await open('/manage', { width: 390, height: 844 });
+  await phoneDoubt.locator(`#pm-loop-panel .pm-goal[data-goal="${rcGoal}"] .pm-card[data-kind="approach-doubt"]`).waitFor();
+  assert.equal(await noHorizontalScroll(phoneDoubt), true, '/manage at 390px with the approach-doubt card');
+  await closePages(phoneDoubt);
+  const englishDoubt = await open('/manage?lang=en', { width: 390, height: 844 });
+  const englishCard = englishDoubt.locator(`#pm-loop-panel .pm-goal[data-goal="${rcGoal}"] .pm-card[data-kind="approach-doubt"]`);
+  await englishCard.waitFor();
+  assert.match(await englishCard.innerText(), /The approach may be wrong[\s\S]*2 root-cause attempts did not fix the same failure\. The approach may be wrong\.[\s\S]*Hypothesis: 포트 3000을 낡은 시험 서버가 쥐고 있다 · not fixed[\s\S]*No hypothesis reported[\s\S]*Try once more/);
+  assert.equal(await noHorizontalScroll(englishDoubt), true, 'English /manage at 390px with the approach-doubt card');
+  if (process.env.WAX_SCREENSHOT_DIR) await englishCard.screenshot({ path: join(process.env.WAX_SCREENSHOT_DIR, 'pm-approach-doubt-en-390.png') });
+  await closePages(englishDoubt);
+  await doubtCard.getByRole('button', { name: '한 번 더 시도' }).click();
+  await rc.locator('.pm-card[data-kind="start-worker"] .pm-root-cause-badge', { hasText: '원인 찾기 모드(3번째)' }).waitFor({ timeout: 10_000 });
+  delete process.env.WAX_STUCK_CHECK;
 
   const english = await open('/manage?lang=en');
   await english.locator(`#pm-loop-panel .pm-goal[data-goal="${goalId}"]`).waitFor();

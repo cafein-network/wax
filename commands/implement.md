@@ -34,7 +34,7 @@ Before phase work or taking over an assigned feature, read wax_context (id, budg
 This command performs the implement (구현) phase.
 1. Parse the first argument as a feature ID. An existing feature is required. Never silently create one.
 2. Read CLI status <id>. If the current phase is not implement, explain the actual next phase and stop. Do not skip gates.
-3. Read CLI prompt implement <id> and follow its phase instructions. Use the host tools to edit the target repository and run relevant checks, preserving unrelated user changes.
+3. Read CLI prompt implement <id> and follow its phase instructions. Edit with host tools; keep unrelated changes. Step by step (CLI test --step S-N): see the check fail, fix, see it pass (red→green). "Too small"/"Passed after": an unseen failure proves nothing. No red: --no-red <reason>. Log unasked choices: CLI ruling <id> --what --why --cost.
 4. Write the phase document under docs/wax/<id>/implement.md without overwriting unrelated documents. Save it with CLI save implement <id> --file <path>.
 5. If the phase requirements are satisfied, run CLI complete implement <id> --evidence <concrete summary and document path> --author <name>. Leave the phase open if a required decision or verification is missing.
 

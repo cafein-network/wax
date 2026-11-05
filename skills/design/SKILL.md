@@ -39,7 +39,7 @@ Before phase work or taking over an assigned feature, read CLI context <id> --bu
 This command performs the design (설계) phase.
 1. Parse the first argument as a feature ID. An existing feature is required. Never silently create one.
 2. Read CLI status <id>. If the current phase is not design, explain the actual next phase and stop. Do not skip gates.
-3. Read CLI prompt design <id> and follow its phase instructions.
+3. Read CLI prompt design <id> and follow its phase instructions. Before designing, propose 2-3 approaches (CLI approach <id> --propose --file) and let the person pick; only one: --single <reason>. "Obvious": say why there. Log unasked choices: CLI ruling <id> --what --why --cost.
 4. Write the phase document under docs/wax/<id>/design.md without overwriting unrelated documents. Save it with CLI save design <id> --file <path>.
 5. If the phase requirements are satisfied, run CLI complete design <id> --evidence <concrete summary and document path> --author <name>. Leave the phase open if a required decision or verification is missing.
 

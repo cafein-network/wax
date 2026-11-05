@@ -39,7 +39,7 @@ export async function runAgentSession(root, options = {}) {
   ];
   const child = launch(command, [...prefix, ...args], { cwd, env: workerEnv(extraEnv), windowsHide: true, shell: false, stdio: ['pipe', 'pipe', 'pipe'] });
   const controller = new AbortController(), calls = new Map(), permissions = new Map(), seen = new Set(), deliveries = new Set();
-  let closing = false, exited = false, sequence = 0, sessionId = thread, text = '', buffer = '', denied = false, fatal, lastResult = '', usage = null;
+  let closing = false, exited = false, sequence = 0, sessionId = thread, text = '', buffer = '', denied = false, fatal, lastResult = '', usage = null, rpcError = null;
   let resolveResult, rejectResult;
   const result = new Promise((resolve, reject) => { resolveResult = resolve; rejectResult = reject; });
   const pulse = () => { try { activity({ approvals: permissions.size }); } catch {} };
@@ -131,7 +131,7 @@ export async function runAgentSession(root, options = {}) {
       }
       if (m.id !== undefined && calls.has(m.id)) {
         const call = calls.get(m.id); clearTimeout(call.timer); calls.delete(m.id);
-        if (m.error) call.reject(new WaxError(t('errors.agentSession.connectionRequestFailedCheck', label)));
+        if (m.error) { rpcError = { code: Number.isSafeInteger(m.error.code) ? m.error.code : null, message: String(m.error.message ?? '').slice(0, 4000) }; call.reject(new WaxError(t('errors.agentSession.connectionRequestFailedCheck', label))); }
         else call.resolve(m.result);
       }
     } else if (tool === 'claude') {
@@ -211,7 +211,7 @@ export async function runAgentSession(root, options = {}) {
     if (fatal) throw fatal;
     return completed;
   } catch (error) {
-    if (error && typeof error === 'object' && !error.toolOutput) { error.toolOutput = { error: String(error.message ?? ''), stderr: diagnosticTail, result: lastResult, usage }; failedOutput = error.toolOutput; }
+    if (error && typeof error === 'object' && !error.toolOutput) { error.toolOutput = { error: String(error.message ?? ''), stderr: diagnosticTail, result: lastResult, usage, ...(rpcError ? { rpcError } : {}) }; failedOutput = error.toolOutput; }
     throw error;
   } finally {
     closing = true; controller.abort(); signal?.removeEventListener('abort', abort);
@@ -220,6 +220,6 @@ export async function runAgentSession(root, options = {}) {
     if (!exited) { child.stdin.end(); child.kill(); }
     const force = setTimeout(() => { if (!exited) child.kill('SIGKILL'); }, 3000);
     try { await closed; await Promise.allSettled([...deliveries]); } finally { clearTimeout(force); }
-    if (failedOutput) failedOutput.stderr = diagnosticTail;
+    if (failedOutput) { failedOutput.stderr = diagnosticTail; if (rpcError && !failedOutput.rpcError) failedOutput.rpcError = rpcError; }
   }
 }
