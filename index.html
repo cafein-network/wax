@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>wax</title>
+<meta name="description" content="wax: Claude Code, Codex, Antigravity CLI, GitHub Copilot CLI, Grok Build, Gemini CLI에 기획 → 설계 → 구현 → 검토 → 보고 흐름을 더하는 플러그인">
+<link rel="canonical" href="https://wax.me2shop.com/">
+<style>
+  :root {
+    --bg: #fbfaf7; --fg: #1d1c1a; --muted: #5d5a54; --line: #e3dfd6; --card: #ffffff; --accent: #8a5a12; --code: #f2efe8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #151413; --fg: #ecebe7; --muted: #a8a49b; --line: #33302b; --card: #1d1c1a; --accent: #e0b062; --code: #26241f; }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 16px 56px; }
+  header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  h1 { font-size: 2.2rem; margin: 0; letter-spacing: -0.02em; }
+  .lang { display: flex; gap: 4px; }
+  .lang button { font: inherit; font-size: 0.9rem; padding: 4px 10px; border: 1px solid var(--line); background: var(--card); color: var(--fg); border-radius: 6px; cursor: pointer; }
+  .lang button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+  .lead { font-size: 1.15rem; margin: 20px 0 8px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .links { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 32px; }
+  .links a { padding: 8px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--fg); text-decoration: none; }
+  .links a.primary { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  h2 { font-size: 1.2rem; margin: 32px 0 12px; }
+  ol, ul { padding-left: 1.3em; }
+  li { margin: 4px 0; }
+  pre { background: var(--code); border: 1px solid var(--line); border-radius: 8px; padding: 12px; overflow-x: auto; font-size: 0.88rem; line-height: 1.5; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .note { color: var(--muted); font-size: 0.92rem; }
+  footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.88rem; }
+  a { color: var(--accent); }
+  [data-lang] { display: none; }
+  html[lang="ko"] [data-lang="ko"], html[lang="en"] [data-lang="en"] { display: revert; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>wax</h1>
+    <div class="lang" role="group" aria-label="Language">
+      <button type="button" data-set="ko" aria-pressed="true">한국어</button>
+      <button type="button" data-set="en" aria-pressed="false">English</button>
+    </div>
+  </header>
+
+  <section data-lang="ko">
+    <p class="lead"><strong>AI 코딩 도구를 바꿔도 일은 이어집니다.</strong></p>
+    <p class="sub">wax는 Claude Code, Codex, Antigravity CLI, GitHub Copilot CLI, Grok Build, Gemini CLI에 <strong>기획 → 설계 → 구현 → 검토 → 보고</strong> 흐름을 더하는 플러그인입니다. 사람이 결정하는 자리는 사람에게 남기고, 단계마다 근거를 남깁니다.</p>
+    <div class="links">
+      <a class="primary" href="https://wax.me2shop.com">홈페이지</a>
+      <a href="https://github.com/cafein-network/wax">GitHub 저장소</a>
+      <a href="https://github.com/cafein-network/wax/releases/latest">최신 릴리스</a>
+      <a href="https://wax.me2shop.com/changelog/">변경 이력</a>
+    </div>
+
+    <h2>설치 (한 번)</h2>
+    <p>Node.js 22 이상이 필요합니다. 쓰는 도구마다 두 줄을 실행하면 그 뒤로 모든 프로젝트에서 wax를 쓸 수 있습니다.</p>
+    <pre><code># Claude Code
+claude plugin marketplace add cafein-network/wax
+claude plugin install wax@wax
+
+# Codex
+codex plugin marketplace add cafein-network/wax
+codex plugin add wax@wax
+
+# GitHub Copilot CLI
+copilot plugin marketplace add cafein-network/wax
+copilot plugin install wax@wax
+
+# Gemini CLI
+gemini extensions install https://github.com/cafein-network/wax</code></pre>
+    <p><strong>Antigravity CLI</strong>와 <strong>Grok Build</strong>는 프로젝트에 연결한 스킬을 씁니다. 저장소를 받은 뒤 프로젝트마다 한 번 연결합니다.</p>
+    <pre><code>git clone https://github.com/cafein-network/wax
+node wax/scripts/install-project.mjs --project "/path/to/your-project"</code></pre>
+    <p class="note">인터넷이 없는 컴퓨터에는 <a href="https://github.com/cafein-network/wax/releases/latest">최신 릴리스</a>의 ZIP을 받아 압축을 푼 폴더 경로를 <code>cafein-network/wax</code> 대신 씁니다(오프라인 설치).</p>
+
+    <h2>무엇을 하나</h2>
+    <ul>
+      <li>단계마다 완료 조건과 근거(검사 실행 기록)를 남깁니다.</li>
+      <li>대시보드에서 목표를 정하고 계획을 확인하면, PM 루프가 단계별 작업자를 제안하거나 띄웁니다.</li>
+      <li>실행 승인, 계획 확정, 병합처럼 사람이 정할 일은 사람에게 묻습니다.</li>
+      <li>공개된 버전은 Ubuntu·macOS·Windows와 Node 22·24에서 검사를 통과한 것만 올립니다.</li>
+    </ul>
+  </section>
+
+  <section data-lang="en">
+    <p class="lead"><strong>Switch AI coding tools without losing the work.</strong></p>
+    <p class="sub">wax is a plugin that adds a <strong>plan → design → implement → review → report</strong> workflow to Claude Code, Codex, Antigravity CLI, GitHub Copilot CLI, Grok Build and Gemini CLI. Decisions that belong to a person stay with a person, and every stage leaves evidence.</p>
+    <div class="links">
+      <a class="primary" href="https://wax.me2shop.com">Homepage</a>
+      <a href="https://github.com/cafein-network/wax">GitHub repository</a>
+      <a href="https://github.com/cafein-network/wax/releases/latest">Latest release</a>
+      <a href="https://wax.me2shop.com/changelog/">Changelog</a>
+    </div>
+
+    <h2>Installation (once)</h2>
+    <p>Node.js 22 or later is required. Run the two lines for each tool you use, and wax is available in every project from then on.</p>
+    <pre><code># Claude Code
+claude plugin marketplace add cafein-network/wax
+claude plugin install wax@wax
+
+# Codex
+codex plugin marketplace add cafein-network/wax
+codex plugin add wax@wax
+
+# GitHub Copilot CLI
+copilot plugin marketplace add cafein-network/wax
+copilot plugin install wax@wax
+
+# Gemini CLI
+gemini extensions install https://github.com/cafein-network/wax</code></pre>
+    <p><strong>Antigravity CLI</strong> and <strong>Grok Build</strong> use skills linked into the project. Download this repository, then link it once per project.</p>
+    <pre><code>git clone https://github.com/cafein-network/wax
+node wax/scripts/install-project.mjs --project "/path/to/your-project"</code></pre>
+    <p class="note">For a computer without internet access, download the ZIP from the <a href="https://github.com/cafein-network/wax/releases/latest">latest release</a> and use the extracted folder path in place of <code>cafein-network/wax</code> (offline install).</p>
+
+    <h2>What it does</h2>
+    <ul>
+      <li>Each stage has completion rules and keeps evidence (recorded check runs).</li>
+      <li>Set a goal and confirm the plan in the dashboard, and the PM loop suggests or starts a worker for each stage.</li>
+      <li>Decisions that belong to a person, such as run approvals, plan confirmation and merging, go to a person.</li>
+      <li>Published versions are only those that pass checks on Ubuntu, macOS and Windows with Node 22 and 24.</li>
+    </ul>
+  </section>
+
+  <footer>
+    <span data-lang="ko">AGPL-3.0 · 자세한 내용은 <a href="https://wax.me2shop.com">wax.me2shop.com</a></span>
+    <span data-lang="en">AGPL-3.0 · More at <a href="https://wax.me2shop.com">wax.me2shop.com</a></span>
+  </footer>
+</main>
+<script>
+  (function () {
+    var root = document.documentElement;
+    function set(lang) {
+      root.lang = lang;
+      document.querySelectorAll('.lang button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.set === lang)); });
+      try { localStorage.setItem('wax-lang', lang); } catch (e) {}
+    }
+    var saved = null;
+    try { saved = localStorage.getItem('wax-lang'); } catch (e) {}
+    set(saved || (/^ko\b/i.test(navigator.language || '') ? 'ko' : 'en'));
+    document.querySelectorAll('.lang button').forEach(function (b) { b.addEventListener('click', function () { set(b.dataset.set); }); });
+  })();
+</script>
+</body>
+</html>
